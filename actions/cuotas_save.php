@@ -28,6 +28,19 @@ $stmtPrestamo = $pdo->prepare('SELECT * FROM prestamos WHERE id_prestamo = :id')
 $stmtPrestamo->execute([':id' => $idPrestamo]);
 $prestamo = $stmtPrestamo->fetch();
 
+$pendienteTotal = ($prestamo['saldo_capital_actual'] + $prestamo['saldo_intereses_actual']);
+$pagoPropuesto = $capPagado + $intPagado;
+if ($pagoPropuesto <= 0) {
+    $_SESSION['error'] = 'El pago de préstamo debe ser mayor a cero.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+if ($pagoPropuesto - $pendienteTotal > 0.01) {
+    $_SESSION['error'] = 'No es posible registrar un pago mayor al saldo pendiente del préstamo.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+
 $saldoCapital = max(0, $prestamo['saldo_capital_actual'] - $capPagado);
 $saldoInteres = max(0, $prestamo['saldo_intereses_actual'] - $intPagado);
 

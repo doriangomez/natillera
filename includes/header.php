@@ -191,3 +191,12 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             </div>
         </header>
         <main class="app-content">
+            <?php if (!empty($_SESSION['error'])): ?>
+                <div class="alert alert-danger"><?php echo clean($_SESSION['error']); unset($_SESSION['error']); ?></div>
+            <?php endif; ?>
+            <?php if (!empty($_SESSION['success'])): ?>
+                <div class="alert alert-success"><?php echo clean($_SESSION['success']); unset($_SESSION['success']); ?></div>
+            <?php endif; ?>
+            <?php if (!empty($_SESSION['warning'])): ?>
+                <div class="alert alert-warning"><?php echo clean($_SESSION['warning']); unset($_SESSION['warning']); ?></div>
+            <?php endif; ?>
