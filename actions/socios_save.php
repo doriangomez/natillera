@@ -31,6 +31,8 @@ if ($accion === 'eliminar' && $id) {
         $pdo->prepare('DELETE FROM socios WHERE id_socio = :id')->execute([':id' => $id]);
 
         $pdo->commit();
+        recalcularAutoIncrementSocios($pdo);
+        $_SESSION['success'] = 'Socio eliminado correctamente.';
         header('Location: ../public/socios.php');
         exit;
     } catch (Exception $e) {
@@ -52,7 +54,7 @@ if ($numeroPollaDigits === '' || strlen($numeroPollaDigits) > 2 || (int) $numero
 
 $numeroPolla = str_pad((string) (int) $numeroPollaDigits, 2, '0', STR_PAD_LEFT);
 
-$conflictoStmt = $pdo->prepare('SELECT id_socio, nombre_completo FROM socios WHERE numero_polla = :numero_polla AND id_socio <> :id');
+$conflictoStmt = $pdo->prepare("SELECT id_socio, nombre_completo FROM socios WHERE LPAD(numero_polla, 2, '0') = :numero_polla AND id_socio <> :id");
 $conflictoStmt->execute([
     ':numero_polla' => $numeroPolla,
     ':id' => $id ?? 0,
@@ -82,8 +84,10 @@ if ($id) {
     $stmt = $pdo->prepare('UPDATE socios SET nombre_completo=:nombre_completo, telefono=:telefono, numero_polla=:numero_polla, periodicidad_pago=:periodicidad_pago, valor_presupuestado=:valor_presupuestado WHERE id_socio=:id');
     $stmt->execute($data);
 } else {
-    $stmt = $pdo->prepare('INSERT INTO socios (nombre_completo, telefono, numero_polla, periodicidad_pago, valor_presupuestado) VALUES (:nombre_completo, :telefono, :numero_polla, :periodicidad_pago, :valor_presupuestado)');
+    $data[':id_socio'] = obtenerSiguienteIdSocioDisponible($pdo);
+    $stmt = $pdo->prepare('INSERT INTO socios (id_socio, nombre_completo, telefono, numero_polla, periodicidad_pago, valor_presupuestado) VALUES (:id_socio, :nombre_completo, :telefono, :numero_polla, :periodicidad_pago, :valor_presupuestado)');
     $stmt->execute($data);
+    recalcularAutoIncrementSocios($pdo);
 }
 header('Location: ../public/socios.php');
 ?>

@@ -18,6 +18,29 @@ function getSocios($pdo, $search = '') {
     return $stmt->fetchAll();
 }
 
+function obtenerSiguienteIdSocioDisponible(PDO $pdo): int {
+    $ids = $pdo->query('SELECT id_socio FROM socios ORDER BY id_socio')->fetchAll(PDO::FETCH_COLUMN);
+
+    $esperado = 1;
+    foreach ($ids as $id) {
+        $idActual = (int) $id;
+        if ($idActual === $esperado) {
+            $esperado++;
+            continue;
+        }
+        if ($idActual > $esperado) {
+            break;
+        }
+    }
+
+    return $esperado;
+}
+
+function recalcularAutoIncrementSocios(PDO $pdo): void {
+    $siguiente = (int) $pdo->query('SELECT COALESCE(MAX(id_socio), 0) + 1 FROM socios')->fetchColumn();
+    $pdo->exec('ALTER TABLE socios AUTO_INCREMENT = ' . $siguiente);
+}
+
 function getActividades($pdo, $soloPolla = false, $incluirInactivas = false) {
     $sql = "SELECT * FROM actividades_maestro";
     $condiciones = [];
