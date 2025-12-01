@@ -13,8 +13,26 @@ switch ($tipo) {
         generarCSV(['ID','Nombre','Teléfono','Polla','Periodicidad','Presupuesto','Saldo'],$rows);
         break;
     case 'movimientos':
-        $rows = $pdo->query('SELECT fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso FROM movimientos ORDER BY fecha DESC')->fetchAll(PDO::FETCH_NUM);
-        generarCSV(['Fecha','Socio','Actividad','Motivo','Valor','Medio','Ingreso','Egreso'],$rows);
+        $fSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
+        $fDesde = $_GET['desde'] ?? '';
+        $fHasta = $_GET['hasta'] ?? '';
+        $params = [];
+        $where = [];
+        if ($fSocio) { $where[] = 'm.id_socio = :s'; $params[':s'] = $fSocio; }
+        if ($fDesde) { $where[] = 'm.fecha >= :d'; $params[':d'] = $fDesde; }
+        if ($fHasta) { $where[] = 'm.fecha <= :h'; $params[':h'] = $fHasta; }
+        $sql = "SELECT m.fecha, s.nombre_completo, COALESCE(p.nombre_deudor, s.nombre_completo) AS deudor, a.nombre_actividad, COALESCE(mp.nombre, m.medio_consignacion) medio, m.motivo, m.valor, m.es_ingreso, m.es_egreso, m.observaciones
+                FROM movimientos m
+                LEFT JOIN socios s ON m.id_socio = s.id_socio
+                LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+                LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id
+                LEFT JOIN prestamos p ON a.es_prestamo = 1 AND p.id_socio = m.id_socio";
+        if ($where) { $sql .= ' WHERE ' . implode(' AND ', $where); }
+        $sql .= ' ORDER BY m.fecha DESC';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_NUM);
+        generarCSV(['Fecha','Socio','Deudor','Actividad','Medio','Motivo','Valor','Ingreso','Egreso','Observaciones'],$rows);
         break;
     case 'saldos':
         $rows = $pdo->query('SELECT nombre_completo, saldo_socio FROM socios WHERE activo=1')->fetchAll(PDO::FETCH_NUM);

@@ -4,8 +4,9 @@ require_once __DIR__ . '/../includes/functions.php';
 
 $socios = getSocios($pdo);
 $actividades = getActividades($pdo);
+$mediosPago = getMediosPago($pdo);
 
-$prestamos = $pdo->query("SELECT p.*, s.nombre_completo FROM prestamos p LEFT JOIN socios s ON p.id_socio=s.id_socio ORDER BY p.fecha_prestamo DESC LIMIT 100")->fetchAll();
+$prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS nombre_aval FROM prestamos p LEFT JOIN socios s ON p.id_socio=s.id_socio LEFT JOIN socios aval ON p.id_socio_aval = aval.id_socio ORDER BY p.fecha_prestamo DESC LIMIT 100")->fetchAll();
 ?>
 <h2 class="mb-3">Préstamos</h2>
 <div class="card mb-3">
@@ -18,17 +19,33 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo FROM prestamos p LEFT JO
                     <input type="date" name="fecha_prestamo" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Socio (opcional)</label>
+                    <label class="form-label">Tipo de deudor</label>
+                    <select name="es_particular" class="form-select">
+                        <option value="0">Socio</option>
+                        <option value="1">Particular</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Socio beneficiario</label>
                     <select name="id_socio" class="form-select">
-                        <option value="">Particular</option>
+                        <option value="">Seleccione socio</option>
                         <?php foreach($socios as $s): ?>
                             <option value="<?php echo $s['id_socio']; ?>"><?php echo clean($s['nombre_completo']); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Nombre deudor (si particular)</label>
-                    <input type="text" name="nombre_deudor" class="form-control">
+                    <label class="form-label">Deudor particular (si aplica)</label>
+                    <input type="text" name="nombre_deudor" class="form-control" placeholder="Nombre de particular">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Socio avalador (para particulares)</label>
+                    <select name="id_socio_aval" class="form-select">
+                        <option value="">Sin aval</option>
+                        <?php foreach($socios as $s): ?>
+                            <option value="<?php echo $s['id_socio']; ?>"><?php echo clean($s['nombre_completo']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Monto préstamo</label>
@@ -65,10 +82,6 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo FROM prestamos p LEFT JO
                     <input type="date" name="fecha_pago" class="form-control" value="<?php echo date('Y-m-d'); ?>">
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label">Número cuota</label>
-                    <input type="number" name="numero_cuota" class="form-control" required>
-                </div>
-                <div class="col-md-2">
                     <label class="form-label">Capital pagado</label>
                     <input type="number" step="0.01" name="valor_capital_pagado" class="form-control" required>
                 </div>
@@ -88,22 +101,29 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo FROM prestamos p LEFT JO
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Medio</label>
-                    <input type="text" name="medio_consignacion" class="form-control" required>
+                    <select name="medio_consignacion" class="form-select" required>
+                        <?php foreach($mediosPago as $mp): ?>
+                            <option value="<?php echo clean($mp['nombre']); ?>"><?php echo clean($mp['nombre']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
             </div>
-            <button class="btn btn-primary mt-3">Registrar pago</button>
+            <div class="mt-2 text-muted small">El número de cuota se asigna automáticamente al guardar el pago.</div>
+            <button class="btn btn-primary mt-2">Registrar pago</button>
         </form>
     </div>
 </div>
 <h4>Préstamos vigentes</h4>
 <div class="table-responsive">
 <table class="table table-sm table-bordered">
-    <thead><tr><th>ID</th><th>Deudor</th><th>Monto</th><th>Saldo capital</th><th>Saldo interés</th><th>Estado</th></tr></thead>
+    <thead><tr><th>ID</th><th>Deudor</th><th>Aval</th><th>Tipo</th><th>Monto</th><th>Saldo capital</th><th>Saldo interés</th><th>Estado</th></tr></thead>
     <tbody>
         <?php foreach($prestamos as $p): ?>
             <tr>
                 <td><?php echo $p['id_prestamo']; ?></td>
                 <td><?php echo clean($p['nombre_completo'] ?? $p['nombre_deudor']); ?></td>
+                <td><?php echo clean($p['nombre_aval']); ?></td>
+                <td><?php echo $p['es_particular'] ? 'Particular' : 'Socio'; ?></td>
                 <td>$<?php echo number_format($p['monto_prestamo'],0,',','.'); ?></td>
                 <td>$<?php echo number_format($p['saldo_capital_actual'],0,',','.'); ?></td>
                 <td>$<?php echo number_format($p['saldo_intereses_actual'],0,',','.'); ?></td>

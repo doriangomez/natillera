@@ -5,11 +5,14 @@ checkAuth();
 
 $idPrestamo = (int) $_POST['id_prestamo'];
 $fechaPago = $_POST['fecha_pago'];
-$numCuota = (int) $_POST['numero_cuota'];
 $capPagado = (float) $_POST['valor_capital_pagado'];
 $intPagado = (float) $_POST['valor_interes_pagado'];
 $idActividad = (int) $_POST['id_actividad'];
 $medio = $_POST['medio_consignacion'];
+
+$stmtNext = $pdo->prepare('SELECT COALESCE(MAX(numero_cuota),0)+1 AS prox FROM cuotas_prestamo WHERE id_prestamo=:id AND fecha_pago IS NOT NULL');
+$stmtNext->execute([':id'=>$idPrestamo]);
+$numCuota = (int) $stmtNext->fetchColumn();
 
 $stmt = $pdo->prepare('INSERT INTO cuotas_prestamo (id_prestamo, numero_cuota, fecha_pago, valor_capital_pagado, valor_interes_pagado, saldo_capital_despues, saldo_intereses_despues, observaciones) VALUES (:id_prestamo, :num, :fecha_pago, :capital, :interes, 0, 0, :obs)');
 $stmt->execute([

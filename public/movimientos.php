@@ -4,12 +4,14 @@ require_once __DIR__ . '/../includes/functions.php';
 
 $socios = getSocios($pdo);
 $actividades = getActividades($pdo);
+$mediosPago = getMediosPago($pdo);
 
 $filtroSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
 $filtroActividad = isset($_GET['actividad']) ? (int) $_GET['actividad'] : 0;
 $filtroFechaIni = $_GET['desde'] ?? '';
 $filtroFechaFin = $_GET['hasta'] ?? '';
 $filtroTipo = $_GET['tipo'] ?? '';
+$filtroMedio = isset($_GET['medio']) ? (int) $_GET['medio'] : 0;
 
 $where = [];
 $params = [];
@@ -19,10 +21,12 @@ if ($filtroFechaIni) { $where[] = 'm.fecha >= :fi'; $params[':fi'] = $filtroFech
 if ($filtroFechaFin) { $where[] = 'm.fecha <= :ff'; $params[':ff'] = $filtroFechaFin; }
 if ($filtroTipo === 'ingreso') { $where[] = 'm.es_ingreso = 1'; }
 if ($filtroTipo === 'egreso') { $where[] = 'm.es_egreso = 1'; }
+if ($filtroMedio) { $where[] = 'm.id_medio_pago = :mp'; $params[':mp'] = $filtroMedio; }
 
-$sql = "SELECT m.*, s.nombre_completo, a.nombre_actividad FROM movimientos m
+$sql = "SELECT m.*, s.nombre_completo, a.nombre_actividad, mp.nombre AS medio_nombre FROM movimientos m
         LEFT JOIN socios s ON m.id_socio = s.id_socio
-        LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad";
+        LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+        LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id";
 if ($where) {
     $sql .= ' WHERE ' . implode(' AND ', $where);
 }
@@ -56,6 +60,14 @@ foreach ($movimientos as $m) {
                     <option value="">Todas</option>
                     <?php foreach($actividades as $a): ?>
                         <option value="<?php echo $a['id_actividad']; ?>" <?php echo ($filtroActividad==$a['id_actividad'])?'selected':''; ?>><?php echo clean($a['nombre_actividad']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-2"><label class="form-label">Medio de pago</label>
+                <select name="medio" class="form-select">
+                    <option value="">Todos</option>
+                    <?php foreach($mediosPago as $mp): ?>
+                        <option value="<?php echo $mp['id']; ?>" <?php echo (!empty($_GET['medio']) && $_GET['medio']==$mp['id'])?'selected':''; ?>><?php echo clean($mp['nombre']); ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -112,7 +124,11 @@ foreach ($movimientos as $m) {
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Medio consignación</label>
-                    <input type="text" name="medio_consignacion" class="form-control" required>
+                    <select name="id_medio_pago" class="form-select" required>
+                        <?php foreach($mediosPago as $mp): ?>
+                            <option value="<?php echo $mp['id']; ?>"><?php echo clean($mp['nombre']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Motivo</label>
@@ -142,7 +158,7 @@ foreach ($movimientos as $m) {
                     <td><?php echo $m['nombre_actividad']; ?></td>
                     <td><?php echo clean($m['motivo']); ?></td>
                     <td>$<?php echo number_format($m['valor'],0,',','.'); ?></td>
-                    <td><?php echo clean($m['medio_consignacion']); ?></td>
+                    <td><?php echo clean($m['medio_nombre'] ?: $m['medio_consignacion']); ?></td>
                     <td><?php echo $m['es_ingreso'] ? 'Sí' : ''; ?></td>
                     <td><?php echo $m['es_egreso'] ? 'Sí' : ''; ?></td>
                 </tr>

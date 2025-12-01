@@ -34,6 +34,21 @@ function getActividades($pdo, $soloPolla = false, $incluirInactivas = false) {
     return $pdo->query($sql)->fetchAll();
 }
 
+function getMediosPago($pdo, $incluirInactivos = false) {
+    $sql = "SELECT * FROM medios_pago";
+    if (!$incluirInactivos) {
+        $sql .= " WHERE activo = 1";
+    }
+    $sql .= " ORDER BY nombre";
+    return $pdo->query($sql)->fetchAll();
+}
+
+function getMedioPago($pdo, $id) {
+    $stmt = $pdo->prepare('SELECT * FROM medios_pago WHERE id = :id');
+    $stmt->execute([':id' => $id]);
+    return $stmt->fetch();
+}
+
 function getSaldoNatillera($pdo) {
     $stmt = $pdo->query("SELECT saldo_actual FROM natillera_estado LIMIT 1");
     $row = $stmt->fetch();
