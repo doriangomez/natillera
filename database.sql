@@ -56,6 +56,7 @@ CREATE TABLE movimientos (
     es_ingreso TINYINT(1) DEFAULT 0,
     es_egreso TINYINT(1) DEFAULT 0,
     observaciones TEXT,
+    modulo VARCHAR(100) DEFAULT NULL,
     usuario_registro VARCHAR(50),
     fecha_registro DATETIME,
     FOREIGN KEY (id_socio) REFERENCES socios(id_socio),

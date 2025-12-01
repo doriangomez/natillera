@@ -16,7 +16,12 @@ if ($accion === 'eliminar') {
     exit;
 }
 
-$columnas = ['anio INT DEFAULT NULL', 'mes INT DEFAULT NULL', 'quincena INT DEFAULT 0'];
+$columnas = [
+    'anio INT DEFAULT NULL',
+    'mes INT DEFAULT NULL',
+    'quincena INT DEFAULT 0',
+    "modulo VARCHAR(100) DEFAULT NULL"
+];
 foreach ($columnas as $def) {
     try {
         $nombre = explode(' ', $def)[0];
@@ -32,8 +37,8 @@ foreach ($columnas as $def) {
 $fecha = $_POST['fecha'];
 $anio = isset($_POST['anio']) ? (int) $_POST['anio'] : null;
 $mes = isset($_POST['mes']) ? (int) $_POST['mes'] : null;
-$quincena = isset($_POST['quincena']) ? (int) $_POST['quincena'] : 0;
-$idSocio = $_POST['id_socio'] ?: null;
+$quincena = isset($_POST['quincena']) ? (int) $_POST['quincena'] : null;
+$idSocio = (isset($_POST['id_socio']) && $_POST['id_socio'] !== '') ? (int) $_POST['id_socio'] : null;
 $idActividad = (int) $_POST['id_actividad'];
 $valor = (float) $_POST['valor'];
 $motivo = '';
@@ -56,6 +61,8 @@ $camposObligatorios = [
     'fecha' => $fecha,
     'anio' => $anio,
     'mes' => $mes,
+    'quincena' => $quincena,
+    'socio' => $idSocio,
     'actividad' => $idActividad,
     'valor' => $valor,
 ];
@@ -88,8 +95,10 @@ if ($anioFecha !== $anio || $mesFecha !== $mes) {
     header('Location: ../public/movimientos.php');
     exit;
 }
-if ($quincena < 0 || $quincena > 2) {
-    $quincena = 0;
+if (!in_array($quincena, [1, 2], true)) {
+    $_SESSION['error'] = 'Debe seleccionar si el movimiento corresponde a la primera o segunda quincena.';
+    header('Location: ../public/movimientos.php');
+    exit;
 }
 
 if (!$medio && $idMedio) {
@@ -108,16 +117,6 @@ $reglaNatillera = $actividad['afecta_saldo_natillera'] ?? 'neutral';
 $esIngreso = $reglaNatillera === 'suma' ? 1 : 0;
 $esEgreso = $reglaNatillera === 'resta' ? 1 : 0;
 
-// Ajuste de quincena según periodicidad
-if ($idSocio) {
-    $stmtSocio = $pdo->prepare('SELECT periodicidad_pago FROM socios WHERE id_socio = :id');
-    $stmtSocio->execute([':id' => $idSocio]);
-    $socioInfo = $stmtSocio->fetch();
-    if ($socioInfo && strtolower($socioInfo['periodicidad_pago']) !== 'quincenal') {
-        $quincena = 0;
-    }
-}
-
 if ($actividad && !empty($actividad['es_polla']) && !$idSocio) {
     $_SESSION['error'] = 'Debe seleccionar un socio para registrar movimientos de polla.';
     header('Location: ../public/movimientos.php');
@@ -133,8 +132,8 @@ if ($esEgreso) {
     $valor = -abs($valor);
 }
 
-$stmt = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_actividad, motivo, valor, medio_consignacion, id_medio_pago, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro)
-VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_actividad, :motivo, :valor, :medio, :medio_id, :ingreso, :egreso, :obs, :usuario, NOW())');
+$stmt = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_actividad, motivo, valor, medio_consignacion, id_medio_pago, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo)
+VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_actividad, :motivo, :valor, :medio, :medio_id, :ingreso, :egreso, :obs, :usuario, NOW(), :modulo)');
 $stmt->execute([
     ':fecha' => $fecha,
     ':anio' => $anio,
@@ -150,6 +149,7 @@ $stmt->execute([
     ':egreso' => $esEgreso,
     ':obs' => $obs,
     ':usuario' => $_SESSION['usuario'] ?? null,
+    ':modulo' => 'movimientos',
 ]);
 
 actualizarSaldoSocio($pdo, $idSocio, $valor, $actividad['afecta_saldo_socio']);
