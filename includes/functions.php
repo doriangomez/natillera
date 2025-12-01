@@ -1,0 +1,68 @@
+<?php
+require_once __DIR__ . '/../config/db.php';
+
+function clean($value) {
+    return htmlspecialchars(trim((string)$value), ENT_QUOTES, 'UTF-8');
+}
+
+function getSocios($pdo, $search = '') {
+    $sql = "SELECT * FROM socios WHERE activo = 1";
+    $params = [];
+    if ($search !== '') {
+        $sql .= " AND (nombre_completo LIKE :q OR telefono LIKE :q OR id_socio LIKE :q)";
+        $params[':q'] = "%$search%";
+    }
+    $sql .= " ORDER BY nombre_completo";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll();
+}
+
+function getActividades($pdo, $soloPolla = false) {
+    $sql = "SELECT * FROM actividades_maestro";
+    if ($soloPolla) {
+        $sql .= " WHERE es_polla = 1";
+    }
+    $sql .= " ORDER BY nombre_actividad";
+    return $pdo->query($sql)->fetchAll();
+}
+
+function getSaldoNatillera($pdo) {
+    $stmt = $pdo->query("SELECT saldo_actual FROM natillera_estado LIMIT 1");
+    $row = $stmt->fetch();
+    return $row ? (float)$row['saldo_actual'] : 0.0;
+}
+
+function actualizarSaldoNatillera($pdo, $monto, $regla) {
+    if ($regla === 'neutral') {
+        return;
+    }
+    $operador = $regla === 'suma' ? '+' : '-';
+    $stmt = $pdo->prepare("UPDATE natillera_estado SET saldo_actual = saldo_actual $operador :monto WHERE id_estado = 1");
+    $stmt->execute([':monto' => abs($monto)]);
+}
+
+function actualizarSaldoSocio($pdo, $idSocio, $monto, $regla) {
+    if (!$idSocio || $regla === 'neutral') {
+        return;
+    }
+    $operador = $regla === 'suma' ? '+' : '-';
+    $stmt = $pdo->prepare("UPDATE socios SET saldo_socio = saldo_socio $operador :monto WHERE id_socio = :id");
+    $stmt->execute([':monto' => abs($monto), ':id' => $idSocio]);
+}
+
+function getActividad($pdo, $id) {
+    $stmt = $pdo->prepare("SELECT * FROM actividades_maestro WHERE id_actividad = :id");
+    $stmt->execute([':id' => $id]);
+    return $stmt->fetch();
+}
+
+function generarCSV($header, $rows) {
+    $fh = fopen('php://output', 'w');
+    fputcsv($fh, $header, ';');
+    foreach ($rows as $r) {
+        fputcsv($fh, $r, ';');
+    }
+    fclose($fh);
+}
+?>
