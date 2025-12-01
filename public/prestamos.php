@@ -116,7 +116,7 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
 <h4 class="d-flex align-items-center gap-2"><i class="bi bi-activity text-primary"></i><span>Préstamos vigentes</span></h4>
 <div class="table-responsive">
 <table class="table table-sm table-bordered">
-    <thead><tr><th>ID</th><th>Deudor</th><th>Aval</th><th>Tipo</th><th>Monto</th><th>Saldo capital</th><th>Saldo interés</th><th>Estado</th></tr></thead>
+    <thead><tr><th>ID</th><th>Deudor</th><th>Aval</th><th>Tipo</th><th>Monto</th><th>Saldo capital</th><th>Saldo interés</th><th>Estado</th><th></th></tr></thead>
     <tbody>
         <?php foreach($prestamos as $p): ?>
             <tr>
@@ -128,6 +128,13 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
                 <td>$<?php echo number_format($p['saldo_capital_actual'],0,',','.'); ?></td>
                 <td>$<?php echo number_format($p['saldo_intereses_actual'],0,',','.'); ?></td>
                 <td><?php echo $p['estado']; ?></td>
+                <td class="text-end">
+                    <form method="POST" action="../actions/prestamos_save.php" class="d-inline" onsubmit="return confirm('Esta acción eliminará el préstamo, sus cuotas y movimientos asociados. ¿Deseas continuar?');">
+                        <input type="hidden" name="accion" value="eliminar">
+                        <input type="hidden" name="id_prestamo" value="<?php echo $p['id_prestamo']; ?>">
+                        <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
+                    </form>
+                </td>
             </tr>
         <?php endforeach; ?>
     </tbody>

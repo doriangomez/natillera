@@ -166,7 +166,7 @@ foreach ($movimientos as $m) {
     <table class="table table-striped table-sm">
         <thead>
             <tr>
-                <th>Fecha</th><th>Periodo</th><th>Socio</th><th>Actividad</th><th>Valor</th><th>Medio</th><th>Ingreso</th><th>Egreso</th>
+                <th>Fecha</th><th>Periodo</th><th>Socio</th><th>Actividad</th><th>Valor</th><th>Medio</th><th>Ingreso</th><th>Egreso</th><th></th>
             </tr>
         </thead>
         <tbody>
@@ -180,6 +180,14 @@ foreach ($movimientos as $m) {
                     <td><?php echo clean($m['medio_nombre'] ?: $m['medio_consignacion']); ?></td>
                     <td><?php echo $m['es_ingreso'] ? 'Sí' : ''; ?></td>
                     <td><?php echo $m['es_egreso'] ? 'Sí' : ''; ?></td>
+                    <td class="text-end">
+                        <form method="POST" action="../actions/movimientos_save.php" class="d-inline" onsubmit="return confirm('Esta acción eliminará el movimiento seleccionado. ¿Deseas continuar?');">
+                            <input type="hidden" name="accion" value="eliminar">
+                            <input type="hidden" name="id_movimiento" value="<?php echo $m['id_movimiento']; ?>">
+                            <input type="hidden" name="redirect" value="../public/movimientos.php">
+                            <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
+                        </form>
+                    </td>
                 </tr>
             <?php endforeach; ?>
         </tbody>
