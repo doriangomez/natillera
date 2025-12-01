@@ -47,32 +47,35 @@ if ($accion === 'eliminar' && $id) {
     }
 }
 
+$numeroPolla = null;
 $numeroPollaRaw = trim($_POST['numero_polla'] ?? '');
 $numeroPollaDigits = preg_replace('/\D/', '', $numeroPollaRaw);
 
-if ($numeroPollaDigits === '' || strlen($numeroPollaDigits) > 2 || (int) $numeroPollaDigits > 99) {
-    $_SESSION['error'] = 'El número de polla debe estar entre 00 y 99.';
-    header('Location: ../public/socios.php' . ($id ? '?id=' . $id : ''));
-    exit;
-}
+if ($numeroPollaDigits !== '') {
+    if (strlen($numeroPollaDigits) > 2 || (int) $numeroPollaDigits > 99) {
+        $_SESSION['error'] = 'El número de polla debe estar entre 00 y 99.';
+        header('Location: ../public/socios.php' . ($id ? '?id=' . $id : ''));
+        exit;
+    }
 
-$numeroPolla = str_pad((string) (int) $numeroPollaDigits, 2, '0', STR_PAD_LEFT);
+    $numeroPolla = str_pad((string) (int) $numeroPollaDigits, 2, '0', STR_PAD_LEFT);
 
-$conflictoStmt = $pdo->prepare("SELECT id_socio, nombre_completo FROM socios WHERE LPAD(numero_polla, 2, '0') = :numero_polla AND id_socio <> :id");
-$conflictoStmt->execute([
-    ':numero_polla' => $numeroPolla,
-    ':id' => $id ?? 0,
-]);
-$socioExistente = $conflictoStmt->fetch();
+    $conflictoStmt = $pdo->prepare("SELECT id_socio, nombre_completo FROM socios WHERE LPAD(numero_polla, 2, '0') = :numero_polla AND id_socio <> :id");
+    $conflictoStmt->execute([
+        ':numero_polla' => $numeroPolla,
+        ':id' => $id ?? 0,
+    ]);
+    $socioExistente = $conflictoStmt->fetch();
 
-if ($socioExistente) {
-    $_SESSION['error'] = "El número de polla $numeroPolla ya está asignado a " . $socioExistente['nombre_completo'] . '.';
-    $_SESSION['error_action'] = [
-        'url' => '../public/socios.php?id=' . $socioExistente['id_socio'],
-        'label' => 'Ver socio',
-    ];
-    header('Location: ../public/socios.php' . ($id ? '?id=' . $id : ''));
-    exit;
+    if ($socioExistente) {
+        $_SESSION['error'] = "El número de polla $numeroPolla ya está asignado a " . $socioExistente['nombre_completo'] . '.';
+        $_SESSION['error_action'] = [
+            'url' => '../public/socios.php?id=' . $socioExistente['id_socio'],
+            'label' => 'Ver socio',
+        ];
+        header('Location: ../public/socios.php' . ($id ? '?id=' . $id : ''));
+        exit;
+    }
 }
 
 $data = [
