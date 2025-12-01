@@ -112,7 +112,8 @@ CREATE TABLE configuracion_general (
     id_config INT PRIMARY KEY,
     nombre_sistema VARCHAR(200) DEFAULT 'Aplicativo de Natillera creado por Dorian Gómez',
     logo_archivo VARCHAR(255) DEFAULT NULL,
-    datos_globales TEXT
+    datos_globales TEXT,
+    reglamento_archivo VARCHAR(255) DEFAULT NULL
 );
 INSERT INTO configuracion_general (id_config, nombre_sistema, logo_archivo, datos_globales) VALUES
 (1, 'Aplicativo de Natillera creado por Dorian Gómez', NULL, 'Datos generales de la natillera');

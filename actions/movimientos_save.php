@@ -12,9 +12,33 @@ $medio = $_POST['medio_consignacion'] ?? '';
 $idMedio = isset($_POST['id_medio_pago']) ? (int) $_POST['id_medio_pago'] : null;
 $obs = $_POST['observaciones'] ?? '';
 
+$camposObligatorios = [
+    'fecha' => $fecha,
+    'actividad' => $idActividad,
+    'valor' => $valor,
+];
+foreach ($camposObligatorios as $campo => $dato) {
+    if ($dato === '' || $dato === null) {
+        $_SESSION['error'] = 'No se puede guardar el movimiento: falta ' . $campo . '.';
+        header('Location: ../public/movimientos.php');
+        exit;
+    }
+}
+if ($valor <= 0) {
+    $_SESSION['error'] = 'El valor del movimiento debe ser mayor a cero.';
+    header('Location: ../public/movimientos.php');
+    exit;
+}
+
 if (!$medio && $idMedio) {
     $medioInfo = getMedioPago($pdo, $idMedio);
     $medio = $medioInfo['nombre'] ?? '';
+}
+$medio = trim($medio);
+if (!$medio) {
+    $_SESSION['error'] = 'Debe seleccionar o registrar un medio de pago.';
+    header('Location: ../public/movimientos.php');
+    exit;
 }
 
 $actividad = getActividad($pdo, $idActividad);
@@ -24,6 +48,11 @@ $esEgreso = $reglaNatillera === 'resta' ? 1 : 0;
 
 if ($actividad && !empty($actividad['es_polla']) && !$idSocio) {
     $_SESSION['error'] = 'Debe seleccionar un socio para registrar movimientos de polla.';
+    header('Location: ../public/movimientos.php');
+    exit;
+}
+if ($actividad && !empty($actividad['es_polla']) && (float) abs($valor) != 20000) {
+    $_SESSION['error'] = 'Cada registro de polla debe ser exactamente de $20.000.';
     header('Location: ../public/movimientos.php');
     exit;
 }

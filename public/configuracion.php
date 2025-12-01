@@ -33,6 +33,8 @@ $medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
                     <span class="badge bg-dark">Admin</span>
                 </div>
                 <form method="POST" action="../actions/configuracion_save.php" enctype="multipart/form-data">
+                    <input type="hidden" name="nombre_sistema" value="<?php echo clean($config['nombre_sistema'] ?? ''); ?>">
+                    <input type="hidden" name="datos_globales" value="<?php echo clean($config['datos_globales'] ?? ''); ?>">
                     <div class="mb-3">
                         <label class="form-label">Nombre del sistema</label>
                         <input type="text" name="nombre_sistema" class="form-control" required value="<?php echo clean($config['nombre_sistema'] ?? ''); ?>">
@@ -53,6 +55,35 @@ $medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
                     </div>
                     <div class="d-flex gap-2">
                         <button class="btn btn-primary" type="submit">Guardar parámetros</button>
+                        <a class="btn btn-outline-secondary" href="index.php">Volver al panel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h2 class="h6 mb-0">Reglamento general</h2>
+                        <p class="text-muted small mb-0">Solo administradores</p>
+                    </div>
+                    <span class="badge bg-dark">Admin</span>
+                </div>
+                <form method="POST" action="../actions/configuracion_save.php" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">Archivo PDF</label>
+                        <input type="file" name="reglamento_pdf" class="form-control" accept="application/pdf">
+                        <?php if (!empty($config['reglamento_archivo'])): ?>
+                            <div class="mt-2">
+                                <span class="text-muted small d-block">Actual: <?php echo clean($config['reglamento_archivo']); ?></span>
+                                <a class="btn btn-outline-primary btn-sm mt-2" href="assets/reglamento/<?php echo clean($config['reglamento_archivo']); ?>" download>Descargar</a>
+                            </div>
+                        <?php else: ?>
+                            <p class="text-muted small mt-2">No hay reglamento cargado.</p>
+                        <?php endif; ?>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary" type="submit">Subir / reemplazar</button>
                         <a class="btn btn-outline-secondary" href="index.php">Volver al panel</a>
                     </div>
                 </form>

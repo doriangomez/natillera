@@ -7,6 +7,7 @@ $anio = (int) $_POST['anio'];
 $mes = (int) $_POST['mes'];
 $medios = $_POST['medio_ids'] ?? [];
 $bancos = $_POST['banco'] ?? [];
+$hayDescuadre = false;
 
 foreach ($medios as $idMedio) {
     $valorBanco = isset($bancos[$idMedio]) ? (float) $bancos[$idMedio] : 0;
@@ -14,6 +15,9 @@ foreach ($medios as $idMedio) {
     $stmtTotal->execute([':id'=>$idMedio, ':y'=>$anio, ':m'=>$mes]);
     $totalSistema = (float) ($stmtTotal->fetchColumn() ?: 0);
     $diff = $totalSistema - $valorBanco;
+    if (abs($diff) > 0.009) {
+        $hayDescuadre = true;
+    }
 
     $stmt = $pdo->prepare('INSERT INTO conciliaciones_medios_pago (id_medio, anio, mes, total_sistema, valor_banco, diferencia) VALUES (:id,:y,:m,:ts,:vb,:df)
         ON DUPLICATE KEY UPDATE total_sistema=VALUES(total_sistema), valor_banco=VALUES(valor_banco), diferencia=VALUES(diferencia)');
@@ -26,7 +30,10 @@ foreach ($medios as $idMedio) {
         ':df' => $diff
     ]);
 }
-
-header('Location: ../public/conciliaciones.php?anio='.$anio.'&mes='.$mes.'&guardado=1');
+$redirect = '../public/conciliaciones.php?anio='.$anio.'&mes='.$mes.'&guardado=1';
+if ($hayDescuadre) {
+    $_SESSION['warning'] = 'Se detectaron descuadres en la conciliación. Verifique los valores registrados.';
+}
+header('Location: ' . $redirect);
 exit;
 ?>

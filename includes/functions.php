@@ -93,7 +93,11 @@ function getConfiguracionGeneral($pdo) {
             'nombre_sistema' => 'Aplicativo de Natillera creado por Dorian Gómez',
             'logo_archivo' => null,
             'datos_globales' => '',
+            'reglamento_archivo' => null,
         ];
+    }
+    if (!isset($config['reglamento_archivo'])) {
+        $config['reglamento_archivo'] = null;
     }
     return $config;
 }
