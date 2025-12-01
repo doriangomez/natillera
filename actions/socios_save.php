@@ -17,15 +17,19 @@ if ($accion === 'eliminar' && $id) {
     try {
         $pdo->beginTransaction();
 
-        $prestamosStmt = $pdo->prepare('SELECT id_prestamo FROM prestamos WHERE id_socio = :id OR id_socio_aval = :id');
-        $prestamosStmt->execute([':id' => $id]);
-        $prestamoIds = $prestamosStmt->fetchAll(PDO::FETCH_COLUMN);
+        // Identificar préstamos donde el socio es el titular para borrarlos junto con sus cuotas
+        $prestamosTitularStmt = $pdo->prepare('SELECT id_prestamo FROM prestamos WHERE id_socio = :id');
+        $prestamosTitularStmt->execute([':id' => $id]);
+        $prestamosTitularIds = $prestamosTitularStmt->fetchAll(PDO::FETCH_COLUMN);
 
-        if ($prestamoIds) {
-            $placeholders = implode(',', array_fill(0, count($prestamoIds), '?'));
-            $pdo->prepare("DELETE FROM cuotas_prestamo WHERE id_prestamo IN ($placeholders)")->execute($prestamoIds);
-            $pdo->prepare("DELETE FROM prestamos WHERE id_prestamo IN ($placeholders)")->execute($prestamoIds);
+        if ($prestamosTitularIds) {
+            $placeholders = implode(',', array_fill(0, count($prestamosTitularIds), '?'));
+            $pdo->prepare("DELETE FROM cuotas_prestamo WHERE id_prestamo IN ($placeholders)")->execute($prestamosTitularIds);
+            $pdo->prepare("DELETE FROM prestamos WHERE id_prestamo IN ($placeholders)")->execute($prestamosTitularIds);
         }
+
+        // Desasociar al socio como aval para no romper la llave foránea
+        $pdo->prepare('UPDATE prestamos SET id_socio_aval = NULL WHERE id_socio_aval = :id')->execute([':id' => $id]);
 
         $pdo->prepare('DELETE FROM movimientos WHERE id_socio = :id')->execute([':id' => $id]);
         $pdo->prepare('DELETE FROM socios WHERE id_socio = :id')->execute([':id' => $id]);
