@@ -3,6 +3,18 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 checkAuth();
 
+$accion = $_POST['accion'] ?? 'guardar';
+$idConciliacion = isset($_POST['id_conciliacion']) ? (int) $_POST['id_conciliacion'] : 0;
+
+if ($accion === 'eliminar') {
+    if ($idConciliacion > 0) {
+        $stmt = $pdo->prepare('DELETE FROM conciliaciones_medios_pago WHERE id = :id');
+        $stmt->execute([':id' => $idConciliacion]);
+    }
+    header('Location: ../public/conciliaciones.php');
+    exit;
+}
+
 $anio = (int) $_POST['anio'];
 $mes = (int) $_POST['mes'];
 $medios = $_POST['medio_ids'] ?? [];
