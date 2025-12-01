@@ -30,7 +30,8 @@ CREATE TABLE actividades_maestro (
     es_prestamo TINYINT(1) DEFAULT 0,
     es_pago_prestamo TINYINT(1) DEFAULT 0,
     es_polla TINYINT(1) DEFAULT 0,
-    es_gasto_general TINYINT(1) DEFAULT 0
+    es_gasto_general TINYINT(1) DEFAULT 0,
+    activo TINYINT(1) DEFAULT 1
 );
 
 CREATE TABLE movimientos (
@@ -94,3 +95,12 @@ INSERT INTO actividades_maestro (nombre_actividad, afecta_saldo_socio, afecta_sa
 ('Pago Premio Polla', 'resta', 'resta', 0, 0, 1, 0),
 ('Pago Abono a Préstamo', 'suma', 'suma', 0, 1, 0, 0),
 ('Gasto General', 'neutral', 'resta', 0, 0, 0, 1);
+
+CREATE TABLE configuracion_general (
+    id_config INT PRIMARY KEY,
+    nombre_sistema VARCHAR(200) DEFAULT 'Aplicativo de Natillera creado por Dorian Gómez',
+    logo_archivo VARCHAR(255) DEFAULT NULL,
+    datos_globales TEXT
+);
+INSERT INTO configuracion_general (id_config, nombre_sistema, logo_archivo, datos_globales) VALUES
+(1, 'Aplicativo de Natillera creado por Dorian Gómez', NULL, 'Datos generales de la natillera');

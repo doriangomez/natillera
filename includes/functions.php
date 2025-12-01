@@ -18,10 +18,17 @@ function getSocios($pdo, $search = '') {
     return $stmt->fetchAll();
 }
 
-function getActividades($pdo, $soloPolla = false) {
+function getActividades($pdo, $soloPolla = false, $incluirInactivas = false) {
     $sql = "SELECT * FROM actividades_maestro";
+    $condiciones = [];
     if ($soloPolla) {
-        $sql .= " WHERE es_polla = 1";
+        $condiciones[] = "es_polla = 1";
+    }
+    if (!$incluirInactivas) {
+        $condiciones[] = "activo = 1";
+    }
+    if ($condiciones) {
+        $sql .= ' WHERE ' . implode(' AND ', $condiciones);
     }
     $sql .= " ORDER BY nombre_actividad";
     return $pdo->query($sql)->fetchAll();
@@ -55,6 +62,25 @@ function getActividad($pdo, $id) {
     $stmt = $pdo->prepare("SELECT * FROM actividades_maestro WHERE id_actividad = :id");
     $stmt->execute([':id' => $id]);
     return $stmt->fetch();
+}
+
+function getConfiguracionGeneral($pdo) {
+    try {
+        $stmt = $pdo->prepare('SELECT * FROM configuracion_general WHERE id_config = 1');
+        $stmt->execute();
+        $config = $stmt->fetch();
+    } catch (PDOException $e) {
+        $config = false;
+    }
+
+    if (!$config) {
+        $config = [
+            'nombre_sistema' => 'Aplicativo de Natillera creado por Dorian Gómez',
+            'logo_archivo' => null,
+            'datos_globales' => '',
+        ];
+    }
+    return $config;
 }
 
 function generarCSV($header, $rows) {
