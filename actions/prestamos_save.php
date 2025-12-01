@@ -3,6 +3,15 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 checkAuth();
 
+try {
+    $existeModulo = $pdo->query("SHOW COLUMNS FROM movimientos LIKE 'modulo'");
+    if ($existeModulo && $existeModulo->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE movimientos ADD COLUMN modulo VARCHAR(100) DEFAULT NULL");
+    }
+} catch (Exception $e) {
+    // continuar
+}
+
 $accion = $_POST['accion'] ?? 'crear';
 $idPrestamo = isset($_POST['id_prestamo']) ? (int) $_POST['id_prestamo'] : 0;
 
@@ -119,7 +128,7 @@ for ($i=1; $i<=$cuotas; $i++) {
 // Registrar movimiento de desembolso si existe actividad marcada como préstamo
 $actividadPrestamo = $pdo->query("SELECT id_actividad, afecta_saldo_socio, afecta_saldo_natillera FROM actividades_maestro WHERE es_prestamo=1 LIMIT 1")->fetch();
 if ($actividadPrestamo) {
-    $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, 0, 1, :obs, :usuario, NOW())');
+    $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, 0, 1, :obs, :usuario, NOW(), :modulo)');
     $stmtMov->execute([
         ':fecha' => $fecha,
         ':id_socio' => $idSocio,
@@ -129,6 +138,7 @@ if ($actividadPrestamo) {
         ':medio' => 'Efectivo',
         ':obs' => 'Desembolso inicial',
         ':usuario' => $_SESSION['usuario'] ?? null,
+        ':modulo' => 'prestamos',
     ]);
     actualizarSaldoSocio($pdo, $idSocio, -abs($monto), $actividadPrestamo['afecta_saldo_socio']);
     actualizarSaldoNatillera($pdo, -abs($monto), $actividadPrestamo['afecta_saldo_natillera']);

@@ -111,17 +111,17 @@ foreach ($movimientos as $m) {
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label">Quincena</label>
-                    <select name="quincena" class="form-select" id="quincenaSelect">
-                        <option value="0">No aplica</option>
+                    <label class="form-label"><span class="text-danger">*</span> Quincena</label>
+                    <select name="quincena" class="form-select" id="quincenaSelect" required>
+                        <option value="" selected disabled>Seleccione la quincena</option>
                         <option value="1">Primera</option>
                         <option value="2">Segunda</option>
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Socio (opcional)</label>
-                    <select name="id_socio" class="form-select" id="socioSelect">
-                        <option value="">Gasto general</option>
+                    <label class="form-label"><span class="text-danger">*</span> Socio</label>
+                    <select name="id_socio" class="form-select" id="socioSelect" required>
+                        <option value="" selected disabled>Seleccione un socio</option>
                         <?php foreach($socios as $s): ?>
                             <option value="<?php echo $s['id_socio']; ?>" data-periodicidad="<?php echo clean($s['periodicidad_pago']); ?>"><?php echo clean($s['nombre_completo']); ?></option>
                         <?php endforeach; ?>
@@ -130,13 +130,14 @@ foreach ($movimientos as $m) {
                 <div class="col-md-4">
                     <label class="form-label"><span class="text-danger">*</span> Actividad</label>
                     <select name="id_actividad" class="form-select" required>
-                    <?php foreach($actividades as $a): ?>
-                        <option value="<?php echo $a['id_actividad']; ?>" data-regla="<?php echo clean($a['afecta_saldo_natillera']); ?>">
-                            <?php echo clean($a['nombre_actividad']); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
+                        <option value="" selected disabled>Seleccione una actividad</option>
+                        <?php foreach($actividades as $a): ?>
+                            <option value="<?php echo $a['id_actividad']; ?>" data-regla="<?php echo clean($a['afecta_saldo_natillera']); ?>">
+                                <?php echo clean($a['nombre_actividad']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
                 <div class="col-md-2">
                     <label class="form-label"><span class="text-danger">*</span> Valor</label>
                     <input type="number" step="0.01" name="valor" class="form-control" required>
@@ -166,7 +167,7 @@ foreach ($movimientos as $m) {
     <table class="table table-striped table-sm">
         <thead>
             <tr>
-                <th>Fecha</th><th>Periodo</th><th>Socio</th><th>Actividad</th><th>Valor</th><th>Medio</th><th>Ingreso</th><th>Egreso</th><th></th>
+                <th>Fecha</th><th>Periodo</th><th>Socio</th><th>Actividad</th><th>Valor</th><th>Medio</th><th>Módulo</th><th>Ingreso</th><th>Egreso</th><th></th>
             </tr>
         </thead>
         <tbody>
@@ -178,6 +179,7 @@ foreach ($movimientos as $m) {
                     <td><?php echo $m['nombre_actividad']; ?></td>
                     <td>$<?php echo number_format($m['valor'],0,',','.'); ?></td>
                     <td><?php echo clean($m['medio_nombre'] ?: $m['medio_consignacion']); ?></td>
+                    <td><?php echo clean($m['modulo'] ?: 'movimientos'); ?></td>
                     <td><?php echo $m['es_ingreso'] ? 'Sí' : ''; ?></td>
                     <td><?php echo $m['es_egreso'] ? 'Sí' : ''; ?></td>
                     <td class="text-end">
@@ -197,24 +199,15 @@ foreach ($movimientos as $m) {
 <script>
 const actividadSelect = document.querySelector('select[name="id_actividad"]');
 const tipoActividadInput = document.getElementById('tipoActividad');
-const socioSelect = document.getElementById('socioSelect');
-const quincenaSelect = document.getElementById('quincenaSelect');
 const anioSelect = document.querySelector('select[name="anio"]');
 const mesSelect = document.querySelector('select[name="mes"]');
 
 function actualizarTipoActividad(){
     const regla = actividadSelect.selectedOptions[0]?.dataset.regla || '';
-    if(regla === 'suma') tipoActividadInput.value = 'Ingreso automático';
+    if(!regla) tipoActividadInput.value = 'Seleccione una actividad';
+    else if(regla === 'suma') tipoActividadInput.value = 'Ingreso automático';
     else if(regla === 'resta') tipoActividadInput.value = 'Egreso automático';
     else tipoActividadInput.value = 'Neutral (no afecta saldo)';
-}
-function actualizarQuincena(){
-    const periodicidad = socioSelect.selectedOptions[0]?.dataset.periodicidad || '';
-    const esQuincenal = periodicidad === 'quincenal';
-    quincenaSelect.disabled = !esQuincenal;
-    if(!esQuincenal){
-        quincenaSelect.value = '0';
-    }
 }
 function actualizarMeses(){
     const anio = parseInt(anioSelect.value, 10);
@@ -235,10 +228,6 @@ function actualizarMeses(){
 if(actividadSelect){
     actividadSelect.addEventListener('change', actualizarTipoActividad);
     actualizarTipoActividad();
-}
-if(socioSelect){
-    socioSelect.addEventListener('change', actualizarQuincena);
-    actualizarQuincena();
 }
 if(anioSelect && mesSelect){
     anioSelect.addEventListener('change', actualizarMeses);

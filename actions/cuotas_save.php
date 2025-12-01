@@ -3,6 +3,15 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 checkAuth();
 
+try {
+    $existeModulo = $pdo->query("SHOW COLUMNS FROM movimientos LIKE 'modulo'");
+    if ($existeModulo && $existeModulo->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE movimientos ADD COLUMN modulo VARCHAR(100) DEFAULT NULL");
+    }
+} catch (Exception $e) {
+    // continuar
+}
+
 $accion = $_POST['accion'] ?? 'crear';
 $idCuota = isset($_POST['id_cuota']) ? (int) $_POST['id_cuota'] : 0;
 
@@ -104,7 +113,7 @@ $pdo->prepare('UPDATE prestamos SET saldo_capital_actual=:cap, saldo_intereses_a
 $actividad = getActividad($pdo, $idActividad);
 $valorTotal = $capPagado + $intPagado;
 
-$stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, 1, 0, :obs, :usuario, NOW())');
+$stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, 1, 0, :obs, :usuario, NOW(), :modulo)');
 $stmtMov->execute([
     ':fecha' => $fechaPago,
     ':id_socio' => $prestamo['id_socio'],
@@ -114,6 +123,7 @@ $stmtMov->execute([
     ':medio' => $medio,
     ':obs' => 'Pago cuota',
     ':usuario' => $_SESSION['usuario'] ?? null,
+    ':modulo' => 'cuotas',
 ]);
 
 actualizarSaldoSocio($pdo, $prestamo['id_socio'], $valorTotal, $actividad['afecta_saldo_socio']);
