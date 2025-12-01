@@ -122,12 +122,6 @@ if ($actividad && !empty($actividad['es_polla']) && !$idSocio) {
     header('Location: ../public/movimientos.php');
     exit;
 }
-if ($actividad && !empty($actividad['es_polla']) && (float) abs($valor) != 20000) {
-    $_SESSION['error'] = 'Cada registro de polla debe ser exactamente de $20.000.';
-    header('Location: ../public/movimientos.php');
-    exit;
-}
-
 if ($esEgreso) {
     $valor = -abs($valor);
 }
