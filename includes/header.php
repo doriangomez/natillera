@@ -193,7 +193,15 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         </header>
         <main class="app-content">
             <?php if (!empty($_SESSION['error'])): ?>
-                <div class="alert alert-danger"><?php echo clean($_SESSION['error']); unset($_SESSION['error']); ?></div>
+                <div class="alert alert-danger d-flex align-items-center justify-content-between gap-3">
+                    <div><?php echo clean($_SESSION['error']); ?></div>
+                    <?php if (!empty($_SESSION['error_action']) && is_array($_SESSION['error_action'])): ?>
+                        <a class="btn btn-sm btn-outline-light" href="<?php echo clean($_SESSION['error_action']['url'] ?? '#'); ?>">
+                            <?php echo clean($_SESSION['error_action']['label'] ?? 'Ver detalle'); ?>
+                        </a>
+                    <?php endif; ?>
+                </div>
+                <?php unset($_SESSION['error'], $_SESSION['error_action']); ?>
             <?php endif; ?>
             <?php if (!empty($_SESSION['success'])): ?>
                 <div class="alert alert-success"><?php echo clean($_SESSION['success']); unset($_SESSION['success']); ?></div>

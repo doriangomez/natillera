@@ -34,7 +34,9 @@ $valorCuotaMensual = $periodicidadPago === 'quincenal' ? $valorCuota * 2 : $valo
                     </div>
                     <div class="mb-2">
                         <label class="form-label">Número polla <span class="text-danger">*</span></label>
-                        <input type="text" name="numero_polla" class="form-control" required value="<?php echo $editData['numero_polla'] ?? ''; ?>">
+                        <input type="text" name="numero_polla" class="form-control" required maxlength="2" pattern="\d{2}" inputmode="numeric" value="<?php echo $editData['numero_polla'] ?? ''; ?>" aria-describedby="numeroPollaHelp">
+                        <div class="form-text" id="numeroPollaHelp">Solo se permiten valores entre 00 y 99.</div>
+                        <div class="alert alert-warning d-flex align-items-center justify-content-between mt-2 d-none" id="numeroPollaAlert"></div>
                     </div>
                     <div class="mb-2">
                         <label class="form-label">Periodicidad pago <span class="text-danger">*</span></label>
@@ -119,6 +121,16 @@ $valorCuotaMensual = $periodicidadPago === 'quincenal' ? $valorCuota * 2 : $valo
     const periodicidadSelect = document.querySelector('select[name="periodicidad_pago"]');
     const valorCuotaInput = document.querySelector('input[name="valor_presupuestado"]');
     const valorCuotaMensualInput = document.getElementById('valorCuotaMensual');
+    const numeroPollaInput = document.querySelector('input[name="numero_polla"]');
+    const numeroPollaAlert = document.getElementById('numeroPollaAlert');
+    const currentSocioId = <?php echo $editData['id_socio'] ?? 'null'; ?>;
+    const sociosPorPolla = <?php echo json_encode(array_map(function($s) {
+        return [
+            'id' => $s['id_socio'],
+            'nombre' => $s['nombre_completo'],
+            'numero' => $s['numero_polla'],
+        ];
+    }, $lista)); ?>;
 
     function actualizarValorMensual() {
         const valorCuota = parseFloat(valorCuotaInput.value) || 0;
@@ -127,8 +139,68 @@ $valorCuotaMensual = $periodicidadPago === 'quincenal' ? $valorCuota * 2 : $valo
         valorCuotaMensualInput.value = valorMensual.toFixed(2);
     }
 
+    function limpiarNumeroPolla(valor) {
+        return valor.replace(/\D/g, '').slice(0, 2);
+    }
+
+    function normalizarNumeroPolla(valor) {
+        if (valor === '') return '';
+        const numero = parseInt(valor, 10);
+        if (Number.isNaN(numero)) return '';
+        return numero.toString().padStart(2, '0');
+    }
+
+    function mostrarAlertaPolla(mensaje, socioId) {
+        numeroPollaAlert.innerHTML = '';
+        numeroPollaAlert.classList.add('d-flex');
+        numeroPollaAlert.classList.remove('d-none');
+
+        const texto = document.createElement('span');
+        texto.textContent = mensaje;
+        numeroPollaAlert.appendChild(texto);
+
+        if (socioId) {
+            const enlace = document.createElement('a');
+            enlace.className = 'btn btn-sm btn-outline-dark';
+            enlace.href = `?id=${socioId}`;
+            enlace.textContent = 'Ver socio';
+            numeroPollaAlert.appendChild(enlace);
+        }
+    }
+
+    function ocultarAlertaPolla() {
+        numeroPollaAlert.classList.add('d-none');
+        numeroPollaAlert.classList.remove('d-flex');
+        numeroPollaAlert.innerHTML = '';
+    }
+
+    function validarNumeroPolla() {
+        const limpio = limpiarNumeroPolla(numeroPollaInput.value);
+        numeroPollaInput.value = limpio;
+
+        if (limpio === '') {
+            ocultarAlertaPolla();
+            return;
+        }
+
+        const normalizado = normalizarNumeroPolla(limpio);
+        numeroPollaInput.value = normalizado;
+
+        const socioExistente = sociosPorPolla.find(s => s.numero === normalizado && s.id !== currentSocioId);
+        if (socioExistente) {
+            mostrarAlertaPolla(`El número de polla ${normalizado} ya está asignado a ${socioExistente.nombre}.`, socioExistente.id);
+        } else {
+            ocultarAlertaPolla();
+        }
+    }
+
     periodicidadSelect.addEventListener('change', actualizarValorMensual);
     valorCuotaInput.addEventListener('input', actualizarValorMensual);
-    document.addEventListener('DOMContentLoaded', actualizarValorMensual);
+    numeroPollaInput.addEventListener('input', validarNumeroPolla);
+    numeroPollaInput.addEventListener('blur', validarNumeroPolla);
+    document.addEventListener('DOMContentLoaded', () => {
+        actualizarValorMensual();
+        validarNumeroPolla();
+    });
 </script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
