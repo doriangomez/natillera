@@ -18,7 +18,7 @@ if ($editId) {
         <div class="card mb-3">
             <div class="card-header"><?php echo $editData ? 'Editar socio' : 'Nuevo socio'; ?></div>
             <div class="card-body">
-                <form method="POST" action="/actions/socios_save.php">
+                <form method="POST" action="../actions/socios_save.php">
                     <input type="hidden" name="id_socio" value="<?php echo $editData['id_socio'] ?? ''; ?>">
                     <div class="mb-2">
                         <label class="form-label">Nombre completo</label>
@@ -45,7 +45,7 @@ if ($editId) {
                     </div>
                     <button class="btn btn-success" type="submit">Guardar</button>
                     <?php if ($editData): ?>
-                        <a class="btn btn-secondary" href="/public/socios.php">Cancelar</a>
+                        <a class="btn btn-secondary" href="socios.php">Cancelar</a>
                     <?php endif; ?>
                 </form>
             </div>
@@ -58,7 +58,7 @@ if ($editId) {
             </div>
             <div class="col-auto">
                 <button class="btn btn-outline-primary">Buscar</button>
-                <a class="btn btn-outline-secondary" href="/actions/export_csv.php?tipo=socios">Exportar CSV</a>
+                <a class="btn btn-outline-secondary" href="../actions/export_csv.php?tipo=socios">Exportar CSV</a>
             </div>
         </form>
         <div class="table-responsive">
@@ -87,7 +87,7 @@ if ($editId) {
                             <td>$<?php echo number_format($s['saldo_socio'],0,',','.'); ?></td>
                             <td>
                                 <a class="btn btn-sm btn-primary" href="?id=<?php echo $s['id_socio']; ?>">Editar</a>
-                                <form method="POST" action="/actions/socios_save.php" class="d-inline" onsubmit="return confirm('¿Inactivar socio?');">
+                                <form method="POST" action="../actions/socios_save.php" class="d-inline" onsubmit="return confirm('¿Inactivar socio?');">
                                     <input type="hidden" name="id_socio" value="<?php echo $s['id_socio']; ?>">
                                     <input type="hidden" name="accion" value="inactivar">
                                     <button class="btn btn-sm btn-danger">Inactivar</button>

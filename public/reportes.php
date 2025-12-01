@@ -25,7 +25,7 @@ $prestamos = $pdo->query("SELECT id_prestamo, nombre_deudor, saldo_capital_actua
         <div class="card">
             <div class="card-header">Saldos por socio</div>
             <div class="card-body">
-                <a class="btn btn-outline-secondary mb-2" href="/actions/export_csv.php?tipo=saldos">Exportar CSV</a>
+                <a class="btn btn-outline-secondary mb-2" href="../actions/export_csv.php?tipo=saldos">Exportar CSV</a>
                 <div class="table-responsive">
                     <table class="table table-sm table-striped">
                         <thead><tr><th>Socio</th><th>Saldo</th></tr></thead>
@@ -43,7 +43,7 @@ $prestamos = $pdo->query("SELECT id_prestamo, nombre_deudor, saldo_capital_actua
 <div class="card mt-3">
     <div class="card-header">PYG por actividad</div>
     <div class="card-body">
-        <a class="btn btn-outline-secondary mb-2" href="/actions/export_csv.php?tipo=pyg">Exportar CSV</a>
+        <a class="btn btn-outline-secondary mb-2" href="../actions/export_csv.php?tipo=pyg">Exportar CSV</a>
         <div class="table-responsive">
             <table class="table table-bordered table-sm">
                 <thead><tr><th>Actividad</th><th>Ingresos</th><th>Egresos</th><th>Neto</th></tr></thead>
@@ -64,7 +64,7 @@ $prestamos = $pdo->query("SELECT id_prestamo, nombre_deudor, saldo_capital_actua
 <div class="card mt-3">
     <div class="card-header">Gastos de la natillera</div>
     <div class="card-body">
-        <a class="btn btn-outline-secondary mb-2" href="/actions/export_csv.php?tipo=gastos">Exportar CSV</a>
+        <a class="btn btn-outline-secondary mb-2" href="../actions/export_csv.php?tipo=gastos">Exportar CSV</a>
         <div class="table-responsive">
             <table class="table table-striped table-sm">
                 <thead><tr><th>Actividad</th><th>Total</th></tr></thead>
@@ -80,7 +80,7 @@ $prestamos = $pdo->query("SELECT id_prestamo, nombre_deudor, saldo_capital_actua
 <div class="card mt-3">
     <div class="card-header">Préstamos y saldos</div>
     <div class="card-body">
-        <a class="btn btn-outline-secondary mb-2" href="/actions/export_csv.php?tipo=prestamos">Exportar CSV</a>
+        <a class="btn btn-outline-secondary mb-2" href="../actions/export_csv.php?tipo=prestamos">Exportar CSV</a>
         <div class="table-responsive">
             <table class="table table-sm table-bordered">
                 <thead><tr><th>ID</th><th>Deudor</th><th>Saldo capital</th><th>Saldo intereses</th></tr></thead>

@@ -1,7 +1,7 @@
 <?php
 session_start();
 if (isset($_SESSION['usuario'])) {
-    header('Location: /public/index.php');
+    header('Location: index.php');
     exit;
 }
 $message = isset($_GET['error']) ? 'Credenciales inválidas' : '';
@@ -24,7 +24,7 @@ $message = isset($_GET['error']) ? 'Credenciales inválidas' : '';
                     <?php if ($message): ?>
                         <div class="alert alert-danger"><?php echo $message; ?></div>
                     <?php endif; ?>
-                    <form method="POST" action="/actions/login.php">
+                    <form method="POST" action="../actions/login.php">
                         <div class="mb-3">
                             <label class="form-label">Usuario</label>
                             <input type="text" name="usuario" class="form-control" required>

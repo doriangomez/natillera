@@ -52,5 +52,5 @@ $stmtMov->execute([
 actualizarSaldoSocio($pdo, $prestamo['id_socio'], $valorTotal, $actividad['afecta_saldo_socio']);
 actualizarSaldoNatillera($pdo, $valorTotal, $actividad['afecta_saldo_natillera']);
 
-header('Location: /public/prestamos.php');
+header('Location: ../public/prestamos.php');
 ?>

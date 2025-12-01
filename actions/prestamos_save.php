@@ -55,5 +55,5 @@ if ($actividadPrestamo) {
     actualizarSaldoNatillera($pdo, -abs($monto), $actividadPrestamo['afecta_saldo_natillera']);
 }
 
-header('Location: /public/prestamos.php');
+header('Location: ../public/prestamos.php');
 ?>

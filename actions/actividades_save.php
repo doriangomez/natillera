@@ -23,5 +23,5 @@ if ($id) {
 }
 $stmt = $pdo->prepare($sql);
 $stmt->execute($data);
-header('Location: /public/actividades.php');
+header('Location: ../public/actividades.php');
 ?>

@@ -11,7 +11,7 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo FROM prestamos p LEFT JO
 <div class="card mb-3">
     <div class="card-header">Crear nuevo préstamo</div>
     <div class="card-body">
-        <form method="POST" action="/actions/prestamos_save.php">
+        <form method="POST" action="../actions/prestamos_save.php">
             <div class="row g-2">
                 <div class="col-md-3">
                     <label class="form-label">Fecha préstamo</label>
@@ -50,7 +50,7 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo FROM prestamos p LEFT JO
 <div class="card mb-3">
     <div class="card-header">Registrar pago de préstamo</div>
     <div class="card-body">
-        <form method="POST" action="/actions/cuotas_save.php">
+        <form method="POST" action="../actions/cuotas_save.php">
             <div class="row g-2">
                 <div class="col-md-4">
                     <label class="form-label">Préstamo</label>

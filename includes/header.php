@@ -18,20 +18,20 @@ checkAuth();
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
   <div class="container-fluid">
-    <a class="navbar-brand" href="/public/index.php">Natillera</a>
+    <a class="navbar-brand" href="index.php">Natillera</a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="navbarNav">
       <ul class="navbar-nav">
-        <li class="nav-item"><a class="nav-link" href="/public/socios.php">Socios</a></li>
-        <li class="nav-item"><a class="nav-link" href="/public/actividades.php">Actividades</a></li>
-        <li class="nav-item"><a class="nav-link" href="/public/movimientos.php">Movimientos</a></li>
-        <li class="nav-item"><a class="nav-link" href="/public/pollas.php">Pollas</a></li>
-        <li class="nav-item"><a class="nav-link" href="/public/prestamos.php">Préstamos</a></li>
-        <li class="nav-item"><a class="nav-link" href="/public/reportes.php">Reportes</a></li>
-        <li class="nav-item"><a class="nav-link" href="/actions/export_csv.php?tipo=menu">Exportar a Excel</a></li>
-        <li class="nav-item"><a class="nav-link" href="/actions/logout.php">Cerrar sesión</a></li>
+        <li class="nav-item"><a class="nav-link" href="socios.php">Socios</a></li>
+        <li class="nav-item"><a class="nav-link" href="actividades.php">Actividades</a></li>
+        <li class="nav-item"><a class="nav-link" href="movimientos.php">Movimientos</a></li>
+        <li class="nav-item"><a class="nav-link" href="pollas.php">Pollas</a></li>
+        <li class="nav-item"><a class="nav-link" href="prestamos.php">Préstamos</a></li>
+        <li class="nav-item"><a class="nav-link" href="reportes.php">Reportes</a></li>
+        <li class="nav-item"><a class="nav-link" href="../actions/export_csv.php?tipo=menu">Exportar a Excel</a></li>
+        <li class="nav-item"><a class="nav-link" href="../actions/logout.php">Cerrar sesión</a></li>
       </ul>
     </div>
   </div>
