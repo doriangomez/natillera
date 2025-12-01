@@ -60,12 +60,12 @@ $medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
                 </form>
             </div>
         </div>
-        <div class="card mt-3">
+        <div class="card mt-3" id="reglamento">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div>
-                        <h2 class="h6 mb-0">Reglamento general</h2>
-                        <p class="text-muted small mb-0">Solo administradores</p>
+                        <h2 class="h6 mb-0">Reglamento</h2>
+                        <p class="text-muted small mb-0">Carga o descarga el reglamento en formato PDF</p>
                     </div>
                     <span class="badge bg-dark">Admin</span>
                 </div>
@@ -76,12 +76,19 @@ $medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
                         <label class="form-label">Archivo PDF</label>
                         <input type="file" name="reglamento_pdf" class="form-control" accept="application/pdf">
                         <?php if (!empty($config['reglamento_archivo'])): ?>
-                            <div class="mt-2">
-                                <span class="text-muted small d-block">Actual: <?php echo clean($config['reglamento_archivo']); ?></span>
-                                <a class="btn btn-outline-primary btn-sm mt-2" href="assets/reglamento/<?php echo clean($config['reglamento_archivo']); ?>" download>Descargar</a>
+                            <div class="mt-3 p-3 border rounded bg-light">
+                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                    <div>
+                                        <span class="text-muted small d-block">Archivo actual</span>
+                                        <strong><?php echo clean($config['reglamento_archivo']); ?></strong>
+                                    </div>
+                                    <a class="btn btn-outline-primary btn-sm" href="../actions/reglamento_download.php">
+                                        <i class="bi bi-download"></i> Descargar
+                                    </a>
+                                </div>
                             </div>
                         <?php else: ?>
-                            <p class="text-muted small mt-2">No hay reglamento cargado.</p>
+                            <p class="text-muted small mt-2 mb-0">No hay reglamento cargado.</p>
                         <?php endif; ?>
                     </div>
                     <div class="d-flex gap-2">
