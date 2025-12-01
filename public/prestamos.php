@@ -8,9 +8,9 @@ $mediosPago = getMediosPago($pdo);
 
 $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS nombre_aval FROM prestamos p LEFT JOIN socios s ON p.id_socio=s.id_socio LEFT JOIN socios aval ON p.id_socio_aval = aval.id_socio ORDER BY p.fecha_prestamo DESC LIMIT 100")->fetchAll();
 ?>
-<h2 class="mb-3">Préstamos</h2>
+<h2 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-cash-coin text-primary"></i><span>Préstamos</span></h2>
 <div class="card mb-3">
-    <div class="card-header">Crear nuevo préstamo</div>
+    <div class="card-header category-prestamos"><i class="bi bi-plus-circle"></i><span>Crear nuevo préstamo</span></div>
     <div class="card-body">
         <form method="POST" action="../actions/prestamos_save.php">
             <div class="row g-2">
@@ -60,12 +60,12 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
                     <input type="number" name="numero_cuotas" class="form-control" value="6" required>
                 </div>
             </div>
-            <button class="btn btn-success mt-3">Crear préstamo</button>
+            <button class="btn btn-success mt-3 btn-icon"><span><i class="bi bi-check2-circle"></i> Crear préstamo</span></button>
         </form>
     </div>
 </div>
 <div class="card mb-3">
-    <div class="card-header">Registrar pago de préstamo</div>
+    <div class="card-header category-prestamos"><i class="bi bi-cash-stack"></i><span>Registrar pago de préstamo</span></div>
     <div class="card-body">
         <form method="POST" action="../actions/cuotas_save.php">
             <div class="row g-2">
@@ -109,11 +109,11 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
                 </div>
             </div>
             <div class="mt-2 text-muted small">El número de cuota se asigna automáticamente al guardar el pago.</div>
-            <button class="btn btn-primary mt-2">Registrar pago</button>
+            <button class="btn btn-primary mt-2 btn-icon"><span><i class="bi bi-receipt"></i> Registrar pago</span></button>
         </form>
     </div>
 </div>
-<h4>Préstamos vigentes</h4>
+<h4 class="d-flex align-items-center gap-2"><i class="bi bi-activity text-primary"></i><span>Préstamos vigentes</span></h4>
 <div class="table-responsive">
 <table class="table table-sm table-bordered">
     <thead><tr><th>ID</th><th>Deudor</th><th>Aval</th><th>Tipo</th><th>Monto</th><th>Saldo capital</th><th>Saldo interés</th><th>Estado</th></tr></thead>
