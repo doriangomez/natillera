@@ -3,9 +3,9 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 checkAdmin();
 
-$nombre = trim($_POST['nombre_sistema'] ?? 'Aplicativo de Natillera creado por Dorian Gómez');
-$datos = trim($_POST['datos_globales'] ?? '');
 $configActual = getConfiguracionGeneral($pdo);
+$nombre = trim($_POST['nombre_sistema'] ?? ($configActual['nombre_sistema'] ?? 'Aplicativo de Natillera creado por Dorian Gómez'));
+$datos = trim($_POST['datos_globales'] ?? ($configActual['datos_globales'] ?? ''));
 $logoActual = $configActual['logo_archivo'] ?? null;
 $nuevoLogo = $logoActual;
 $reglamentoActual = $configActual['reglamento_archivo'] ?? null;

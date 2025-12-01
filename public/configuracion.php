@@ -70,6 +70,8 @@ $medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
                     <span class="badge bg-dark">Admin</span>
                 </div>
                 <form method="POST" action="../actions/configuracion_save.php" enctype="multipart/form-data">
+                    <input type="hidden" name="nombre_sistema" value="<?php echo clean($config['nombre_sistema'] ?? ''); ?>">
+                    <input type="hidden" name="datos_globales" value="<?php echo clean($config['datos_globales'] ?? ''); ?>">
                     <div class="mb-3">
                         <label class="form-label">Archivo PDF</label>
                         <input type="file" name="reglamento_pdf" class="form-control" accept="application/pdf">
