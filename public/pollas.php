@@ -10,8 +10,8 @@ $egresos = $pdo->query("SELECT SUM(valor) as total FROM movimientos m JOIN activ
 $porSocio = $pdo->query("SELECT s.nombre_completo, SUM(CASE WHEN m.es_ingreso=1 THEN m.valor ELSE 0 END) ingresos, SUM(CASE WHEN m.es_egreso=1 THEN m.valor ELSE 0 END) egresos FROM movimientos m JOIN socios s ON m.id_socio=s.id_socio JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 GROUP BY s.id_socio")->fetchAll();
 $porMes = $pdo->query("SELECT DATE_FORMAT(m.fecha, '%Y-%m') mes, SUM(CASE WHEN m.es_ingreso=1 THEN m.valor ELSE 0 END) ingresos, SUM(CASE WHEN m.es_egreso=1 THEN m.valor ELSE 0 END) egresos FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 GROUP BY DATE_FORMAT(m.fecha, '%Y-%m') ORDER BY mes DESC")->fetchAll();
 ?>
-<h2 class="mb-3">Gestión de pollas</h2>
-<div class="alert alert-info">El registro de pagos y premios de pollas se realiza ahora exclusivamente desde el módulo de Movimientos. Esta vista permanece como panel informativo.</div>
+<h2 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-trophy-fill text-primary"></i><span>Gestión de pollas</span></h2>
+<div class="alert alert-info d-flex align-items-center gap-2"><i class="bi bi-info-circle-fill"></i><span>El registro de pagos y premios de pollas se realiza ahora exclusivamente desde el módulo de Movimientos. Esta vista permanece como panel informativo.</span></div>
 <div class="row g-3">
     <div class="col-md-4">
         <div class="card text-bg-primary">

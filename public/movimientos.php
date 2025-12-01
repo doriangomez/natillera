@@ -41,8 +41,9 @@ foreach ($movimientos as $m) {
     if ($m['es_egreso']) { $totales['egresos'] += $m['valor']; }
 }
 ?>
-<h2 class="mb-3">Movimientos</h2>
+<h2 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-arrows-left-right text-primary"></i><span>Movimientos</span></h2>
 <div class="card mb-3">
+    <div class="card-header category-ingresos"><i class="bi bi-funnel"></i><span>Filtrar movimientos</span></div>
     <div class="card-body">
         <form class="row g-2" method="GET">
             <div class="col-md-2"><label class="form-label">Desde</label><input type="date" name="desde" class="form-control" value="<?php echo $filtroFechaIni; ?>"></div>
@@ -79,14 +80,14 @@ foreach ($movimientos as $m) {
                 </select>
             </div>
             <div class="col-md-12">
-                <button class="btn btn-primary">Filtrar</button>
-                <a class="btn btn-outline-secondary" href="../actions/export_csv.php?tipo=movimientos">Exportar CSV</a>
+                <button class="btn btn-primary btn-icon"><span><i class="bi bi-funnel"></i> Filtrar</span></button>
+                <a class="btn btn-outline-secondary btn-icon" href="../actions/export_csv.php?tipo=movimientos"><span><i class="bi bi-file-earmark-arrow-down"></i> Exportar CSV</span></a>
             </div>
         </form>
     </div>
 </div>
 <div class="card mb-3">
-    <div class="card-header">Registrar movimiento</div>
+    <div class="card-header category-gastos"><i class="bi bi-plus-circle"></i><span>Registrar movimiento</span></div>
     <div class="card-body">
         <form method="POST" action="../actions/movimientos_save.php">
             <div class="row g-2">
@@ -138,7 +139,7 @@ foreach ($movimientos as $m) {
                     <input type="text" name="observaciones" class="form-control">
                 </div>
             </div>
-            <button class="btn btn-success mt-3">Guardar</button>
+            <button class="btn btn-success mt-3 btn-icon"><span><i class="bi bi-check2-circle"></i> Guardar</span></button>
         </form>
     </div>
 </div>

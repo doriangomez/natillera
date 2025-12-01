@@ -14,18 +14,18 @@ $totalGastos = array_sum(array_column($gastos, 'valor'));
 <div class="d-flex justify-content-between align-items-start mb-4">
     <div>
         <p class="text-muted small mb-1">Consulta rápida de gastos generales registrados</p>
-        <h1 class="h4 mb-0">Gastos</h1>
+        <h1 class="h4 mb-0 d-flex align-items-center gap-2"><i class="bi bi-receipt-cutoff text-warning"></i><span>Gastos</span></h1>
     </div>
     <div class="d-flex gap-2">
-        <a class="btn btn-outline-primary" href="../actions/export_csv.php?tipo=gastos">Exportar CSV</a>
-        <a class="btn btn-primary" href="movimientos.php">Registrar gasto</a>
+        <a class="btn btn-outline-primary btn-icon" href="../actions/export_csv.php?tipo=gastos"><span><i class="bi bi-file-earmark-spreadsheet"></i> Exportar CSV</span></a>
+        <a class="btn btn-primary btn-icon" href="movimientos.php"><span><i class="bi bi-plus-circle"></i> Registrar gasto</span></a>
     </div>
 </div>
 <div class="row g-4">
     <div class="col-lg-4">
         <div class="card text-bg-light h-100">
             <div class="card-body">
-                <h2 class="h6 text-uppercase text-muted">Total de gastos listados</h2>
+                <h2 class="h6 text-uppercase text-muted d-flex align-items-center gap-2"><i class="bi bi-cash-coin"></i><span>Total de gastos listados</span></h2>
                 <p class="display-6 mb-0">
                     $<?php echo number_format($totalGastos, 0, ',', '.'); ?>
                 </p>
@@ -35,9 +35,10 @@ $totalGastos = array_sum(array_column($gastos, 'valor'));
     </div>
     <div class="col-lg-8">
         <div class="card h-100">
+            <div class="card-header category-gastos"><i class="bi bi-list-check"></i><span>Detalle de movimientos</span></div>
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h2 class="h6 mb-0">Detalle de movimientos</h2>
+                    <h2 class="h6 mb-0 d-flex align-items-center gap-2"><i class="bi bi-clipboard-data"></i><span>Detalle de movimientos</span></h2>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle">
