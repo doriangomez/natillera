@@ -47,4 +47,31 @@ $archivo = $config['reglamento_archivo'] ?? null;
     </div>
 </div>
 
+<?php if (!empty($isAdmin)): ?>
+    <div class="card mt-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h2 class="h6 mb-0">Administrar reglamento</h2>
+                    <p class="text-muted small mb-0">Sube un nuevo PDF o reemplaza el documento vigente</p>
+                </div>
+                <span class="badge bg-dark">Admin</span>
+            </div>
+            <form method="POST" action="../actions/reglamento_upload.php" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label class="form-label">Archivo PDF</label>
+                    <input type="file" name="reglamento_pdf" class="form-control" accept="application/pdf" required>
+                    <?php if (!empty($archivo)): ?>
+                        <p class="text-muted small mt-2 mb-0">El archivo nuevo reemplazará al reglamento actual.</p>
+                    <?php endif; ?>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" type="submit">Subir reglamento</button>
+                    <a class="btn btn-outline-secondary" href="index.php">Volver al panel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+<?php endif; ?>
+
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
