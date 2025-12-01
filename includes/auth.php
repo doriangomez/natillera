@@ -6,4 +6,12 @@ function checkAuth() {
         exit;
     }
 }
+
+function checkAdmin() {
+    checkAuth();
+    if (!isset($_SESSION['rol']) || $_SESSION['rol'] !== 'admin') {
+        header('Location: ../public/index.php?error=permiso');
+        exit;
+    }
+}
 ?>
