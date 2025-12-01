@@ -132,7 +132,7 @@ foreach ($movimientos as $m) {
                     <select name="id_actividad" class="form-select" required>
                         <option value="" selected disabled>Seleccione una actividad</option>
                         <?php foreach($actividades as $a): ?>
-                            <option value="<?php echo $a['id_actividad']; ?>" data-regla="<?php echo clean($a['afecta_saldo_natillera']); ?>">
+                            <option value="<?php echo $a['id_actividad']; ?>" data-regla="<?php echo clean($a['afecta_saldo_natillera']); ?>" data-es-polla="<?php echo !empty($a['es_polla']) ? '1' : '0'; ?>">
                                 <?php echo clean($a['nombre_actividad']); ?>
                             </option>
                         <?php endforeach; ?>
@@ -201,6 +201,8 @@ const actividadSelect = document.querySelector('select[name="id_actividad"]');
 const tipoActividadInput = document.getElementById('tipoActividad');
 const anioSelect = document.querySelector('select[name="anio"]');
 const mesSelect = document.querySelector('select[name="mes"]');
+const valorInput = document.querySelector('input[name="valor"]');
+const formularioMovimiento = document.querySelector('form[action="../actions/movimientos_save.php"]');
 
 function actualizarTipoActividad(){
     const regla = actividadSelect.selectedOptions[0]?.dataset.regla || '';
@@ -232,6 +234,23 @@ if(actividadSelect){
 if(anioSelect && mesSelect){
     anioSelect.addEventListener('change', actualizarMeses);
     actualizarMeses();
+}
+
+function esPollaSeleccionada(){
+    const opcion = actividadSelect?.selectedOptions[0];
+    return opcion?.dataset.esPolla === '1';
+}
+
+if(formularioMovimiento){
+    formularioMovimiento.addEventListener('submit', (ev) => {
+        if(!esPollaSeleccionada()) return;
+        const valor = Math.abs(parseFloat(valorInput?.value ?? ''));
+        if(Number.isNaN(valor) || valor === 20000) return;
+        const continuar = confirm('Advertencia: normalmente las pollas se registran por $20.000. ¿Deseas continuar con un valor diferente?');
+        if(!continuar){
+            ev.preventDefault();
+        }
+    });
 }
 </script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
