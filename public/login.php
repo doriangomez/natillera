@@ -49,7 +49,7 @@ $message = isset($_GET['error']) ? 'Credenciales inválidas' : '';
                 <div class="card-body p-4">
                     <?php if ($logoPath): ?>
                         <div class="mb-3 d-flex justify-content-center">
-                            <img src="<?php echo $logoPath; ?>" alt="Logo" class="rounded" style="max-height:72px; background:#fff; padding:8px;">
+                            <img src="<?php echo $logoPath; ?>" alt="Logo" class="rounded" style="max-height:110px; background:#fff; padding:10px;">
                         </div>
                     <?php endif; ?>
                     <div class="mb-3">

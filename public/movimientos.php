@@ -106,21 +106,20 @@ foreach ($movimientos as $m) {
                 <div class="col-md-3">
                     <label class="form-label">Actividad</label>
                     <select name="id_actividad" class="form-select" required>
-                        <?php foreach($actividades as $a): ?>
-                            <option value="<?php echo $a['id_actividad']; ?>"><?php echo clean($a['nombre_actividad']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+                    <?php foreach($actividades as $a): ?>
+                        <option value="<?php echo $a['id_actividad']; ?>" data-regla="<?php echo clean($a['afecta_saldo_natillera']); ?>">
+                            <?php echo clean($a['nombre_actividad']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
                 <div class="col-md-2">
                     <label class="form-label">Valor</label>
                     <input type="number" step="0.01" name="valor" class="form-control" required>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">Ingreso/Egreso</label>
-                    <select name="tipo_mov" class="form-select">
-                        <option value="ingreso">Ingreso</option>
-                        <option value="egreso">Egreso</option>
-                    </select>
+                <div class="col-md-3">
+                    <label class="form-label">Tipo automático</label>
+                    <input type="text" class="form-control" id="tipoActividad" value="Seleccione una actividad" disabled>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Medio consignación</label>
@@ -167,4 +166,18 @@ foreach ($movimientos as $m) {
     </table>
 </div>
 <div class="alert alert-info">Totales mostrados: Ingresos $<?php echo number_format($totales['ingresos'],0,',','.'); ?> | Egresos $<?php echo number_format($totales['egresos'],0,',','.'); ?></div>
+<script>
+const actividadSelect = document.querySelector('select[name="id_actividad"]');
+const tipoActividadInput = document.getElementById('tipoActividad');
+function actualizarTipoActividad(){
+    const regla = actividadSelect.selectedOptions[0]?.dataset.regla || '';
+    if(regla === 'suma') tipoActividadInput.value = 'Ingreso automático';
+    else if(regla === 'resta') tipoActividadInput.value = 'Egreso automático';
+    else tipoActividadInput.value = 'Neutral (no afecta saldo)';
+}
+if(actividadSelect){
+    actividadSelect.addEventListener('change', actualizarTipoActividad);
+    actualizarTipoActividad();
+}
+</script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
