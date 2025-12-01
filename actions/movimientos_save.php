@@ -34,5 +34,5 @@ $stmt->execute([
 actualizarSaldoSocio($pdo, $idSocio, $valor, $actividad['afecta_saldo_socio']);
 actualizarSaldoNatillera($pdo, $valor, $actividad['afecta_saldo_natillera']);
 
-header('Location: /public/movimientos.php');
+header('Location: ../public/movimientos.php');
 ?>

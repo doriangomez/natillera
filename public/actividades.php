@@ -15,7 +15,7 @@ if ($editId) {
         <div class="card mb-3">
             <div class="card-header"><?php echo $editData ? 'Editar actividad' : 'Nueva actividad'; ?></div>
             <div class="card-body">
-                <form method="POST" action="/actions/actividades_save.php">
+                <form method="POST" action="../actions/actividades_save.php">
                     <input type="hidden" name="id_actividad" value="<?php echo $editData['id_actividad'] ?? ''; ?>">
                     <div class="mb-2">
                         <label class="form-label">Nombre</label>
@@ -63,7 +63,7 @@ if ($editId) {
                     </div>
                     <button class="btn btn-success">Guardar</button>
                     <?php if ($editData): ?>
-                        <a class="btn btn-secondary" href="/public/actividades.php">Cancelar</a>
+                        <a class="btn btn-secondary" href="actividades.php">Cancelar</a>
                     <?php endif; ?>
                 </form>
             </div>

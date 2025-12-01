@@ -12,8 +12,8 @@ $user = $stmt->fetch();
 if ($user && password_verify($pass, $user['contraseña_hash'])) {
     $_SESSION['usuario'] = $user['usuario'];
     $_SESSION['rol'] = $user['rol'];
-    header('Location: /public/index.php');
+    header('Location: ../public/index.php');
 } else {
-    header('Location: /public/login.php?error=1');
+    header('Location: ../public/login.php?error=1');
 }
 ?>

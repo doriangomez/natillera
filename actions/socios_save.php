@@ -9,7 +9,7 @@ $accion = $_POST['accion'] ?? 'guardar';
 if ($accion === 'inactivar' && $id) {
     $stmt = $pdo->prepare('UPDATE socios SET activo = 0 WHERE id_socio = :id');
     $stmt->execute([':id' => $id]);
-    header('Location: /public/socios.php');
+    header('Location: ../public/socios.php');
     exit;
 }
 
@@ -29,5 +29,5 @@ if ($id) {
     $stmt = $pdo->prepare('INSERT INTO socios (nombre_completo, telefono, numero_polla, periodicidad_pago, valor_presupuestado) VALUES (:nombre_completo, :telefono, :numero_polla, :periodicidad_pago, :valor_presupuestado)');
     $stmt->execute($data);
 }
-header('Location: /public/socios.php');
+header('Location: ../public/socios.php');
 ?>

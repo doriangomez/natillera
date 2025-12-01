@@ -13,7 +13,7 @@ $porSocio = $pdo->query("SELECT s.nombre_completo, SUM(CASE WHEN m.es_ingreso=1 
 <div class="card mb-3">
     <div class="card-header">Registrar ingreso / pago de polla</div>
     <div class="card-body">
-        <form method="POST" action="/actions/movimientos_save.php">
+        <form method="POST" action="../actions/movimientos_save.php">
             <div class="row g-2">
                 <div class="col-md-3">
                     <label class="form-label">Fecha</label>

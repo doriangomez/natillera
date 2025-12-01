@@ -68,7 +68,7 @@ foreach ($movimientos as $m) {
             </div>
             <div class="col-md-12">
                 <button class="btn btn-primary">Filtrar</button>
-                <a class="btn btn-outline-secondary" href="/actions/export_csv.php?tipo=movimientos">Exportar CSV</a>
+                <a class="btn btn-outline-secondary" href="../actions/export_csv.php?tipo=movimientos">Exportar CSV</a>
             </div>
         </form>
     </div>
@@ -76,7 +76,7 @@ foreach ($movimientos as $m) {
 <div class="card mb-3">
     <div class="card-header">Registrar movimiento</div>
     <div class="card-body">
-        <form method="POST" action="/actions/movimientos_save.php">
+        <form method="POST" action="../actions/movimientos_save.php">
             <div class="row g-2">
                 <div class="col-md-2">
                     <label class="form-label">Fecha</label>
