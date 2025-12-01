@@ -11,6 +11,10 @@ if ($editId) {
     $stmt->execute([':id' => $editId]);
     $editData = $stmt->fetch();
 }
+
+$valorCuota = $editData['valor_presupuestado'] ?? 0;
+$periodicidadPago = $editData['periodicidad_pago'] ?? 'mensual';
+$valorCuotaMensual = $periodicidadPago === 'quincenal' ? $valorCuota * 2 : $valorCuota;
 ?>
 <h2 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-people-fill text-primary"></i><span>Socios</span></h2>
 <div class="row">
@@ -21,27 +25,31 @@ if ($editId) {
                 <form method="POST" action="../actions/socios_save.php">
                     <input type="hidden" name="id_socio" value="<?php echo $editData['id_socio'] ?? ''; ?>">
                     <div class="mb-2">
-                        <label class="form-label">Nombre completo</label>
+                        <label class="form-label">Nombre completo <span class="text-danger">*</span></label>
                         <input type="text" name="nombre_completo" class="form-control" required value="<?php echo $editData['nombre_completo'] ?? ''; ?>">
                     </div>
                     <div class="mb-2">
-                        <label class="form-label">Teléfono</label>
-                        <input type="text" name="telefono" class="form-control" value="<?php echo $editData['telefono'] ?? ''; ?>">
+                        <label class="form-label">Teléfono <span class="text-danger">*</span></label>
+                        <input type="text" name="telefono" class="form-control" required value="<?php echo $editData['telefono'] ?? ''; ?>">
                     </div>
                     <div class="mb-2">
-                        <label class="form-label">Número polla</label>
-                        <input type="text" name="numero_polla" class="form-control" value="<?php echo $editData['numero_polla'] ?? ''; ?>">
+                        <label class="form-label">Número polla <span class="text-danger">*</span></label>
+                        <input type="text" name="numero_polla" class="form-control" required value="<?php echo $editData['numero_polla'] ?? ''; ?>">
                     </div>
                     <div class="mb-2">
-                        <label class="form-label">Periodicidad pago</label>
-                        <select name="periodicidad_pago" class="form-select">
-                            <option value="quincenal" <?php echo (isset($editData['periodicidad_pago']) && $editData['periodicidad_pago']==='quincenal')?'selected':''; ?>>Quincenal</option>
-                            <option value="mensual" <?php echo (isset($editData['periodicidad_pago']) && $editData['periodicidad_pago']==='mensual')?'selected':''; ?>>Mensual</option>
+                        <label class="form-label">Periodicidad pago <span class="text-danger">*</span></label>
+                        <select name="periodicidad_pago" class="form-select" required>
+                            <option value="quincenal" <?php echo ($periodicidadPago==='quincenal')?'selected':''; ?>>Quincenal</option>
+                            <option value="mensual" <?php echo ($periodicidadPago==='mensual')?'selected':''; ?>>Mensual</option>
                         </select>
                     </div>
                     <div class="mb-2">
-                        <label class="form-label">Valor presupuestado</label>
-                        <input type="number" step="0.01" name="valor_presupuestado" class="form-control" value="<?php echo $editData['valor_presupuestado'] ?? '0'; ?>">
+                        <label class="form-label">Valor cuota <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" name="valor_presupuestado" class="form-control" required value="<?php echo $valorCuota; ?>">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Valor cuota mensual</label>
+                        <input type="text" class="form-control" id="valorCuotaMensual" value="<?php echo number_format($valorCuotaMensual,2,'.',''); ?>" readonly>
                     </div>
                     <button class="btn btn-success btn-icon" type="submit"><span><i class="bi bi-check-circle"></i> Guardar</span></button>
                     <?php if ($editData): ?>
@@ -70,7 +78,8 @@ if ($editId) {
                         <th>Teléfono</th>
                         <th>Polla</th>
                         <th>Periodicidad</th>
-                        <th>Presupuesto</th>
+                        <th>Valor cuota</th>
+                        <th>Valor cuota mensual</th>
                         <th>Saldo</th>
                         <th>Acciones</th>
                     </tr>
@@ -84,6 +93,7 @@ if ($editId) {
                             <td><?php echo clean($s['numero_polla']); ?></td>
                             <td><?php echo clean($s['periodicidad_pago']); ?></td>
                             <td>$<?php echo number_format($s['valor_presupuestado'],0,',','.'); ?></td>
+                            <td>$<?php echo number_format($s['periodicidad_pago']==='quincenal' ? $s['valor_presupuestado']*2 : $s['valor_presupuestado'],0,',','.'); ?></td>
                             <td>$<?php echo number_format($s['saldo_socio'],0,',','.'); ?></td>
                             <td>
                                 <a class="btn btn-sm btn-primary btn-icon" href="?id=<?php echo $s['id_socio']; ?>"><span><i class="bi bi-pencil"></i> Editar</span></a>
@@ -105,4 +115,20 @@ if ($editId) {
         </div>
     </div>
 </div>
+<script>
+    const periodicidadSelect = document.querySelector('select[name="periodicidad_pago"]');
+    const valorCuotaInput = document.querySelector('input[name="valor_presupuestado"]');
+    const valorCuotaMensualInput = document.getElementById('valorCuotaMensual');
+
+    function actualizarValorMensual() {
+        const valorCuota = parseFloat(valorCuotaInput.value) || 0;
+        const periodicidad = periodicidadSelect.value;
+        const valorMensual = periodicidad === 'quincenal' ? valorCuota * 2 : valorCuota;
+        valorCuotaMensualInput.value = valorMensual.toFixed(2);
+    }
+
+    periodicidadSelect.addEventListener('change', actualizarValorMensual);
+    valorCuotaInput.addEventListener('input', actualizarValorMensual);
+    document.addEventListener('DOMContentLoaded', actualizarValorMensual);
+</script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
