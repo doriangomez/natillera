@@ -7,16 +7,23 @@ $id = $_POST['id_actividad'] ?? null;
 $accion = $_POST['accion'] ?? 'guardar';
 
 if ($accion === 'eliminar' && $id) {
-    $stmtRelacion = $pdo->prepare('SELECT COUNT(*) FROM movimientos WHERE id_actividad = :id');
-    $stmtRelacion->execute([':id' => $id]);
-    if ((int) $stmtRelacion->fetchColumn() > 0) {
-        $_SESSION['error'] = 'No es posible eliminar la actividad porque tiene movimientos asociados.';
-        header('Location: ../public/actividades.php');
-        exit;
+    try {
+        $pdo->beginTransaction();
+
+        $stmtMovimientos = $pdo->prepare('DELETE FROM movimientos WHERE id_actividad = :id');
+        $stmtMovimientos->execute([':id' => $id]);
+
+        $stmt = $pdo->prepare('DELETE FROM actividades_maestro WHERE id_actividad = :id');
+        $stmt->execute([':id' => $id]);
+
+        $pdo->commit();
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        $_SESSION['error'] = 'No se pudo eliminar la actividad y sus movimientos relacionados.';
     }
 
-    $stmt = $pdo->prepare('DELETE FROM actividades_maestro WHERE id_actividad = :id');
-    $stmt->execute([':id' => $id]);
     header('Location: ../public/actividades.php');
     exit;
 }

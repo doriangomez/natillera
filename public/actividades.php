@@ -131,6 +131,11 @@ if ($editId) {
                                                 <?php echo $a['activo'] ? 'Desactivar' : 'Activar'; ?>
                                             </button>
                                         </form>
+                                        <form method="POST" action="../actions/actividades_save.php" class="d-inline" onsubmit="return confirm('Esta acción eliminará la actividad y todos sus movimientos asociados. ¿Deseas continuar?');">
+                                            <input type="hidden" name="id_actividad" value="<?php echo $a['id_actividad']; ?>">
+                                            <input type="hidden" name="accion" value="eliminar">
+                                            <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
+                                        </form>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

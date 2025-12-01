@@ -5,13 +5,14 @@ checkAuth();
 
 $accion = $_POST['accion'] ?? 'guardar';
 $idMovimiento = isset($_POST['id_movimiento']) ? (int) $_POST['id_movimiento'] : 0;
+$redirect = $_POST['redirect'] ?? '../public/movimientos.php';
 
 if ($accion === 'eliminar') {
     if ($idMovimiento > 0) {
         $stmt = $pdo->prepare('DELETE FROM movimientos WHERE id_movimiento = :id LIMIT 1');
         $stmt->execute([':id' => $idMovimiento]);
     }
-    header('Location: ../public/movimientos.php');
+    header('Location: ' . $redirect);
     exit;
 }
 
