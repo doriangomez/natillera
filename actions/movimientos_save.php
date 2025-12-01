@@ -3,17 +3,40 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 checkAuth();
 
+$columnas = ['anio INT DEFAULT NULL', 'mes INT DEFAULT NULL', 'quincena INT DEFAULT 0'];
+foreach ($columnas as $def) {
+    try {
+        $nombre = explode(' ', $def)[0];
+        $existe = $pdo->query("SHOW COLUMNS FROM movimientos LIKE '$nombre'");
+        if ($existe && $existe->rowCount() === 0) {
+            $pdo->exec("ALTER TABLE movimientos ADD COLUMN $def");
+        }
+    } catch (Exception $e) {
+        // continuar
+    }
+}
+
 $fecha = $_POST['fecha'];
+$anio = isset($_POST['anio']) ? (int) $_POST['anio'] : null;
+$mes = isset($_POST['mes']) ? (int) $_POST['mes'] : null;
+$quincena = isset($_POST['quincena']) ? (int) $_POST['quincena'] : 0;
 $idSocio = $_POST['id_socio'] ?: null;
 $idActividad = (int) $_POST['id_actividad'];
 $valor = (float) $_POST['valor'];
-$motivo = $_POST['motivo'];
+$motivo = '';
+
+if (!$anio || !$mes) {
+    $anio = (int) date('Y', strtotime($fecha));
+    $mes = (int) date('n', strtotime($fecha));
+}
 $medio = $_POST['medio_consignacion'] ?? '';
 $idMedio = isset($_POST['id_medio_pago']) ? (int) $_POST['id_medio_pago'] : null;
 $obs = $_POST['observaciones'] ?? '';
 
 $camposObligatorios = [
     'fecha' => $fecha,
+    'anio' => $anio,
+    'mes' => $mes,
     'actividad' => $idActividad,
     'valor' => $valor,
 ];
@@ -28,6 +51,17 @@ if ($valor <= 0) {
     $_SESSION['error'] = 'El valor del movimiento debe ser mayor a cero.';
     header('Location: ../public/movimientos.php');
     exit;
+}
+
+// Validar periodo permitido (dic 2025 a nov 2026)
+$periodoValido = ($anio === 2025 && $mes === 12) || ($anio === 2026 && $mes >= 1 && $mes <= 11);
+if (!$periodoValido) {
+    $_SESSION['error'] = 'El periodo seleccionado debe estar entre diciembre 2025 y noviembre 2026.';
+    header('Location: ../public/movimientos.php');
+    exit;
+}
+if ($quincena < 0 || $quincena > 2) {
+    $quincena = 0;
 }
 
 if (!$medio && $idMedio) {
@@ -46,6 +80,16 @@ $reglaNatillera = $actividad['afecta_saldo_natillera'] ?? 'neutral';
 $esIngreso = $reglaNatillera === 'suma' ? 1 : 0;
 $esEgreso = $reglaNatillera === 'resta' ? 1 : 0;
 
+// Ajuste de quincena según periodicidad
+if ($idSocio) {
+    $stmtSocio = $pdo->prepare('SELECT periodicidad_pago FROM socios WHERE id_socio = :id');
+    $stmtSocio->execute([':id' => $idSocio]);
+    $socioInfo = $stmtSocio->fetch();
+    if ($socioInfo && strtolower($socioInfo['periodicidad_pago']) !== 'quincenal') {
+        $quincena = 0;
+    }
+}
+
 if ($actividad && !empty($actividad['es_polla']) && !$idSocio) {
     $_SESSION['error'] = 'Debe seleccionar un socio para registrar movimientos de polla.';
     header('Location: ../public/movimientos.php');
@@ -61,9 +105,13 @@ if ($esEgreso) {
     $valor = -abs($valor);
 }
 
-$stmt = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, id_medio_pago, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, :medio_id, :ingreso, :egreso, :obs, :usuario, NOW())');
+$stmt = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_actividad, motivo, valor, medio_consignacion, id_medio_pago, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro)
+VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_actividad, :motivo, :valor, :medio, :medio_id, :ingreso, :egreso, :obs, :usuario, NOW())');
 $stmt->execute([
     ':fecha' => $fecha,
+    ':anio' => $anio,
+    ':mes' => $mes,
+    ':quincena' => $quincena,
     ':id_socio' => $idSocio,
     ':id_actividad' => $idActividad,
     ':motivo' => $motivo,
