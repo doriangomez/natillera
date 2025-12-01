@@ -92,20 +92,43 @@ foreach ($movimientos as $m) {
         <form method="POST" action="../actions/movimientos_save.php">
             <div class="row g-2">
                 <div class="col-md-2">
-                    <label class="form-label">Fecha</label>
+                    <label class="form-label"><span class="text-danger">*</span> Fecha</label>
                     <input type="date" name="fecha" class="form-control" required value="<?php echo date('Y-m-d'); ?>">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <label class="form-label"><span class="text-danger">*</span> Año</label>
+                    <select name="anio" class="form-select" required>
+                        <option value="2025">2025</option>
+                        <option value="2026">2026</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label"><span class="text-danger">*</span> Mes</label>
+                    <select name="mes" class="form-select" required>
+                        <?php for($m=1;$m<=12;$m++): ?>
+                            <option value="<?php echo $m; ?>" <?php echo $m===12?'selected':''; ?>><?php echo $m; ?></option>
+                        <?php endfor; ?>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Quincena</label>
+                    <select name="quincena" class="form-select" id="quincenaSelect">
+                        <option value="0">No aplica</option>
+                        <option value="1">Primera</option>
+                        <option value="2">Segunda</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
                     <label class="form-label">Socio (opcional)</label>
-                    <select name="id_socio" class="form-select">
+                    <select name="id_socio" class="form-select" id="socioSelect">
                         <option value="">Gasto general</option>
                         <?php foreach($socios as $s): ?>
-                            <option value="<?php echo $s['id_socio']; ?>"><?php echo clean($s['nombre_completo']); ?></option>
+                            <option value="<?php echo $s['id_socio']; ?>" data-periodicidad="<?php echo clean($s['periodicidad_pago']); ?>"><?php echo clean($s['nombre_completo']); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Actividad</label>
+                <div class="col-md-4">
+                    <label class="form-label"><span class="text-danger">*</span> Actividad</label>
                     <select name="id_actividad" class="form-select" required>
                     <?php foreach($actividades as $a): ?>
                         <option value="<?php echo $a['id_actividad']; ?>" data-regla="<?php echo clean($a['afecta_saldo_natillera']); ?>">
@@ -115,7 +138,7 @@ foreach ($movimientos as $m) {
                 </select>
             </div>
                 <div class="col-md-2">
-                    <label class="form-label">Valor</label>
+                    <label class="form-label"><span class="text-danger">*</span> Valor</label>
                     <input type="number" step="0.01" name="valor" class="form-control" required>
                 </div>
                 <div class="col-md-3">
@@ -123,18 +146,14 @@ foreach ($movimientos as $m) {
                     <input type="text" class="form-control" id="tipoActividad" value="Seleccione una actividad" disabled>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Medio consignación</label>
+                    <label class="form-label"><span class="text-danger">*</span> Medio consignación</label>
                     <select name="id_medio_pago" class="form-select" required>
                         <?php foreach($mediosPago as $mp): ?>
                             <option value="<?php echo $mp['id']; ?>"><?php echo clean($mp['nombre']); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Motivo</label>
-                    <input type="text" name="motivo" class="form-control" required>
-                </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label class="form-label">Observaciones</label>
                     <input type="text" name="observaciones" class="form-control">
                 </div>
@@ -147,16 +166,16 @@ foreach ($movimientos as $m) {
     <table class="table table-striped table-sm">
         <thead>
             <tr>
-                <th>Fecha</th><th>Socio</th><th>Actividad</th><th>Motivo</th><th>Valor</th><th>Medio</th><th>Ingreso</th><th>Egreso</th>
+                <th>Fecha</th><th>Periodo</th><th>Socio</th><th>Actividad</th><th>Valor</th><th>Medio</th><th>Ingreso</th><th>Egreso</th>
             </tr>
         </thead>
         <tbody>
             <?php foreach($movimientos as $m): ?>
                 <tr>
                     <td><?php echo $m['fecha']; ?></td>
+                    <td><?php echo trim(($m['mes'] ?? '') . '/' . ($m['anio'] ?? '')); ?><?php echo $m['quincena'] ? ' - Q' . $m['quincena'] : ''; ?></td>
                     <td><?php echo $m['nombre_completo'] ?? 'General'; ?></td>
                     <td><?php echo $m['nombre_actividad']; ?></td>
-                    <td><?php echo clean($m['motivo']); ?></td>
                     <td>$<?php echo number_format($m['valor'],0,',','.'); ?></td>
                     <td><?php echo clean($m['medio_nombre'] ?: $m['medio_consignacion']); ?></td>
                     <td><?php echo $m['es_ingreso'] ? 'Sí' : ''; ?></td>
@@ -170,15 +189,52 @@ foreach ($movimientos as $m) {
 <script>
 const actividadSelect = document.querySelector('select[name="id_actividad"]');
 const tipoActividadInput = document.getElementById('tipoActividad');
+const socioSelect = document.getElementById('socioSelect');
+const quincenaSelect = document.getElementById('quincenaSelect');
+const anioSelect = document.querySelector('select[name="anio"]');
+const mesSelect = document.querySelector('select[name="mes"]');
+
 function actualizarTipoActividad(){
     const regla = actividadSelect.selectedOptions[0]?.dataset.regla || '';
     if(regla === 'suma') tipoActividadInput.value = 'Ingreso automático';
     else if(regla === 'resta') tipoActividadInput.value = 'Egreso automático';
     else tipoActividadInput.value = 'Neutral (no afecta saldo)';
 }
+function actualizarQuincena(){
+    const periodicidad = socioSelect.selectedOptions[0]?.dataset.periodicidad || '';
+    const esQuincenal = periodicidad === 'quincenal';
+    quincenaSelect.disabled = !esQuincenal;
+    if(!esQuincenal){
+        quincenaSelect.value = '0';
+    }
+}
+function actualizarMeses(){
+    const anio = parseInt(anioSelect.value, 10);
+    mesSelect.querySelectorAll('option').forEach(opt => {
+        const val = parseInt(opt.value, 10);
+        let habilitado = true;
+        if (anio === 2025) {
+            habilitado = val === 12;
+        } else if (anio === 2026) {
+            habilitado = val >= 1 && val <= 11;
+        }
+        opt.disabled = !habilitado;
+    });
+    if (mesSelect.selectedOptions[0]?.disabled) {
+        mesSelect.value = anio === 2025 ? '12' : '1';
+    }
+}
 if(actividadSelect){
     actividadSelect.addEventListener('change', actualizarTipoActividad);
     actualizarTipoActividad();
+}
+if(socioSelect){
+    socioSelect.addEventListener('change', actualizarQuincena);
+    actualizarQuincena();
+}
+if(anioSelect && mesSelect){
+    anioSelect.addEventListener('change', actualizarMeses);
+    actualizarMeses();
 }
 </script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

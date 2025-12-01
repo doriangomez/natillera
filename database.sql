@@ -44,6 +44,9 @@ CREATE TABLE medios_pago (
 CREATE TABLE movimientos (
     id_movimiento INT AUTO_INCREMENT PRIMARY KEY,
     fecha DATE NOT NULL,
+    anio INT DEFAULT NULL,
+    mes INT DEFAULT NULL,
+    quincena INT DEFAULT 0,
     id_socio INT NULL,
     id_actividad INT NOT NULL,
     motivo VARCHAR(200),
