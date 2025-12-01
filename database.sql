@@ -34,6 +34,13 @@ CREATE TABLE actividades_maestro (
     activo TINYINT(1) DEFAULT 1
 );
 
+CREATE TABLE medios_pago (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion VARCHAR(255),
+    activo TINYINT(1) DEFAULT 1
+);
+
 CREATE TABLE movimientos (
     id_movimiento INT AUTO_INCREMENT PRIMARY KEY,
     fecha DATE NOT NULL,
@@ -42,13 +49,15 @@ CREATE TABLE movimientos (
     motivo VARCHAR(200),
     valor DECIMAL(12,2) NOT NULL,
     medio_consignacion VARCHAR(100),
+    id_medio_pago INT NULL,
     es_ingreso TINYINT(1) DEFAULT 0,
     es_egreso TINYINT(1) DEFAULT 0,
     observaciones TEXT,
     usuario_registro VARCHAR(50),
     fecha_registro DATETIME,
     FOREIGN KEY (id_socio) REFERENCES socios(id_socio),
-    FOREIGN KEY (id_actividad) REFERENCES actividades_maestro(id_actividad)
+    FOREIGN KEY (id_actividad) REFERENCES actividades_maestro(id_actividad),
+    FOREIGN KEY (id_medio_pago) REFERENCES medios_pago(id)
 );
 
 CREATE TABLE natillera_estado (
@@ -61,6 +70,8 @@ INSERT INTO natillera_estado (id_estado, saldo_actual) VALUES (1,0)
 CREATE TABLE prestamos (
     id_prestamo INT AUTO_INCREMENT PRIMARY KEY,
     id_socio INT NULL,
+    es_particular TINYINT(1) DEFAULT 0,
+    id_socio_aval INT NULL,
     nombre_deudor VARCHAR(150),
     fecha_prestamo DATE,
     monto_prestamo DECIMAL(12,2),
@@ -69,7 +80,8 @@ CREATE TABLE prestamos (
     saldo_capital_actual DECIMAL(12,2) DEFAULT 0,
     saldo_intereses_actual DECIMAL(12,2) DEFAULT 0,
     estado VARCHAR(20) DEFAULT 'vigente',
-    FOREIGN KEY (id_socio) REFERENCES socios(id_socio)
+    FOREIGN KEY (id_socio) REFERENCES socios(id_socio),
+    FOREIGN KEY (id_socio_aval) REFERENCES socios(id_socio)
 );
 
 CREATE TABLE cuotas_prestamo (
@@ -104,3 +116,16 @@ CREATE TABLE configuracion_general (
 );
 INSERT INTO configuracion_general (id_config, nombre_sistema, logo_archivo, datos_globales) VALUES
 (1, 'Aplicativo de Natillera creado por Dorian Gómez', NULL, 'Datos generales de la natillera');
+
+CREATE TABLE conciliaciones_medios_pago (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    id_medio INT NOT NULL,
+    anio INT NOT NULL,
+    mes INT NOT NULL,
+    total_sistema DECIMAL(12,2) DEFAULT 0,
+    valor_banco DECIMAL(12,2) DEFAULT 0,
+    diferencia DECIMAL(12,2) DEFAULT 0,
+    fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_concilia (id_medio, anio, mes),
+    FOREIGN KEY (id_medio) REFERENCES medios_pago(id)
+);

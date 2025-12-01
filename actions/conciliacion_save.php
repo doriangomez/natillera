@@ -1,0 +1,32 @@
+<?php
+require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/auth.php';
+checkAuth();
+
+$anio = (int) $_POST['anio'];
+$mes = (int) $_POST['mes'];
+$medios = $_POST['medio_ids'] ?? [];
+$bancos = $_POST['banco'] ?? [];
+
+foreach ($medios as $idMedio) {
+    $valorBanco = isset($bancos[$idMedio]) ? (float) $bancos[$idMedio] : 0;
+    $stmtTotal = $pdo->prepare('SELECT SUM(valor) total FROM movimientos WHERE id_medio_pago = :id AND YEAR(fecha)=:y AND MONTH(fecha)=:m');
+    $stmtTotal->execute([':id'=>$idMedio, ':y'=>$anio, ':m'=>$mes]);
+    $totalSistema = (float) ($stmtTotal->fetchColumn() ?: 0);
+    $diff = $totalSistema - $valorBanco;
+
+    $stmt = $pdo->prepare('INSERT INTO conciliaciones_medios_pago (id_medio, anio, mes, total_sistema, valor_banco, diferencia) VALUES (:id,:y,:m,:ts,:vb,:df)
+        ON DUPLICATE KEY UPDATE total_sistema=VALUES(total_sistema), valor_banco=VALUES(valor_banco), diferencia=VALUES(diferencia)');
+    $stmt->execute([
+        ':id' => $idMedio,
+        ':y' => $anio,
+        ':m' => $mes,
+        ':ts' => $totalSistema,
+        ':vb' => $valorBanco,
+        ':df' => $diff
+    ]);
+}
+
+header('Location: ../public/conciliaciones.php?anio='.$anio.'&mes='.$mes.'&guardado=1');
+exit;
+?>

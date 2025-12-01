@@ -5,14 +5,18 @@ checkAuth();
 
 $fecha = $_POST['fecha_prestamo'];
 $idSocio = $_POST['id_socio'] ?: null;
+$esParticular = isset($_POST['es_particular']) ? (int) $_POST['es_particular'] : 0;
+$idAval = $_POST['id_socio_aval'] ?: null;
 $nombreDeudor = $_POST['nombre_deudor'] ?: null;
 $monto = (float) $_POST['monto_prestamo'];
 $tasa = (float) $_POST['tasa_interes'];
 $cuotas = (int) $_POST['numero_cuotas'];
 
-$stmt = $pdo->prepare('INSERT INTO prestamos (id_socio, nombre_deudor, fecha_prestamo, monto_prestamo, tasa_interes, numero_cuotas, saldo_capital_actual, saldo_intereses_actual, estado) VALUES (:id_socio, :nombre_deudor, :fecha, :monto, :tasa, :cuotas, :saldo_capital_actual, :saldo_intereses_actual, :estado)');
+$stmt = $pdo->prepare('INSERT INTO prestamos (id_socio, es_particular, id_socio_aval, nombre_deudor, fecha_prestamo, monto_prestamo, tasa_interes, numero_cuotas, saldo_capital_actual, saldo_intereses_actual, estado) VALUES (:id_socio, :es_particular, :id_aval, :nombre_deudor, :fecha, :monto, :tasa, :cuotas, :saldo_capital_actual, :saldo_intereses_actual, :estado)');
 $stmt->execute([
     ':id_socio' => $idSocio,
+    ':es_particular' => $esParticular,
+    ':id_aval' => $idAval,
     ':nombre_deudor' => $nombreDeudor,
     ':fecha' => $fecha,
     ':monto' => $monto,

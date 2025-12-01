@@ -138,6 +138,8 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <a class="nav-link-sidebar<?php echo $currentPage === 'socios.php' ? ' active' : ''; ?>" href="socios.php">Socios</a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'actividades.php' ? ' active' : ''; ?>" href="actividades.php">Actividades</a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'movimientos.php' ? ' active' : ''; ?>" href="movimientos.php">Movimientos</a>
+            <a class="nav-link-sidebar<?php echo $currentPage === 'movimientos_socio.php' ? ' active' : ''; ?>" href="movimientos_socio.php">Movimientos por socio</a>
+            <a class="nav-link-sidebar<?php echo $currentPage === 'conciliaciones.php' ? ' active' : ''; ?>" href="conciliaciones.php">Conciliación medios de pago</a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'pollas.php' ? ' active' : ''; ?>" href="pollas.php">Pollas</a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'prestamos.php' ? ' active' : ''; ?>" href="prestamos.php">Préstamos</a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'gastos.php' ? ' active' : ''; ?>" href="gastos.php">Gastos</a>

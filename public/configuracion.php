@@ -6,8 +6,11 @@ require_once __DIR__ . '/../includes/functions.php';
 
 $config = getConfiguracionGeneral($pdo);
 $actividades = getActividades($pdo, false, true);
+$medios = getMediosPago($pdo, true);
 $editId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $editData = $editId ? getActividad($pdo, $editId) : null;
+$medioId = isset($_GET['medio_id']) ? (int) $_GET['medio_id'] : 0;
+$medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
 ?>
 <div class="d-flex justify-content-between align-items-start mb-4">
     <div>
@@ -159,6 +162,68 @@ $editData = $editId ? getActividad($pdo, $editId) : null;
                                                 <?php echo $a['activo'] ? 'Desactivar' : 'Activar'; ?>
                                             </button>
                                         </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h2 class="h6 mb-0">Medios de pago / consignación</h2>
+                        <p class="text-muted small mb-0">Administra las cuentas o canales donde se reciben consignaciones</p>
+                    </div>
+                    <?php if ($medioData): ?>
+                        <a class="btn btn-outline-secondary btn-sm" href="configuracion.php">Salir de edición</a>
+                    <?php endif; ?>
+                </div>
+                <form method="POST" action="../actions/medios_pago_save.php" class="mb-4">
+                    <input type="hidden" name="id" value="<?php echo $medioData['id'] ?? ''; ?>">
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Nombre del medio</label>
+                            <input type="text" name="nombre" class="form-control" required value="<?php echo clean($medioData['nombre'] ?? ''); ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Descripción</label>
+                            <input type="text" name="descripcion" class="form-control" value="<?php echo clean($medioData['descripcion'] ?? ''); ?>">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Activo</label>
+                            <select name="activo" class="form-select">
+                                <option value="1" <?php echo (!isset($medioData['activo']) || $medioData['activo']) ? 'selected' : ''; ?>>Sí</option>
+                                <option value="0" <?php echo (isset($medioData['activo']) && !$medioData['activo']) ? 'selected' : ''; ?>>No</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary mt-3" type="submit">Guardar medio de pago</button>
+                </form>
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Descripción</th>
+                                <th>Estado</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($medios as $m): ?>
+                                <tr>
+                                    <td><?php echo $m['id']; ?></td>
+                                    <td><?php echo clean($m['nombre']); ?></td>
+                                    <td class="small text-muted"><?php echo clean($m['descripcion']); ?></td>
+                                    <td><span class="badge <?php echo $m['activo'] ? 'bg-success' : 'bg-secondary'; ?>"><?php echo $m['activo'] ? 'Activo' : 'Inactivo'; ?></span></td>
+                                    <td class="text-end">
+                                        <a class="btn btn-sm btn-outline-primary" href="?medio_id=<?php echo $m['id']; ?>">Editar</a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
