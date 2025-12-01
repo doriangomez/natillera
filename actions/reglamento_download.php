@@ -2,7 +2,8 @@
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 
-checkAdmin();
+// Todos los usuarios autenticados pueden consultar el reglamento
+checkAuth();
 
 $config = getConfiguracionGeneral($pdo);
 $archivo = $config['reglamento_archivo'] ?? null;
