@@ -4,6 +4,22 @@ require_once __DIR__ . '/../includes/auth.php';
 checkAdmin();
 
 $id = $_POST['id_actividad'] ?? null;
+$accion = $_POST['accion'] ?? 'guardar';
+
+if ($accion === 'eliminar' && $id) {
+    $stmtRelacion = $pdo->prepare('SELECT COUNT(*) FROM movimientos WHERE id_actividad = :id');
+    $stmtRelacion->execute([':id' => $id]);
+    if ((int) $stmtRelacion->fetchColumn() > 0) {
+        $_SESSION['error'] = 'No es posible eliminar la actividad porque tiene movimientos asociados.';
+        header('Location: ../public/actividades.php');
+        exit;
+    }
+
+    $stmt = $pdo->prepare('DELETE FROM actividades_maestro WHERE id_actividad = :id');
+    $stmt->execute([':id' => $id]);
+    header('Location: ../public/actividades.php');
+    exit;
+}
 $data = [
     ':nombre_actividad' => $_POST['nombre_actividad'],
     ':descripcion' => $_POST['descripcion'] ?? '',

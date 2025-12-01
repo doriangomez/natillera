@@ -39,6 +39,18 @@ $message = isset($_GET['error']) ? 'Credenciales inválidas' : '';
             box-shadow: 0 16px 48px rgba(0,0,0,0.25);
             border: 1px solid rgba(255,255,255,0.08);
         }
+        .brand-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .login-logo {
+            width: 220px;
+            max-height: 120px;
+            height: auto;
+            max-width: 100%;
+            object-fit: contain;
+        }
     </style>
 </head>
 <body>
@@ -48,8 +60,8 @@ $message = isset($_GET['error']) ? 'Credenciales inválidas' : '';
             <div class="card login-card text-center">
                 <div class="card-body p-4">
                     <?php if ($logoPath): ?>
-                        <div class="mb-3 d-flex justify-content-center">
-                            <img src="<?php echo $logoPath; ?>" alt="Logo" class="rounded" style="max-height:110px; background:#fff; padding:10px;">
+                        <div class="mb-3 brand-wrapper">
+                            <img src="<?php echo $logoPath; ?>" alt="Logo" class="login-logo">
                         </div>
                     <?php endif; ?>
                     <div class="mb-3">

@@ -13,6 +13,35 @@ if ($accion === 'inactivar' && $id) {
     exit;
 }
 
+if ($accion === 'eliminar' && $id) {
+    $bloqueos = [
+        'movimientos' => $pdo->prepare('SELECT COUNT(*) FROM movimientos WHERE id_socio = :id'),
+        'prestamos' => $pdo->prepare('SELECT COUNT(*) FROM prestamos WHERE id_socio = :id OR id_socio_aval = :id'),
+        'pollas' => $pdo->prepare('SELECT COUNT(*) FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE m.id_socio = :id AND a.es_polla = 1'),
+        'abonos' => $pdo->prepare('SELECT COUNT(*) FROM cuotas_prestamo cp JOIN prestamos p ON cp.id_prestamo = p.id_prestamo WHERE p.id_socio = :id'),
+    ];
+
+    $tieneRelaciones = false;
+    foreach ($bloqueos as $stmt) {
+        $stmt->execute([':id' => $id]);
+        if ((int) $stmt->fetchColumn() > 0) {
+            $tieneRelaciones = true;
+            break;
+        }
+    }
+
+    if ($tieneRelaciones) {
+        $_SESSION['error'] = 'No es posible eliminar el socio: existen movimientos, préstamos, pollas o abonos relacionados.';
+        header('Location: ../public/socios.php');
+        exit;
+    }
+
+    $stmt = $pdo->prepare('DELETE FROM socios WHERE id_socio = :id');
+    $stmt->execute([':id' => $id]);
+    header('Location: ../public/socios.php');
+    exit;
+}
+
 $data = [
     ':nombre_completo' => $_POST['nombre_completo'],
     ':telefono' => $_POST['telefono'] ?? '',

@@ -3,6 +3,18 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 checkAuth();
 
+$accion = $_POST['accion'] ?? 'guardar';
+$idMovimiento = isset($_POST['id_movimiento']) ? (int) $_POST['id_movimiento'] : 0;
+
+if ($accion === 'eliminar') {
+    if ($idMovimiento > 0) {
+        $stmt = $pdo->prepare('DELETE FROM movimientos WHERE id_movimiento = :id LIMIT 1');
+        $stmt->execute([':id' => $idMovimiento]);
+    }
+    header('Location: ../public/movimientos.php');
+    exit;
+}
+
 $columnas = ['anio INT DEFAULT NULL', 'mes INT DEFAULT NULL', 'quincena INT DEFAULT 0'];
 foreach ($columnas as $def) {
     try {

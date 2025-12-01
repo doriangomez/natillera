@@ -3,6 +3,81 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 checkAuth();
 
+$accion = $_POST['accion'] ?? 'crear';
+$idPrestamo = isset($_POST['id_prestamo']) ? (int) $_POST['id_prestamo'] : 0;
+
+if ($accion === 'eliminar') {
+    try {
+        $pdo->beginTransaction();
+
+        $stmtPrestamo = $pdo->prepare('SELECT * FROM prestamos WHERE id_prestamo = :id');
+        $stmtPrestamo->execute([':id' => $idPrestamo]);
+        $prestamo = $stmtPrestamo->fetch();
+
+        if (!$prestamo) {
+            throw new RuntimeException('Préstamo no encontrado.');
+        }
+
+        $stmtCuotas = $pdo->prepare('SELECT * FROM cuotas_prestamo WHERE id_prestamo = :id');
+        $stmtCuotas->execute([':id' => $idPrestamo]);
+        $cuotas = $stmtCuotas->fetchAll();
+
+        foreach ($cuotas as $cuota) {
+            $valorTotal = (float) $cuota['valor_capital_pagado'] + (float) $cuota['valor_interes_pagado'];
+            if (!empty($cuota['fecha_pago'])) {
+                $motivo = 'Pago cuota préstamo #' . $idPrestamo;
+                $sqlDelMov = 'DELETE FROM movimientos WHERE motivo = :motivo AND fecha = :fecha AND ABS(valor - :valor) < 0.01';
+                $paramsMov = [
+                    ':motivo' => $motivo,
+                    ':fecha' => $cuota['fecha_pago'],
+                    ':valor' => $valorTotal,
+                ];
+                if (!empty($prestamo['id_socio'])) {
+                    $sqlDelMov .= ' AND id_socio = :id_socio';
+                    $paramsMov[':id_socio'] = $prestamo['id_socio'];
+                } else {
+                    $sqlDelMov .= ' AND id_socio IS NULL';
+                }
+                $sqlDelMov .= ' LIMIT 1';
+                $pdo->prepare($sqlDelMov)->execute($paramsMov);
+            }
+        }
+
+        $stmtDelCuotas = $pdo->prepare('DELETE FROM cuotas_prestamo WHERE id_prestamo = :id');
+        $stmtDelCuotas->execute([':id' => $idPrestamo]);
+
+        $actividadPrestamo = $pdo->query("SELECT id_actividad FROM actividades_maestro WHERE es_prestamo=1 LIMIT 1")->fetch();
+        if ($actividadPrestamo) {
+            $paramsDel = [
+                ':id_act' => $actividadPrestamo['id_actividad'],
+                ':fecha' => $prestamo['fecha_prestamo'],
+                ':valor' => -abs((float) $prestamo['monto_prestamo']),
+            ];
+            $sqlDelDesembolso = 'DELETE FROM movimientos WHERE id_actividad = :id_act AND motivo = :motivo AND fecha = :fecha AND valor = :valor';
+            $sqlDelDesembolso .= !empty($prestamo['id_socio']) ? ' AND id_socio = :id_socio' : ' AND id_socio IS NULL';
+            $paramsDel[':motivo'] = 'Desembolso préstamo';
+            if (!empty($prestamo['id_socio'])) {
+                $paramsDel[':id_socio'] = $prestamo['id_socio'];
+            }
+            $sqlDelDesembolso .= ' LIMIT 1';
+            $pdo->prepare($sqlDelDesembolso)->execute($paramsDel);
+        }
+
+        $stmtDelPrestamo = $pdo->prepare('DELETE FROM prestamos WHERE id_prestamo = :id');
+        $stmtDelPrestamo->execute([':id' => $idPrestamo]);
+
+        $pdo->commit();
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        $_SESSION['error'] = 'No se pudo eliminar el préstamo: ' . $e->getMessage();
+    }
+
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+
 $fecha = $_POST['fecha_prestamo'];
 $idSocio = $_POST['id_socio'] ?: null;
 $esParticular = isset($_POST['es_particular']) ? (int) $_POST['es_particular'] : 0;

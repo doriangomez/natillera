@@ -3,6 +3,57 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 checkAuth();
 
+$accion = $_POST['accion'] ?? 'crear';
+$idCuota = isset($_POST['id_cuota']) ? (int) $_POST['id_cuota'] : 0;
+
+if ($accion === 'eliminar') {
+    try {
+        $pdo->beginTransaction();
+
+        $stmtCuota = $pdo->prepare('SELECT * FROM cuotas_prestamo WHERE id_cuota = :id');
+        $stmtCuota->execute([':id' => $idCuota]);
+        $cuota = $stmtCuota->fetch();
+
+        if (!$cuota) {
+            throw new RuntimeException('Abono no encontrado.');
+        }
+
+        $stmtPrestamo = $pdo->prepare('SELECT * FROM prestamos WHERE id_prestamo = :id');
+        $stmtPrestamo->execute([':id' => $cuota['id_prestamo']]);
+        $prestamo = $stmtPrestamo->fetch();
+
+        $valorTotal = (float) $cuota['valor_capital_pagado'] + (float) $cuota['valor_interes_pagado'];
+        if (!empty($cuota['fecha_pago'])) {
+            $motivo = 'Pago cuota préstamo #' . $cuota['id_prestamo'];
+            $sqlDelMov = 'DELETE FROM movimientos WHERE motivo = :motivo AND fecha = :fecha AND ABS(valor - :valor) < 0.01';
+            $paramsMov = [
+                ':motivo' => $motivo,
+                ':fecha' => $cuota['fecha_pago'],
+                ':valor' => $valorTotal,
+            ];
+            if (!empty($prestamo['id_socio'])) {
+                $sqlDelMov .= ' AND id_socio = :id_socio';
+                $paramsMov[':id_socio'] = $prestamo['id_socio'];
+            } else {
+                $sqlDelMov .= ' AND id_socio IS NULL';
+            }
+            $sqlDelMov .= ' LIMIT 1';
+            $pdo->prepare($sqlDelMov)->execute($paramsMov);
+        }
+
+        $pdo->prepare('DELETE FROM cuotas_prestamo WHERE id_cuota = :id')->execute([':id' => $idCuota]);
+        $pdo->commit();
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        $_SESSION['error'] = 'No se pudo eliminar el abono: ' . $e->getMessage();
+    }
+
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+
 $idPrestamo = (int) $_POST['id_prestamo'];
 $fechaPago = $_POST['fecha_pago'];
 $capPagado = (float) $_POST['valor_capital_pagado'];
