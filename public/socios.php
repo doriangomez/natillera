@@ -92,6 +92,11 @@ if ($editId) {
                                     <input type="hidden" name="accion" value="inactivar">
                                     <button class="btn btn-sm btn-danger btn-icon"><span><i class="bi bi-slash-circle"></i> Inactivar</span></button>
                                 </form>
+                                <form method="POST" action="../actions/socios_save.php" class="d-inline" onsubmit="return confirm('¿Eliminar definitivamente el socio y todos sus registros asociados?');">
+                                    <input type="hidden" name="id_socio" value="<?php echo $s['id_socio']; ?>">
+                                    <input type="hidden" name="accion" value="eliminar">
+                                    <button class="btn btn-sm btn-outline-danger btn-icon"><span><i class="bi bi-trash"></i> Eliminar</span></button>
+                                </form>
                             </td>
                         </tr>
                     <?php endforeach; ?>

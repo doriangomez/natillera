@@ -14,32 +14,31 @@ if ($accion === 'inactivar' && $id) {
 }
 
 if ($accion === 'eliminar' && $id) {
-    $bloqueos = [
-        'movimientos' => $pdo->prepare('SELECT COUNT(*) FROM movimientos WHERE id_socio = :id'),
-        'prestamos' => $pdo->prepare('SELECT COUNT(*) FROM prestamos WHERE id_socio = :id OR id_socio_aval = :id'),
-        'pollas' => $pdo->prepare('SELECT COUNT(*) FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE m.id_socio = :id AND a.es_polla = 1'),
-        'abonos' => $pdo->prepare('SELECT COUNT(*) FROM cuotas_prestamo cp JOIN prestamos p ON cp.id_prestamo = p.id_prestamo WHERE p.id_socio = :id'),
-    ];
+    try {
+        $pdo->beginTransaction();
 
-    $tieneRelaciones = false;
-    foreach ($bloqueos as $stmt) {
-        $stmt->execute([':id' => $id]);
-        if ((int) $stmt->fetchColumn() > 0) {
-            $tieneRelaciones = true;
-            break;
+        $prestamosStmt = $pdo->prepare('SELECT id_prestamo FROM prestamos WHERE id_socio = :id OR id_socio_aval = :id');
+        $prestamosStmt->execute([':id' => $id]);
+        $prestamoIds = $prestamosStmt->fetchAll(PDO::FETCH_COLUMN);
+
+        if ($prestamoIds) {
+            $placeholders = implode(',', array_fill(0, count($prestamoIds), '?'));
+            $pdo->prepare("DELETE FROM cuotas_prestamo WHERE id_prestamo IN ($placeholders)")->execute($prestamoIds);
+            $pdo->prepare("DELETE FROM prestamos WHERE id_prestamo IN ($placeholders)")->execute($prestamoIds);
         }
-    }
 
-    if ($tieneRelaciones) {
-        $_SESSION['error'] = 'No es posible eliminar el socio: existen movimientos, préstamos, pollas o abonos relacionados.';
+        $pdo->prepare('DELETE FROM movimientos WHERE id_socio = :id')->execute([':id' => $id]);
+        $pdo->prepare('DELETE FROM socios WHERE id_socio = :id')->execute([':id' => $id]);
+
+        $pdo->commit();
+        header('Location: ../public/socios.php');
+        exit;
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        $_SESSION['error'] = 'No fue posible eliminar el socio y sus registros relacionados.';
         header('Location: ../public/socios.php');
         exit;
     }
-
-    $stmt = $pdo->prepare('DELETE FROM socios WHERE id_socio = :id');
-    $stmt->execute([':id' => $id]);
-    header('Location: ../public/socios.php');
-    exit;
 }
 
 $data = [
