@@ -4,32 +4,53 @@ require_once __DIR__ . '/../includes/functions.php';
 
 $totalSocios = (int) ($pdo->query("SELECT COUNT(*) AS total FROM socios WHERE activo = 1")->fetch()['total'] ?? 0);
 
-$totalCuotas = (float) $pdo->query("
-    SELECT COALESCE(SUM(ABS(m.valor)),0) total
-    FROM movimientos m
-    JOIN actividades_maestro a ON m.id_actividad=a.id_actividad
-    WHERE m.es_ingreso=1 AND a.es_polla=0 AND a.es_prestamo=0 AND a.es_pago_prestamo=0 AND a.es_gasto_general=0
-")->fetchColumn();
+$totalesMovimientos = $pdo->query("
+    WITH mov_signado AS (
+        SELECT m.id_movimiento, m.valor, m.id_actividad,
+               CASE a.afecta_saldo_socio
+                    WHEN 'suma' THEN m.valor
+                    WHEN 'resta' THEN -m.valor
+                    ELSE 0 END AS valor_socio,
+               CASE a.afecta_saldo_natillera
+                    WHEN 'suma' THEN m.valor
+                    WHEN 'resta' THEN -m.valor
+                    ELSE 0 END AS valor_natillera,
+               a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general
+        FROM movimientos m
+        JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+    )
+    SELECT
+        COALESCE(SUM(CASE WHEN es_prestamo = 0 AND es_pago_prestamo = 0 AND es_polla = 0 AND es_gasto_general = 0 THEN valor_natillera END),0) AS total_cuotas,
+        COALESCE(SUM(CASE WHEN es_polla = 1 THEN valor_natillera END),0) AS total_pollas,
+        COALESCE(SUM(CASE WHEN es_prestamo = 1 THEN valor_natillera END),0) AS total_prestado,
+        COALESCE(SUM(CASE WHEN es_pago_prestamo = 1 AND valor_socio <> 0 THEN valor_natillera END),0) AS total_prestamo_recuperado,
+        COALESCE(SUM(CASE WHEN es_pago_prestamo = 1 AND valor_socio = 0 THEN valor_natillera END),0) AS total_intereses,
+        COALESCE(SUM(CASE WHEN es_gasto_general = 1 THEN valor_natillera END),0) AS total_gastos,
+        COALESCE(SUM(CASE WHEN valor_natillera > 0 THEN valor_natillera END),0) AS total_ingresos,
+        COALESCE(SUM(CASE WHEN valor_natillera < 0 THEN -valor_natillera END),0) AS total_egresos,
+        COALESCE(SUM(valor_natillera),0) AS total_natillera
+    FROM mov_signado
+")->fetch(PDO::FETCH_ASSOC);
 
-$totalPollas = (float) $pdo->query("
-    SELECT COALESCE(SUM(ABS(m.valor)),0) total
-    FROM movimientos m
-    JOIN actividades_maestro a ON m.id_actividad=a.id_actividad
-    WHERE m.es_ingreso=1 AND a.es_polla=1
-")->fetchColumn();
+$totalCuotas = (float) ($totalesMovimientos['total_cuotas'] ?? 0);
+$totalPollas = (float) ($totalesMovimientos['total_pollas'] ?? 0);
+$totalPrestamoRecuperado = (float) ($totalesMovimientos['total_prestamo_recuperado'] ?? 0);
+$totalInteresesPrestamo = (float) ($totalesMovimientos['total_intereses'] ?? 0);
+$totalPrestado = (float) ($totalesMovimientos['total_prestado'] ?? 0);
+$totalIngresos = (float) ($totalesMovimientos['total_ingresos'] ?? 0);
+$totalEgresos = (float) ($totalesMovimientos['total_egresos'] ?? 0);
+$saldoNatillera = (float) ($totalesMovimientos['total_natillera'] ?? 0);
 
-$totalPrestamoRecuperado = (float) $pdo->query("SELECT COALESCE(SUM(valor_capital_pagado),0) FROM cuotas_prestamo")->fetchColumn();
-$totalInteresesPrestamo = (float) $pdo->query("SELECT COALESCE(SUM(valor_interes_pagado),0) FROM cuotas_prestamo")->fetchColumn();
-$totalPrestado = (float) $pdo->query("SELECT COALESCE(SUM(monto_prestamo),0) FROM prestamos")->fetchColumn();
-
-$totalIngresos = (float) $pdo->query("SELECT COALESCE(SUM(ABS(valor)),0) FROM movimientos WHERE es_ingreso=1")->fetchColumn();
-$totalEgresos = (float) $pdo->query("SELECT COALESCE(SUM(ABS(valor)),0) FROM movimientos WHERE es_egreso=1")->fetchColumn();
-
-$totalOtrasActividades = max(0, $totalIngresos - ($totalCuotas + $totalPollas + $totalPrestamoRecuperado + $totalInteresesPrestamo));
-$saldoNatillera = getSaldoNatillera($pdo);
+$totalOtrasActividades = max(0, $totalIngresos - (max(0, $totalCuotas) + max(0, $totalPollas) + max(0, $totalPrestamoRecuperado) + max(0, $totalInteresesPrestamo)));
 
 $chartLabels = ['Cuotas', 'Pollas', 'Préstamos (capital recuperado)', 'Intereses', 'Otras actividades'];
-$chartDataset = [$totalCuotas, $totalPollas, $totalPrestamoRecuperado, $totalInteresesPrestamo, $totalOtrasActividades];
+$chartDataset = [
+    max(0, $totalCuotas),
+    max(0, $totalPollas),
+    max(0, $totalPrestamoRecuperado),
+    max(0, $totalInteresesPrestamo),
+    max(0, $totalOtrasActividades)
+];
 
 $socios = getSocios($pdo);
 $actividades = getActividades($pdo, false, true);
@@ -50,29 +71,33 @@ $sqlWhere = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
 $movimientosStmt = $pdo->prepare("
     WITH mov_filtrado AS (
-        SELECT m.id_movimiento, m.fecha, m.valor, m.es_ingreso, m.es_egreso, m.id_socio, m.id_actividad,
+        SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad,
                s.nombre_completo, a.nombre_actividad, a.afecta_saldo_socio, a.afecta_saldo_natillera,
+               a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general,
                COALESCE(mp.nombre, m.medio_consignacion) AS medio_nombre
         FROM movimientos m
         LEFT JOIN socios s ON m.id_socio = s.id_socio
-        LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+        JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
         LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id
         $sqlWhere
-    ), calculado AS (
+    ), mov_signado AS (
         SELECT mov_filtrado.*,
-               SUM(CASE 
-                       WHEN mov_filtrado.afecta_saldo_natillera = 'suma' THEN mov_filtrado.valor
-                       WHEN mov_filtrado.afecta_saldo_natillera = 'resta' THEN -mov_filtrado.valor
-                       ELSE 0 END
-               ) OVER (ORDER BY mov_filtrado.fecha, mov_filtrado.id_movimiento ROWS UNBOUNDED PRECEDING) AS saldo_natillera,
-               CASE WHEN mov_filtrado.id_socio IS NOT NULL THEN
-                    SUM(CASE 
-                            WHEN mov_filtrado.afecta_saldo_socio = 'suma' THEN mov_filtrado.valor
-                            WHEN mov_filtrado.afecta_saldo_socio = 'resta' THEN -mov_filtrado.valor
-                            ELSE 0 END
-                    ) OVER (PARTITION BY mov_filtrado.id_socio ORDER BY mov_filtrado.fecha, mov_filtrado.id_movimiento ROWS UNBOUNDED PRECEDING)
-               END AS saldo_socio
+               CASE mov_filtrado.afecta_saldo_socio
+                    WHEN 'suma' THEN mov_filtrado.valor
+                    WHEN 'resta' THEN -mov_filtrado.valor
+                    ELSE 0 END AS valor_socio,
+               CASE mov_filtrado.afecta_saldo_natillera
+                    WHEN 'suma' THEN mov_filtrado.valor
+                    WHEN 'resta' THEN -mov_filtrado.valor
+                    ELSE 0 END AS valor_natillera
         FROM mov_filtrado
+    ), calculado AS (
+        SELECT mov_signado.*,
+               SUM(mov_signado.valor_natillera) OVER (ORDER BY mov_signado.fecha, mov_signado.id_movimiento ROWS UNBOUNDED PRECEDING) AS saldo_natillera,
+               CASE WHEN mov_signado.id_socio IS NOT NULL THEN
+                    SUM(mov_signado.valor_socio) OVER (PARTITION BY mov_signado.id_socio ORDER BY mov_signado.fecha, mov_signado.id_movimiento ROWS UNBOUNDED PRECEDING)
+               END AS saldo_socio
+        FROM mov_signado
     )
     SELECT * FROM calculado
     ORDER BY fecha DESC, id_movimiento DESC
@@ -246,14 +271,25 @@ $movimientos = $movimientosStmt->fetchAll();
                             <tr><td colspan="8" class="text-center text-muted">No hay movimientos con los filtros seleccionados.</td></tr>
                         <?php endif; ?>
                         <?php foreach($movimientos as $m): ?>
+                            <?php
+                                $tipoMovimiento = 'Neutral';
+                                $claseTipo = 'bg-secondary-subtle text-secondary';
+                                if ($m['valor_natillera'] > 0) {
+                                    $tipoMovimiento = 'Ingreso';
+                                    $claseTipo = 'bg-success-subtle text-success';
+                                } elseif ($m['valor_natillera'] < 0) {
+                                    $tipoMovimiento = 'Egreso';
+                                    $claseTipo = 'bg-danger-subtle text-danger';
+                                }
+                            ?>
                             <tr>
                                 <td><?php echo clean($m['fecha']); ?></td>
                                 <td><?php echo $m['nombre_completo'] ? clean($m['nombre_completo']) : 'General'; ?></td>
                                 <td><?php echo clean($m['nombre_actividad']); ?></td>
                                 <td><?php echo clean($m['medio_nombre']); ?></td>
-                                <td><span class="badge <?php echo $m['es_ingreso'] ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'; ?>">
-                                    <?php echo $m['es_ingreso'] ? 'Ingreso' : 'Egreso'; ?></span></td>
-                                <td class="text-end">$<?php echo number_format(abs($m['valor']),0,',','.'); ?></td>
+                                <td><span class="badge <?php echo $claseTipo; ?>">
+                                    <?php echo $tipoMovimiento; ?></span></td>
+                                <td class="text-end">$<?php echo number_format($m['valor_natillera'],0,',','.'); ?></td>
                                 <td class="text-end"><?php echo $m['saldo_socio'] !== null ? '$'.number_format($m['saldo_socio'],0,',','.') : '-'; ?></td>
                                 <td class="text-end">$<?php echo number_format($m['saldo_natillera'],0,',','.'); ?></td>
                             </tr>
