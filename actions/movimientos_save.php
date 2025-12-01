@@ -29,6 +29,12 @@ if (!$anio || !$mes) {
     $anio = (int) date('Y', strtotime($fecha));
     $mes = (int) date('n', strtotime($fecha));
 }
+$fechaObj = DateTime::createFromFormat('Y-m-d', $fecha);
+if (!$fechaObj) {
+    $_SESSION['error'] = 'La fecha del movimiento no es válida.';
+    header('Location: ../public/movimientos.php');
+    exit;
+}
 $medio = $_POST['medio_consignacion'] ?? '';
 $idMedio = isset($_POST['id_medio_pago']) ? (int) $_POST['id_medio_pago'] : null;
 $obs = $_POST['observaciones'] ?? '';
@@ -53,10 +59,19 @@ if ($valor <= 0) {
     exit;
 }
 
-// Validar periodo permitido (dic 2025 a nov 2026)
-$periodoValido = ($anio === 2025 && $mes === 12) || ($anio === 2026 && $mes >= 1 && $mes <= 11);
+// Validar periodo permitido (dic 2025 a nov 2026) y consistencia de fecha
+$inicioPeriodo = new DateTime('2025-12-01');
+$finPeriodo = new DateTime('2026-11-30 23:59:59');
+$anioFecha = (int) $fechaObj->format('Y');
+$mesFecha = (int) $fechaObj->format('n');
+$periodoValido = $fechaObj >= $inicioPeriodo && $fechaObj <= $finPeriodo;
 if (!$periodoValido) {
-    $_SESSION['error'] = 'El periodo seleccionado debe estar entre diciembre 2025 y noviembre 2026.';
+    $_SESSION['error'] = 'La fecha del movimiento debe estar entre diciembre 2025 y noviembre 2026.';
+    header('Location: ../public/movimientos.php');
+    exit;
+}
+if ($anioFecha !== $anio || $mesFecha !== $mes) {
+    $_SESSION['error'] = 'El año y el mes seleccionados deben coincidir con la fecha del movimiento.';
     header('Location: ../public/movimientos.php');
     exit;
 }
