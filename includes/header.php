@@ -50,12 +50,21 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             background: rgba(255, 255, 255, 0.04);
         }
         .sidebar .brand img {
-            width: 42px;
-            height: 42px;
+            width: 72px;
+            height: 72px;
             object-fit: contain;
-            border-radius: 12px;
+            border-radius: 14px;
             background: #fff;
-            padding: 6px;
+            padding: 8px;
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 220px;
+            }
+            .sidebar .brand img {
+                width: 56px;
+                height: 56px;
+            }
         }
         .sidebar h1 {
             font-size: 1rem;

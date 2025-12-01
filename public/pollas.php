@@ -8,60 +8,10 @@ $actividadesPolla = getActividades($pdo, true);
 $ingresos = $pdo->query("SELECT SUM(valor) as total FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 AND m.es_ingreso=1")->fetch()['total'] ?? 0;
 $egresos = $pdo->query("SELECT SUM(valor) as total FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 AND m.es_egreso=1")->fetch()['total'] ?? 0;
 $porSocio = $pdo->query("SELECT s.nombre_completo, SUM(CASE WHEN m.es_ingreso=1 THEN m.valor ELSE 0 END) ingresos, SUM(CASE WHEN m.es_egreso=1 THEN m.valor ELSE 0 END) egresos FROM movimientos m JOIN socios s ON m.id_socio=s.id_socio JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 GROUP BY s.id_socio")->fetchAll();
+$porMes = $pdo->query("SELECT DATE_FORMAT(m.fecha, '%Y-%m') mes, SUM(CASE WHEN m.es_ingreso=1 THEN m.valor ELSE 0 END) ingresos, SUM(CASE WHEN m.es_egreso=1 THEN m.valor ELSE 0 END) egresos FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 GROUP BY DATE_FORMAT(m.fecha, '%Y-%m') ORDER BY mes DESC")->fetchAll();
 ?>
 <h2 class="mb-3">Gestión de pollas</h2>
-<div class="card mb-3">
-    <div class="card-header">Registrar ingreso / pago de polla</div>
-    <div class="card-body">
-        <form method="POST" action="../actions/movimientos_save.php">
-            <div class="row g-2">
-                <div class="col-md-3">
-                    <label class="form-label">Fecha</label>
-                    <input type="date" name="fecha" class="form-control" required value="<?php echo date('Y-m-d'); ?>">
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Socio</label>
-                    <select name="id_socio" class="form-select" required>
-                        <?php foreach($socios as $s): ?>
-                            <option value="<?php echo $s['id_socio']; ?>"><?php echo clean($s['nombre_completo']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Actividad de polla</label>
-                    <select name="id_actividad" class="form-select" required>
-                        <?php foreach($actividadesPolla as $a): ?>
-                            <option value="<?php echo $a['id_actividad']; ?>"><?php echo clean($a['nombre_actividad']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Valor</label>
-                    <input type="number" step="0.01" name="valor" class="form-control" required>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Tipo</label>
-                    <select name="tipo_mov" class="form-select">
-                        <option value="ingreso">Ingreso</option>
-                        <option value="egreso">Pago premio</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Medio consignación</label>
-                    <input type="text" name="medio_consignacion" class="form-control" required>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Motivo</label>
-                    <input type="text" name="motivo" class="form-control" value="Polla">
-                </div>
-                <div class="col-md-12">
-                    <input type="hidden" name="observaciones" value="Registro de polla">
-                </div>
-            </div>
-            <button class="btn btn-success mt-3">Guardar</button>
-        </form>
-    </div>
-</div>
+<div class="alert alert-info">El registro de pagos y premios de pollas se realiza ahora exclusivamente desde el módulo de Movimientos. Esta vista permanece como panel informativo.</div>
 <div class="row g-3">
     <div class="col-md-4">
         <div class="card text-bg-primary">
@@ -96,6 +46,22 @@ $porSocio = $pdo->query("SELECT s.nombre_completo, SUM(CASE WHEN m.es_ingreso=1 
         <?php foreach($porSocio as $r): ?>
             <tr>
                 <td><?php echo clean($r['nombre_completo']); ?></td>
+                <td>$<?php echo number_format($r['ingresos'],0,',','.'); ?></td>
+                <td>$<?php echo number_format($r['egresos'],0,',','.'); ?></td>
+                <td>$<?php echo number_format($r['ingresos'] - $r['egresos'],0,',','.'); ?></td>
+            </tr>
+        <?php endforeach; ?>
+    </tbody>
+</table>
+</div>
+<h4 class="mt-4">Totales mensuales</h4>
+<div class="table-responsive">
+<table class="table table-bordered table-sm">
+    <thead><tr><th>Mes</th><th>Ingresos</th><th>Egresos</th><th>Neto</th></tr></thead>
+    <tbody>
+        <?php foreach($porMes as $r): ?>
+            <tr>
+                <td><?php echo clean($r['mes']); ?></td>
                 <td>$<?php echo number_format($r['ingresos'],0,',','.'); ?></td>
                 <td>$<?php echo number_format($r['egresos'],0,',','.'); ?></td>
                 <td>$<?php echo number_format($r['ingresos'] - $r['egresos'],0,',','.'); ?></td>
