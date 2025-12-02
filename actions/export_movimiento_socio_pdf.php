@@ -63,18 +63,26 @@ function prepararLogoObjeto(array $config, array &$objetos): ?array
         return null;
     }
 
-    $imagen = @imagecreatefromstring((string) file_get_contents($rutaLogo));
-    if (!$imagen) {
+    $info = @getimagesize($rutaLogo);
+    if (!$info) {
         return null;
     }
 
-    $ancho = imagesx($imagen);
-    $alto = imagesy($imagen);
+    [$ancho, $alto] = $info;
+    $mime = $info['mime'] ?? '';
 
-    ob_start();
-    imagejpeg($imagen, null, 90);
-    $binario = (string) ob_get_clean();
-    imagedestroy($imagen);
+    $binario = '';
+    if ($mime === 'image/jpeg' || $mime === 'image/jpg') {
+        $binario = (string) file_get_contents($rutaLogo);
+    } elseif (function_exists('imagecreatefromstring') && function_exists('imagejpeg')) {
+        $imagen = @imagecreatefromstring((string) file_get_contents($rutaLogo));
+        if ($imagen) {
+            ob_start();
+            imagejpeg($imagen, null, 90);
+            $binario = (string) ob_get_clean();
+            imagedestroy($imagen);
+        }
+    }
 
     if ($binario === '') {
         return null;
