@@ -53,9 +53,13 @@ unset($m);
     </div>
     <div class="d-flex gap-2">
         <a class="btn btn-outline-secondary" href="../actions/export_csv.php?tipo=movimientos&socio=<?php echo $fSocio; ?>&desde=<?php echo $fDesde; ?>&hasta=<?php echo $fHasta; ?>">Exportar filtrado</a>
-        <?php if ($fSocio): ?>
-            <a class="btn btn-outline-danger" href="../actions/export_movimiento_socio_pdf.php?socio=<?php echo $fSocio; ?>&desde=<?php echo $fDesde; ?>&hasta=<?php echo $fHasta; ?>&actividad=<?php echo $fActividad; ?>">Exportar PDF socio</a>
-        <?php endif; ?>
+        <button id="btnExportarMovimientos" class="btn btn-outline-danger"
+            data-socio="<?php echo $fSocio; ?>"
+            data-desde="<?php echo $fDesde; ?>"
+            data-hasta="<?php echo $fHasta; ?>"
+            data-actividad="<?php echo $fActividad; ?>">
+            Exportar movimientos PDF
+        </button>
     </div>
 </div>
 <div class="card mb-3">
@@ -136,4 +140,39 @@ unset($m);
     </table>
 </div>
 <div class="alert alert-info">Ingresos socio: $<?php echo number_format($totales['ingresos'],0,',','.'); ?> | Egresos socio: $<?php echo number_format(abs($totales['egresos']),0,',','.'); ?> | Saldo neto socio: $<?php echo number_format($totales['ingresos']+$totales['egresos'],0,',','.'); ?></div>
+<script>
+const btnExportar = document.getElementById('btnExportarMovimientos');
+if (btnExportar) {
+    btnExportar.addEventListener('click', () => {
+        const decision = (prompt('¿Exportar movimientos individual o colectivo?', 'individual') || '').trim().toLowerCase();
+        if (decision !== 'individual' && decision !== 'colectivo') {
+            alert('Debes indicar "individual" o "colectivo".');
+            return;
+        }
+
+        const params = new URLSearchParams({
+            socio: btnExportar.dataset.socio || '',
+            desde: btnExportar.dataset.desde || '',
+            hasta: btnExportar.dataset.hasta || '',
+            actividad: btnExportar.dataset.actividad || ''
+        });
+
+        if (decision === 'individual') {
+            if (!btnExportar.dataset.socio) {
+                alert('Selecciona un socio en el filtro para exportar un PDF individual.');
+                return;
+            }
+            params.set('modo', 'individual');
+        } else {
+            params.set('modo', 'colectivo');
+            const ruta = (prompt('Ruta de extracción/carpeta para guardar los archivos separados', 'exportes_movimientos') || 'exportes_movimientos').trim();
+            if (ruta) {
+                params.set('ruta', ruta);
+            }
+        }
+
+        window.location.href = '../actions/export_movimiento_socio_pdf.php?' + params.toString();
+    });
+}
+</script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
