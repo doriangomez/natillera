@@ -1,7 +1,4 @@
 <?php
-use Dompdf\Dompdf;
-use Dompdf\Options;
-
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 
@@ -10,28 +7,7 @@ require_once __DIR__ . '/../includes/auth.php';
 
 checkAuth();
 
-$formato = strtolower($_GET['formato'] ?? 'pdf');
-if (!in_array($formato, ['pdf', 'html'], true)) {
-    $formato = 'pdf';
-}
-
-// Validación de dependencias y codificación (solo para PDF)
-if ($formato === 'pdf') {
-    $autoloadPath = realpath(__DIR__ . '/../vendor/autoload.php');
-    if ($autoloadPath === false || !file_exists($autoloadPath)) {
-        exit('No se encuentra el autoload de Dompdf. Asegúrese de instalar las dependencias con Composer.');
-    }
-    require_once $autoloadPath;
-
-    if (function_exists('mb_internal_encoding')) {
-        mb_internal_encoding('UTF-8');
-        if (mb_internal_encoding() !== 'UTF-8') {
-            exit('La generación del PDF requiere UTF-8.');
-        }
-    } elseif (!preg_match('//u', 'á')) {
-        exit('La generación del PDF requiere UTF-8.');
-    }
-}
+$formato = 'html';
 
 function obtenerSocio(int $idSocio, PDO $pdo): array
 {
@@ -504,21 +480,6 @@ function construirHtmlPdf(array $data): string
     return (string) ob_get_clean();
 }
 
-function generarPdf(string $html): string
-{
-    $options = new Options();
-    $options->set('isHtml5ParserEnabled', true);
-    $options->set('isRemoteEnabled', true);
-    $options->setChroot(__DIR__ . '/..');
-
-    $dompdf = new Dompdf($options);
-    $dompdf->loadHtml($html, 'UTF-8');
-    $dompdf->setPaper('A4', 'portrait');
-    $dompdf->render();
-
-    return $dompdf->output();
-}
-
 $modo = $_GET['modo'] ?? 'individual';
 $idSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
 $desde = $_GET['desde'] ?? '';
@@ -580,9 +541,8 @@ if ($modo === 'colectivo') {
                 'logo' => $logo,
                 'mensajeUsuario' => $mensajeUsuario,
             ]);
-            $extension = $formato === 'html' ? 'html' : 'pdf';
-            $contenidoArchivo = $formato === 'html' ? $html : generarPdf($html);
-            $nombreArchivo = ($rutaCarpeta ? $rutaCarpeta.'/' : '') . nombreArchivoSocio($socioDetalle) . '_movimientos.' . $extension;
+            $nombreArchivo = ($rutaCarpeta ? $rutaCarpeta.'/' : '') . nombreArchivoSocio($socioDetalle) . '_movimientos.html';
+            $contenidoArchivo = $html;
             $zip->addFromString($nombreArchivo, $contenidoArchivo);
         } catch (Throwable $e) {
             continue;
@@ -625,18 +585,7 @@ $html = construirHtmlPdf([
     'mensajeUsuario' => $mensajeUsuario,
 ]);
 
-if ($formato === 'html') {
-    $nombre = nombreArchivoSocio($socio) . '_movimientos.html';
-    header('Content-Type: text/html; charset=UTF-8');
-    header('Content-Disposition: attachment; filename="' . $nombre . '"');
-    echo $html;
-    exit;
-}
-
-$pdf = generarPdf($html);
-$nombre = nombreArchivoSocio($socio) . '_movimientos.pdf';
-
-header('Content-Type: application/pdf');
-header('Content-Disposition: attachment; filename="' . $nombre . '"');
-header('Content-Length: ' . strlen($pdf));
-echo $pdf;
+$nombre = nombreArchivoSocio($socio) . '_movimientos.html';
+header('Content-Type: text/html; charset=UTF-8');
+header('Content-Disposition: inline; filename="' . $nombre . '"');
+echo $html;

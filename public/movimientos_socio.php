@@ -210,10 +210,8 @@ unset($m);
                     </div>
                     <div class="mb-3">
                         <label class="form-label" for="formatoExport">Formato de reporte</label>
-                        <select class="form-select" id="formatoExport" name="formatoExport">
-                            <option value="pdf" selected>PDF (ideal para compartir o imprimir)</option>
-                            <option value="html">HTML (versión web con logo y estilo moderno)</option>
-                        </select>
+                        <input type="text" readonly class="form-control" id="formatoExport" value="HTML (abre en la aplicación)">
+                        <div class="form-text">La exportación individual se abrirá en esta aplicación como página HTML.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label" for="mensajeNoticias">Noticias o mensaje para el reporte</label>
@@ -314,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const socioSeleccionado = socioSelect.value;
             const rutaDestino = rutaInput.value.trim();
             const mensajeNoticias = (document.getElementById('mensajeNoticias')?.value || '').trim();
-            const formato = (document.getElementById('formatoExport')?.value || 'pdf').toLowerCase();
+            const formato = 'html';
 
             socioSelect.classList.remove('is-invalid');
             if (modo === 'individual' && !socioSeleccionado) {
@@ -339,7 +337,12 @@ document.addEventListener('DOMContentLoaded', () => {
             params.set('formato', formato);
 
             modalInstance.hide();
-            window.location.href = '../actions/export_movimiento_socio_pdf.php?' + params.toString();
+            const url = '../actions/export_movimiento_socio_pdf.php?' + params.toString();
+            if (modo === 'individual') {
+                window.location.href = url;
+            } else {
+                window.location.href = url;
+            }
         });
     }
 });
