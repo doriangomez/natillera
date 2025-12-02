@@ -536,6 +536,10 @@ if ($modo === 'colectivo') {
     $rutaHtml = __DIR__ . '/html_pdfs';
     $rutaPdf = __DIR__ . '/pdf_generados';
 
+    if (isset($_GET['zip']) && $_GET['zip']) {
+        exit('ZIP NO PERMITIDO – flujo inválido');
+    }
+
     if (!is_dir($rutaHtml)) {
         mkdir($rutaHtml, 0777, true);
     }
@@ -544,6 +548,7 @@ if ($modo === 'colectivo') {
     }
 
     limpiarCarpeta($rutaHtml);
+    limpiarCarpeta($rutaPdf);
 
     $socios = $pdo->query('SELECT id_socio, nombre_completo FROM socios ORDER BY nombre_completo ASC')->fetchAll();
     if (!$socios) {
@@ -574,7 +579,7 @@ if ($modo === 'colectivo') {
                 'logo' => $logo,
                 'mensajeUsuario' => $mensajeUsuario,
             ]);
-            $nombreArchivo = nombreArchivoSocio($socioDetalle) . '_movimientos.html';
+            $nombreArchivo = nombreArchivoSocio($socioDetalle) . '.html';
             file_put_contents($rutaHtml . '/' . $nombreArchivo, $html);
         } catch (Throwable $e) {
             continue;
@@ -603,11 +608,8 @@ if ($modo === 'colectivo') {
 
     $zip->close();
 
-    header('Content-Type: application/zip');
-    header('Content-Disposition: attachment; filename="' . $nombreZip . '"');
-    header('Content-Length: ' . filesize($rutaZip));
-    readfile($rutaZip);
-    unlink($rutaZip);
+    header('Content-Type: text/plain; charset=UTF-8');
+    echo 'Exportación masiva finalizada correctamente';
     exit;
 }
 
