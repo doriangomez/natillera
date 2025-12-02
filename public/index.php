@@ -5,23 +5,6 @@ require_once __DIR__ . '/../includes/functions.php';
 $totalSocios = (int) ($pdo->query("SELECT COUNT(*) AS total FROM socios WHERE activo = 1")->fetch()['total'] ?? 0);
 
 $totalesMovimientos = $pdo->query("
-    WITH mov_signado AS (
-        SELECT m.id_movimiento, m.valor, m.id_actividad,
-               CASE WHEN a.es_polla = 1 THEN 0 ELSE
-                    CASE a.afecta_saldo_socio
-                        WHEN 'suma' THEN m.valor
-                        WHEN 'resta' THEN -m.valor
-                        ELSE 0
-                    END
-               END AS valor_socio,
-               CASE a.afecta_saldo_natillera
-                    WHEN 'suma' THEN m.valor
-                    WHEN 'resta' THEN -m.valor
-                    ELSE 0 END AS valor_natillera,
-               a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general
-        FROM movimientos m
-        JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
-    )
     SELECT
         COALESCE(SUM(CASE WHEN es_prestamo = 0 AND es_pago_prestamo = 0 AND es_polla = 0 AND es_gasto_general = 0 THEN valor_natillera END),0) AS total_cuotas,
         COALESCE(SUM(CASE WHEN es_polla = 1 THEN valor_natillera END),0) AS total_pollas,
@@ -32,7 +15,23 @@ $totalesMovimientos = $pdo->query("
         COALESCE(SUM(CASE WHEN valor_natillera > 0 THEN valor_natillera END),0) AS total_ingresos,
         COALESCE(SUM(CASE WHEN valor_natillera < 0 THEN -valor_natillera END),0) AS total_egresos,
         COALESCE(SUM(valor_natillera),0) AS total_natillera
-    FROM mov_signado
+    FROM (
+        SELECT m.id_movimiento, m.valor, m.id_actividad,
+               CASE WHEN a.es_polla = 1 THEN 0 ELSE
+                    CASE
+                        WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'suma' THEN m.valor
+                        WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'resta' THEN -m.valor
+                        ELSE 0
+                    END
+               END AS valor_socio,
+               CASE
+                    WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'suma' THEN m.valor
+                    WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'resta' THEN -m.valor
+                    ELSE 0 END AS valor_natillera,
+               a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general
+        FROM movimientos m
+        JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+    ) AS mov_signado
 ")->fetch(PDO::FETCH_ASSOC);
 
 $totalCuotas = (float) ($totalesMovimientos['total_cuotas'] ?? 0);
@@ -73,47 +72,123 @@ if ($filtroFechaFin) { $where[] = 'm.fecha <= :ff'; $params[':ff'] = $filtroFech
 $sqlWhere = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
 $movimientosStmt = $pdo->prepare("
-    WITH mov_filtrado AS (
-        SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad,
-               s.nombre_completo, a.nombre_actividad, a.afecta_saldo_socio, a.afecta_saldo_natillera,
-               a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general,
-               COALESCE(mp.nombre, m.medio_consignacion) AS medio_nombre
-        FROM movimientos m
-        LEFT JOIN socios s ON m.id_socio = s.id_socio
-        JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
-        LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id
-        $sqlWhere
-    ), mov_signado AS (
-        SELECT mov_filtrado.*,
-               CASE WHEN mov_filtrado.es_polla = 1 THEN 0 ELSE
-                    CASE mov_filtrado.afecta_saldo_socio
-                        WHEN 'suma' THEN mov_filtrado.valor
-                        WHEN 'resta' THEN -mov_filtrado.valor
-                        ELSE 0
-                    END
-               END AS valor_socio,
-               CASE mov_filtrado.afecta_saldo_natillera
-                    WHEN 'suma' THEN mov_filtrado.valor
-                    WHEN 'resta' THEN -mov_filtrado.valor
-                    ELSE 0 END AS valor_natillera
-        FROM mov_filtrado
-    ), calculado AS (
+    SELECT calculado.*
+    FROM (
         SELECT mov_signado.*,
-               SUM(mov_signado.valor_natillera) OVER (
-                   ORDER BY mov_signado.fecha, mov_signado.id_movimiento
-                   ROWS UNBOUNDED PRECEDING
-               ) AS saldo_natillera,
-               CASE WHEN mov_signado.id_socio IS NOT NULL THEN
-                    SUM(CASE WHEN mov_signado.es_polla = 1 THEN 0 ELSE mov_signado.valor_socio END) OVER (
-                        PARTITION BY mov_signado.id_socio
-                        ORDER BY mov_signado.fecha, mov_signado.id_movimiento
-                        ROWS UNBOUNDED PRECEDING
-                    )
-               END AS saldo_socio
-        FROM mov_signado
-    )
-    SELECT * FROM calculado
-    ORDER BY fecha DESC, id_movimiento DESC
+            (
+                SELECT SUM(ms2.valor_natillera)
+                FROM (
+                    SELECT mf2.id_movimiento, mf2.fecha,
+                           CASE WHEN mf2.es_polla = 1 THEN 0 ELSE
+                                CASE mf2.afecta_saldo_socio
+                                    WHEN 'suma' THEN mf2.valor
+                                    WHEN 'resta' THEN -mf2.valor
+                                    ELSE 0
+                                END
+                           END AS valor_socio,
+                           CASE mf2.afecta_saldo_natillera
+                                WHEN 'suma' THEN mf2.valor
+                                WHEN 'resta' THEN -mf2.valor
+                                ELSE 0 END AS valor_natillera
+                    FROM (
+                        SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad,
+                               CASE
+                                   WHEN a.es_polla = 1 THEN 'neutral'
+                                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'suma' THEN 'suma'
+                                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'resta' THEN 'resta'
+                                   ELSE 'neutral'
+                               END AS afecta_saldo_socio,
+                               CASE
+                                   WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'suma' THEN 'suma'
+                                   WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'resta' THEN 'resta'
+                                   ELSE 'neutral'
+                               END AS afecta_saldo_natillera,
+                               a.es_polla
+                        FROM movimientos m
+                        JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+                        $sqlWhere
+                    ) AS mf2
+                ) AS ms2
+                WHERE ms2.fecha < mov_signado.fecha
+                   OR (ms2.fecha = mov_signado.fecha AND ms2.id_movimiento <= mov_signado.id_movimiento)
+            ) AS saldo_natillera,
+            CASE WHEN mov_signado.id_socio IS NOT NULL THEN (
+                SELECT SUM(
+                        CASE
+                            WHEN ms2.afecta_saldo_socio = 'neutral' OR ms2.es_polla = 1 THEN 0
+                            ELSE ms2.valor_socio
+                        END)
+                FROM (
+                    SELECT mf2.id_movimiento, mf2.fecha, mf2.id_socio,
+                           CASE
+                               WHEN mf2.es_polla = 1 THEN 'neutral'
+                               WHEN LOWER(TRIM(mf2.afecta_saldo_socio)) = 'suma' THEN 'suma'
+                               WHEN LOWER(TRIM(mf2.afecta_saldo_socio)) = 'resta' THEN 'resta'
+                               ELSE 'neutral'
+                           END AS afecta_saldo_socio,
+                           CASE mf2.afecta_saldo_socio
+                               WHEN 'suma' THEN mf2.valor
+                               WHEN 'resta' THEN -mf2.valor
+                               ELSE 0 END AS valor_socio,
+                           mf2.es_polla
+                    FROM (
+                        SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad,
+                               CASE
+                                   WHEN a.es_polla = 1 THEN 'neutral'
+                                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'suma' THEN 'suma'
+                                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'resta' THEN 'resta'
+                                   ELSE 'neutral'
+                               END AS afecta_saldo_socio,
+                               a.es_polla
+                        FROM movimientos m
+                        JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+                        $sqlWhere
+                    ) AS mf2
+                ) AS ms2
+                WHERE ms2.id_socio = mov_signado.id_socio
+                  AND (ms2.fecha < mov_signado.fecha
+                       OR (ms2.fecha = mov_signado.fecha AND ms2.id_movimiento <= mov_signado.id_movimiento))
+            ) END AS saldo_socio
+        FROM (
+            SELECT mf.id_movimiento, mf.fecha, mf.valor, mf.id_socio, mf.id_actividad,
+                   mf.nombre_completo, mf.nombre_actividad, mf.afecta_saldo_socio, mf.afecta_saldo_natillera,
+                   mf.es_prestamo, mf.es_pago_prestamo, mf.es_polla, mf.es_gasto_general, mf.medio_nombre,
+                   CASE WHEN mf.es_polla = 1 THEN 0 ELSE
+                        CASE mf.afecta_saldo_socio
+                            WHEN 'suma' THEN mf.valor
+                            WHEN 'resta' THEN -mf.valor
+                            ELSE 0
+                        END
+                   END AS valor_socio,
+                   CASE mf.afecta_saldo_natillera
+                        WHEN 'suma' THEN mf.valor
+                        WHEN 'resta' THEN -mf.valor
+                        ELSE 0 END AS valor_natillera
+            FROM (
+                SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad,
+                       s.nombre_completo, a.nombre_actividad,
+                       CASE
+                           WHEN a.es_polla = 1 THEN 'neutral'
+                           WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'suma' THEN 'suma'
+                           WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'resta' THEN 'resta'
+                           ELSE 'neutral'
+                       END AS afecta_saldo_socio,
+                       CASE
+                           WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'suma' THEN 'suma'
+                           WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'resta' THEN 'resta'
+                           ELSE 'neutral'
+                       END AS afecta_saldo_natillera,
+                       a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general,
+                       COALESCE(mp.nombre, m.medio_consignacion) AS medio_nombre
+                FROM movimientos m
+                LEFT JOIN socios s ON m.id_socio = s.id_socio
+                JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+                LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id
+                $sqlWhere
+            ) AS mf
+        ) AS mov_signado
+    ) AS calculado
+    ORDER BY calculado.fecha DESC, calculado.id_movimiento DESC
 ");
 $movimientosStmt->execute($params);
 $movimientos = $movimientosStmt->fetchAll();
