@@ -140,37 +140,137 @@ unset($m);
     </table>
 </div>
 <div class="alert alert-info">Ingresos socio: $<?php echo number_format($totales['ingresos'],0,',','.'); ?> | Egresos socio: $<?php echo number_format(abs($totales['egresos']),0,',','.'); ?> | Saldo neto socio: $<?php echo number_format($totales['ingresos']+$totales['egresos'],0,',','.'); ?></div>
+<div class="modal fade" id="exportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Exportar movimientos</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="exportForm" class="needs-validation" novalidate>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label d-block">Modo de exportación</label>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="modoExportacion" id="modoIndividual" value="individual" checked>
+                            <label class="form-check-label" for="modoIndividual">Individual</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="modoExportacion" id="modoColectivo" value="colectivo">
+                            <label class="form-check-label" for="modoColectivo">Colectivo</label>
+                        </div>
+                    </div>
+                    <div class="mb-3" id="campoSocio">
+                        <label class="form-label" for="socioExport">Socio</label>
+                        <select class="form-select" id="socioExport" required>
+                            <option value="">Selecciona un socio</option>
+                            <?php foreach($socios as $s): ?>
+                                <option value="<?php echo $s['id_socio']; ?>" <?php echo $fSocio==$s['id_socio']?'selected':''; ?>><?php echo clean($s['nombre_completo']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="invalid-feedback">Debes elegir un socio para exportar de forma individual.</div>
+                    </div>
+                    <div class="mb-3" id="campoRuta" style="display:none;">
+                        <label class="form-label" for="rutaExport">Carpeta destino (opcional)</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="rutaExport" name="rutaExport" placeholder="Ej: exportes_movimientos" aria-describedby="btnSeleccionarRuta">
+                            <button class="btn btn-outline-secondary" type="button" id="btnSeleccionarRuta">Elegir carpeta…</button>
+                        </div>
+                        <input type="file" id="selectorRuta" webkitdirectory directory multiple style="display:none;">
+                        <div class="form-text">El archivo ZIP se descargará en tu carpeta de descargas; este nombre define la carpeta interna.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="submit" class="btn btn-danger">Exportar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 <script>
 const btnExportar = document.getElementById('btnExportarMovimientos');
+let exportModal;
+let folderInput;
+
+function actualizarVisibilidadCampos(modo) {
+    const campoSocio = document.getElementById('campoSocio');
+    const campoRuta = document.getElementById('campoRuta');
+    if (modo === 'individual') {
+        campoSocio.style.display = '';
+        campoRuta.style.display = 'none';
+        document.getElementById('socioExport').setAttribute('required', 'required');
+    } else {
+        campoSocio.style.display = 'none';
+        campoRuta.style.display = '';
+        document.getElementById('socioExport').removeAttribute('required');
+    }
+}
+
+function obtenerNombreCarpetaSeleccionada(fileInput) {
+    if (!fileInput || !fileInput.files || fileInput.files.length === 0) return '';
+    const primeraRuta = fileInput.files[0].webkitRelativePath || fileInput.files[0].name || '';
+    return primeraRuta.split('/')[0] || '';
+}
+
 if (btnExportar) {
+    exportModal = new bootstrap.Modal(document.getElementById('exportModal'));
+    folderInput = document.getElementById('selectorRuta');
+
     btnExportar.addEventListener('click', () => {
-        const decision = (prompt('¿Exportar movimientos individual o colectivo?', 'individual') || '').trim().toLowerCase();
-        if (decision !== 'individual' && decision !== 'colectivo') {
-            alert('Debes indicar "individual" o "colectivo".');
+        document.getElementById('socioExport').value = btnExportar.dataset.socio || '';
+        document.getElementById('rutaExport').value = '';
+        document.getElementById('modoIndividual').checked = true;
+        actualizarVisibilidadCampos('individual');
+        exportModal.show();
+    });
+
+    document.querySelectorAll('input[name="modoExportacion"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            actualizarVisibilidadCampos(e.target.value);
+        });
+    });
+
+    document.getElementById('btnSeleccionarRuta').addEventListener('click', () => {
+        if (folderInput && folderInput.showPicker) {
+            folderInput.showPicker().catch(() => {});
+        } else if (folderInput) {
+            folderInput.click();
+        }
+    });
+
+    folderInput.addEventListener('change', () => {
+        const nombreCarpeta = obtenerNombreCarpetaSeleccionada(folderInput);
+        if (nombreCarpeta) {
+            document.getElementById('rutaExport').value = nombreCarpeta;
+        }
+    });
+
+    document.getElementById('exportForm').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const modo = document.querySelector('input[name="modoExportacion"]:checked').value;
+        const socioSeleccionado = document.getElementById('socioExport').value;
+        const rutaDestino = document.getElementById('rutaExport').value.trim();
+
+        document.getElementById('socioExport').classList.remove('is-invalid');
+        if (modo === 'individual' && !socioSeleccionado) {
+            event.stopPropagation();
+            document.getElementById('socioExport').classList.add('is-invalid');
             return;
         }
 
         const params = new URLSearchParams({
-            socio: btnExportar.dataset.socio || '',
+            socio: modo === 'individual' ? socioSeleccionado : (btnExportar.dataset.socio || ''),
             desde: btnExportar.dataset.desde || '',
             hasta: btnExportar.dataset.hasta || '',
             actividad: btnExportar.dataset.actividad || ''
         });
-
-        if (decision === 'individual') {
-            if (!btnExportar.dataset.socio) {
-                alert('Selecciona un socio en el filtro para exportar un PDF individual.');
-                return;
-            }
-            params.set('modo', 'individual');
-        } else {
-            params.set('modo', 'colectivo');
-            const ruta = (prompt('Ruta de extracción/carpeta para guardar los archivos separados', 'exportes_movimientos') || 'exportes_movimientos').trim();
-            if (ruta) {
-                params.set('ruta', ruta);
-            }
+        params.set('modo', modo);
+        if (modo === 'colectivo' && rutaDestino) {
+            params.set('ruta', rutaDestino);
         }
 
+        exportModal.hide();
         window.location.href = '../actions/export_movimiento_socio_pdf.php?' + params.toString();
     });
 }
