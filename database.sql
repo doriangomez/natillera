@@ -132,6 +132,7 @@ CREATE TABLE polla_resultados (
     UNIQUE KEY uq_polla_mes (anio, mes)
 );
 
+-- Conciliación mensual por medio de pago (una fila por medio y periodo)
 CREATE TABLE conciliaciones_medios_pago (
     id INT AUTO_INCREMENT PRIMARY KEY,
     id_medio INT NOT NULL,
