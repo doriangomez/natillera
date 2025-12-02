@@ -8,6 +8,15 @@ $totalesMovimientos = $pdo->query("
     WITH mov_signado AS (
         SELECT m.id_movimiento, m.valor, m.id_actividad,
                CASE WHEN a.es_polla = 1 THEN 0 ELSE
+                    CASE LOWER(TRIM(a.afecta_saldo_socio))
+                        WHEN 'suma' THEN m.valor
+                        WHEN 'resta' THEN -m.valor
+                        ELSE 0
+                    END
+               END AS valor_socio,
+               CASE LOWER(TRIM(a.afecta_saldo_natillera))
+                    WHEN 'suma' THEN m.valor
+                    WHEN 'resta' THEN -m.valor
                     CASE
                         WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'suma' THEN m.valor
                         WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'resta' THEN -m.valor
@@ -76,6 +85,8 @@ $movimientosStmt = $pdo->prepare("
     WITH mov_filtrado AS (
         SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad,
                s.nombre_completo, a.nombre_actividad,
+               LOWER(TRIM(a.afecta_saldo_socio)) AS afecta_saldo_socio,
+               LOWER(TRIM(a.afecta_saldo_natillera)) AS afecta_saldo_natillera,
                CASE
                    WHEN a.es_polla = 1 THEN 'neutral'
                    WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'suma' THEN 'suma'
