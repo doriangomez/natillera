@@ -7,8 +7,6 @@ require_once __DIR__ . '/../includes/auth.php';
 
 checkAuth();
 
-$formato = 'html';
-
 function limpiarCarpeta($ruta) {
     foreach (glob($ruta . '/*') as $archivo) {
         if (is_dir($archivo)) {
