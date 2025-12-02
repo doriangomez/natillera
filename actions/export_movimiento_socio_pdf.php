@@ -1,7 +1,27 @@
 <?php
+use Dompdf\Dompdf;
+use Dompdf\Options;
+
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
+
 checkAuth();
+
+// Validación de dependencias y codificación
+$autoloadPath = __DIR__ . '/../vendor/autoload.php';
+if (!file_exists($autoloadPath)) {
+    exit('No se encuentra el autoload de Dompdf. Asegúrese de instalar las dependencias con Composer.');
+}
+require_once $autoloadPath;
+
+if (function_exists('mb_internal_encoding')) {
+    mb_internal_encoding('UTF-8');
+    if (mb_internal_encoding() !== 'UTF-8') {
+        exit('La generación del PDF requiere UTF-8.');
+    }
+} elseif (!preg_match('//u', 'á')) {
+    exit('La generación del PDF requiere UTF-8.');
+}
 
 function obtenerSocio(int $idSocio, PDO $pdo): array
 {
@@ -52,48 +72,22 @@ function obtenerPrestamos(PDO $pdo, int $idSocio): array
     return [$prestamos, $totalCapital, $totalIntereses];
 }
 
-function prepararLogoObjeto(array $config, array &$objetos): ?array
+function obtenerPagosIntereses(PDO $pdo, int $idSocio): array
 {
-    if (empty($config['logo_archivo'])) {
-        return null;
+    $sql = "SELECT cp.fecha_pago, cp.numero_cuota, cp.valor_interes_pagado, p.id_prestamo
+            FROM cuotas_prestamo cp
+            JOIN prestamos p ON cp.id_prestamo = p.id_prestamo
+            WHERE p.id_socio = :id AND cp.valor_interes_pagado > 0
+            ORDER BY cp.fecha_pago ASC, cp.numero_cuota ASC";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([':id' => $idSocio]);
+    $pagos = $stmt->fetchAll();
+
+    if (!is_array($pagos)) {
+        exit('No se pudieron obtener los pagos de intereses.');
     }
 
-    $rutaLogo = __DIR__ . '/../public/assets/logo/' . basename($config['logo_archivo']);
-    if (!is_readable($rutaLogo)) {
-        return null;
-    }
-
-    $info = @getimagesize($rutaLogo);
-    if (!$info) {
-        return null;
-    }
-
-    [$ancho, $alto] = $info;
-    $mime = $info['mime'] ?? '';
-
-    $binario = '';
-    if ($mime === 'image/jpeg' || $mime === 'image/jpg') {
-        $binario = (string) file_get_contents($rutaLogo);
-    } elseif (function_exists('imagecreatefromstring') && function_exists('imagejpeg')) {
-        $imagen = @imagecreatefromstring((string) file_get_contents($rutaLogo));
-        if ($imagen) {
-            ob_start();
-            imagejpeg($imagen, null, 90);
-            $binario = (string) ob_get_clean();
-            imagedestroy($imagen);
-        }
-    }
-
-    if ($binario === '') {
-        return null;
-    }
-
-    $logoId = reservarObjeto($objetos);
-    $contenido = "<< /Type /XObject /Subtype /Image /Width $ancho /Height $alto /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " . strlen($binario) . " >>\nstream\n";
-    $contenido .= $binario . "\nendstream";
-    definirObjeto($objetos, $logoId, $contenido);
-
-    return ['id' => $logoId, 'ancho' => $ancho, 'alto' => $alto];
+    return $pagos;
 }
 
 function formatearMoneda(float $valor): string
@@ -167,252 +161,232 @@ function construirDetalleCuotas(array $movimientos): array
     return $detalles;
 }
 
-function textoPdf(string $texto): string
+function nombreArchivoSocio(array $socio): string
 {
-    $texto = (string) $texto;
-    $convertido = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $texto);
-    if ($convertido === false) {
-        $convertido = $texto;
+    $seguro = preg_replace('/[^A-Za-z0-9_\-]/', '_', $socio['nombre_completo']);
+    $seguro = trim($seguro, '_');
+    return $seguro !== '' ? $seguro : ('socio_' . (int)$socio['id_socio']);
+}
+
+function prepararLogo(array $config): string
+{
+    if (empty($config['logo_archivo'])) {
+        exit('No se configuró un archivo de logo.');
     }
-    return $convertido;
+
+    $rutaLogo = realpath(__DIR__ . '/../public/assets/logo/' . basename((string)$config['logo_archivo']));
+    if (!$rutaLogo || !is_readable($rutaLogo)) {
+        exit('No se encontró el logo en la ruta esperada.');
+    }
+
+    $mime = mime_content_type($rutaLogo) ?: 'image/png';
+    $contenido = (string) file_get_contents($rutaLogo);
+    if ($contenido === '') {
+        exit('El archivo de logo está vacío o es ilegible.');
+    }
+
+    return 'data:' . $mime . ';base64,' . base64_encode($contenido);
 }
 
-function escaparPdfTexto(string $texto): string
+function tablaHtml(array $headers, array $rows, string $class = 'table'): string
 {
-    return str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], textoPdf($texto));
-}
+    $thead = '<thead><tr>';
+    foreach ($headers as $h) {
+        $thead .= '<th>' . htmlspecialchars((string)$h, ENT_QUOTES, 'UTF-8') . '</th>';
+    }
+    $thead .= '</tr></thead>';
 
-function reservarObjeto(array &$objetos): int
-{
-    $objetos[] = null;
-    return count($objetos);
-}
-
-function definirObjeto(array &$objetos, int $id, string $contenido): void
-{
-    $objetos[$id - 1] = $contenido;
-}
-
-function crearPdfSocio(array $socio, array $cuotasPorMes, array $pollasPorMes, array $prestamos, float $totalCapital, float $totalIntereses, array $config, array $resultadosPolla, array $detallesCuotas, string $mensajeUsuario): string
-{
-    $ancho = 595; // A4 en puntos
-    $alto = 842;
-    $margen = 36;
-    $y = $alto - $margen;
-    $salto = 16;
-    $paginas = [''];
-    $paginaActual = 0;
-
-    $objetos = [];
-    $fuenteNormal = reservarObjeto($objetos);
-    definirObjeto($objetos, $fuenteNormal, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
-    $fuenteNegrita = reservarObjeto($objetos);
-    definirObjeto($objetos, $fuenteNegrita, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
-
-    $logo = prepararLogoObjeto($config, $objetos);
-
-    $agregarLinea = function(string $texto, int $tam = 12, bool $negrita = false, ?int $x = null) use (&$paginas, &$paginaActual, &$y, $salto, $margen, $alto) {
-        $seccion = & $paginas[$paginaActual];
-        if ($y - $salto < $margen) {
-            $paginas[] = '';
-            $paginaActual++;
-            $y = $alto - $margen;
-            $seccion = & $paginas[$paginaActual];
-        }
-        $posX = $x ?? $margen;
-        $fuente = $negrita ? 'F2' : 'F1';
-        $seccion .= "BT /$fuente $tam Tf 1 0 0 1 $posX $y Tm (" . escaparPdfTexto($texto) . ") Tj ET\n";
-        $y -= $salto;
-    };
-
-    $agregarTitulo = function(string $texto) use ($agregarLinea, &$y) {
-        $agregarLinea($texto, 13, true);
-        $y += 4;
-    };
-
-    $agregarTabla = function(array $headers, array $rows, array $anchos, int $tam = 10) use (&$paginas, &$paginaActual, &$y, $margen, $alto) {
-        $rowHeight = 20;
-        $totalAncho = array_sum($anchos);
-        $seccion = & $paginas[$paginaActual];
-
-        $dibujarFila = function(array $celdas, bool $esHeader = false) use (&$seccion, &$y, $margen, $rowHeight, $anchos, $tam) {
-            $x = $margen;
-            $fuente = $esHeader ? 'F2' : 'F1';
-            $seccion .= ($margen) . ' ' . $y . ' m ' . ($margen + array_sum($anchos)) . ' ' . $y . " l S\n";
-            foreach ($celdas as $i => $texto) {
-                $seccion .= "BT /$fuente " . ($esHeader ? $tam+1 : $tam) . " Tf 1 0 0 1 " . ($x + 4) . " " . ($y - 13) . " Tm (" . escaparPdfTexto((string)$texto) . ") Tj ET\n";
-                $x += $anchos[$i];
+    $tbody = '<tbody>';
+    if (!$rows) {
+        $colspan = count($headers);
+        $tbody .= '<tr><td colspan="' . $colspan . '" style="text-align:center;">No hay información disponible.</td></tr>';
+    } else {
+        foreach ($rows as $row) {
+            $tbody .= '<tr>';
+            foreach ($row as $cell) {
+                $tbody .= '<td>' . htmlspecialchars((string)$cell, ENT_QUOTES, 'UTF-8') . '</td>';
             }
-            $seccion .= ($margen) . ' ' . ($y - $rowHeight) . ' m ' . ($margen + array_sum($anchos)) . ' ' . ($y - $rowHeight) . " l S\n";
-            $y -= $rowHeight;
-        };
-
-        if ($y - ($rowHeight * (count($rows) + 1)) < $alto * 0.12) {
-            $paginas[] = '';
-            $paginaActual++;
-            $y = $alto - $margen;
-            $seccion = & $paginas[$paginaActual];
+            $tbody .= '</tr>';
         }
-
-        $dibujarFila($headers, true);
-        foreach ($rows as $fila) {
-            $dibujarFila($fila, false);
-        }
-        $y -= 6;
-    };
-
-    if ($logo) {
-        $anchoLogo = 120;
-        $escala = $anchoLogo / max(1, $logo['ancho']);
-        $altoLogo = $logo['alto'] * $escala;
-        $paginas[$paginaActual] .= "q\n$anchoLogo 0 0 $altoLogo $margen " . ($y - $altoLogo) . " cm\n/ImLogo Do\nQ\n";
-        $y -= ($altoLogo + 10);
     }
+    $tbody .= '</tbody>';
 
-    $agregarLinea(trim(($config['nombre_sistema'] ?? 'Natillera') . ' • Movimientos por socio'), 16, true);
-    $agregarLinea('Generado: ' . date('Y-m-d H:i'), 10);
+    return '<table class="' . $class . '">' . $thead . $tbody . '</table>';
+}
 
-    $agregarTitulo('Datos del socio');
+function construirHtmlPdf(array $data): string
+{
+    $logo = $data['logo'];
+    $socio = $data['socio'];
+    $config = $data['config'];
+    $resultadosPolla = $data['resultadosPolla'];
+    $fechaGeneracion = date('Y-m-d H:i');
+
     $datosSocio = [
-        ['Nombre', $socio['nombre_completo']],
-        ['Teléfono', $socio['telefono'] ?: 'Sin teléfono'],
-        ['Tipo de pago', $socio['periodicidad_pago']],
-        ['Valor cuota', formatearMoneda((float)$socio['valor_presupuestado'])],
-        ['Saldo socio', formatearMoneda((float)$socio['saldo_socio'])],
+        ['Campo' => 'Nombre', 'Valor' => $socio['nombre_completo']],
+        ['Campo' => 'Teléfono', 'Valor' => $socio['telefono'] ?: 'Sin teléfono'],
+        ['Campo' => 'Tipo de pago', 'Valor' => $socio['periodicidad_pago']],
+        ['Campo' => 'Valor cuota', 'Valor' => formatearMoneda((float)$socio['valor_presupuestado'])],
+        ['Campo' => 'Saldo socio', 'Valor' => formatearMoneda((float)$socio['saldo_socio'])],
     ];
     if (!empty($socio['numero_polla'])) {
-        $datosSocio[] = ['Número de polla', $socio['numero_polla']];
+        $datosSocio[] = ['Campo' => 'Número de polla', 'Valor' => $socio['numero_polla']];
     }
-    $agregarTabla(['Dato', 'Detalle'], $datosSocio, [160, 360], 11);
 
-    $agregarTitulo('Pagos de cuota socio (por mes/quincena)');
-    if (!$cuotasPorMes) {
-        $agregarLinea('No hay registros para las cuotas del socio.', 11);
-    } else {
-        $filasCuotas = [];
-        $totalCuotas = 0;
-        foreach ($cuotasPorMes as $c) {
-            $filasCuotas[] = [$c['label'], formatearMoneda((float)$c['total'])];
-            $totalCuotas += (float)$c['total'];
-        }
+    $filasCuotas = [];
+    $totalCuotas = 0;
+    foreach ($data['cuotasPorMes'] as $c) {
+        $filasCuotas[] = [$c['label'], formatearMoneda((float)$c['total'])];
+        $totalCuotas += (float)$c['total'];
+    }
+    if ($filasCuotas) {
         $filasCuotas[] = ['Total aportado', formatearMoneda($totalCuotas)];
-        $agregarTabla(['Mes', 'Valor'], $filasCuotas, [300, 220]);
     }
 
-    $agregarTitulo('Detalle de cuotas con saldo');
-    if (!$detallesCuotas) {
-        $agregarLinea('No hay registros de cuotas en el rango filtrado.', 11);
-    } else {
-        $filasDetalles = [];
-        foreach ($detallesCuotas as $detalle) {
-            $filasDetalles[] = [
-                $detalle['fecha'] . ($detalle['quincena'] ? ' (Q' . $detalle['quincena'] . ')' : ''),
-                $detalle['actividad'],
-                formatearMoneda($detalle['valor']),
-                formatearMoneda($detalle['saldo']),
-            ];
-        }
-        $agregarTabla(['Fecha', 'Actividad', 'Valor', 'Saldo después'], $filasDetalles, [150, 170, 100, 130]);
+    $filasDetalles = [];
+    foreach ($data['detallesCuotas'] as $detalle) {
+        $filasDetalles[] = [
+            $detalle['fecha'] . ($detalle['quincena'] ? ' (Q' . $detalle['quincena'] . ')' : ''),
+            $detalle['actividad'],
+            formatearMoneda($detalle['valor']),
+            formatearMoneda($detalle['saldo']),
+        ];
     }
 
-    $agregarTitulo('Pagos de pollas por mes');
-    if (!$pollasPorMes) {
-        $agregarLinea('No hay pagos de pollas registrados.', 11);
-    } else {
-        $filasPollas = [];
-        $totalPollas = 0;
-        foreach ($pollasPorMes as $p) {
-            $numero = $resultadosPolla[$p['clave']]['numero_ganador'] ?? '—';
-            $filasPollas[] = [$p['label'], formatearMoneda((float)$p['total']), $numero];
-            $totalPollas += (float)$p['total'];
-        }
+    $filasPollas = [];
+    $totalPollas = 0;
+    foreach ($data['pollasPorMes'] as $p) {
+        $numero = $resultadosPolla[$p['clave']]['numero_ganador'] ?? '—';
+        $filasPollas[] = [$p['label'], formatearMoneda((float)$p['total']), $numero];
+        $totalPollas += (float)$p['total'];
+    }
+    if ($filasPollas) {
         $filasPollas[] = ['Total pagado', formatearMoneda($totalPollas), ''];
-        $agregarTabla(['Mes', 'Valor', 'Número ganador'], $filasPollas, [240, 180, 120]);
     }
 
-    $agregarTitulo('Estado de préstamos');
-    if (!$prestamos) {
-        $agregarLinea('No hay préstamos asociados.', 11);
-    } else {
-        $filasPrestamos = [];
-        foreach ($prestamos as $p) {
-            $filasPrestamos[] = [
-                'Préstamo #' . (int)$p['id_prestamo'],
-                $p['nombre_deudor'],
-                formatearMoneda((float)$p['saldo_capital_actual']),
-                formatearMoneda((float)$p['saldo_intereses_actual']),
-            ];
-        }
-        $filasPrestamos[] = ['Totales', '', formatearMoneda($totalCapital), formatearMoneda($totalIntereses)];
-        $agregarTabla(['Identificador', 'Deudor', 'Capital pendiente', 'Intereses pendientes'], $filasPrestamos, [140, 180, 120, 120]);
+    $filasPrestamos = [];
+    foreach ($data['prestamos'] as $p) {
+        $filasPrestamos[] = [
+            'Préstamo #' . (int)$p['id_prestamo'],
+            $p['nombre_deudor'],
+            formatearMoneda((float)$p['saldo_capital_actual']),
+            formatearMoneda((float)$p['saldo_intereses_actual']),
+        ];
+    }
+    if ($filasPrestamos) {
+        $filasPrestamos[] = ['Totales', '', formatearMoneda($data['totalCapital']), formatearMoneda($data['totalIntereses'])];
+    }
+
+    $filasIntereses = [];
+    foreach ($data['pagosIntereses'] as $pago) {
+        $concepto = 'Interés cuota #' . (int)$pago['numero_cuota'] . ' - Préstamo #' . (int)$pago['id_prestamo'];
+        $filasIntereses[] = [
+            $pago['fecha_pago'] ?: 'Sin fecha',
+            $concepto,
+            formatearMoneda((float)$pago['valor_interes_pagado']),
+        ];
     }
 
     $mensajes = [];
     if (!empty($config['datos_globales'])) {
         $mensajes[] = trim($config['datos_globales']);
     }
-    if (trim($mensajeUsuario) !== '') {
-        $mensajes[] = trim($mensajeUsuario);
+    if (trim($data['mensajeUsuario']) !== '') {
+        $mensajes[] = trim($data['mensajeUsuario']);
     }
-    if ($mensajes) {
-        $agregarTitulo('Noticias de la natillera');
-        foreach ($mensajes as $mensaje) {
-            $lineas = explode("\n", $mensaje);
-            foreach ($lineas as $l) {
-                $agregarLinea($l, 10);
-            }
-            $y -= 4;
+
+    $htmlMensajes = '';
+    foreach ($mensajes as $mensaje) {
+        $lineas = explode("\n", $mensaje);
+        foreach ($lineas as $linea) {
+            $htmlMensajes .= '<p class="nota">' . htmlspecialchars($linea, ENT_QUOTES, 'UTF-8') . '</p>';
         }
     }
 
-    $idPaginas = reservarObjeto($objetos);
-    $contenidoIds = [];
-    $paginasIds = [];
+    $nombreSistema = $config['nombre_sistema'] ?? 'Creciendo Juntos';
 
-    foreach ($paginas as $contenido) {
-        $contenido = trim($contenido) . "\n";
-        $contenidoIds[] = reservarObjeto($objetos);
-        definirObjeto($objetos, end($contenidoIds), "<< /Length " . strlen($contenido) . " >>\nstream\n$contenido endstream");
+    ob_start();
+    ?>
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            @page { margin: 1.5cm; }
+            body { font-family: 'DejaVu Sans', sans-serif; color: #333; font-size: 12px; }
+            .header { border-bottom: 2px solid #003366; padding-bottom: 10px; margin-bottom: 20px; }
+            .header table { width: 100%; border-collapse: collapse; }
+            .header img { width: 140px; }
+            .titulo { color: #003366; font-size: 20px; margin: 0; text-align: center; }
+            .subtitulo { color: #4a4a4a; font-size: 12px; margin: 4px 0 0 0; text-align: center; }
+            .meta { font-size: 11px; color: #666; margin: 0; text-align: center; }
+            .section-title { color: #003366; font-size: 14px; margin: 16px 0 8px; }
+            .table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+            .table th { background: #f2f4f7; color: #003366; text-align: left; border: 1px solid #d4d9e2; padding: 6px; font-size: 11px; }
+            .table td { border: 1px solid #d4d9e2; padding: 6px; font-size: 11px; }
+            .nota { margin: 4px 0; font-size: 11px; }
+            .footer { text-align: center; color: #777; font-size: 9px; margin-top: 14px; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <table>
+                <tr>
+                    <td style="width: 160px;"><img src="<?php echo htmlspecialchars($logo, ENT_QUOTES, 'UTF-8'); ?>" alt="Logo"></td>
+                    <td style="text-align: center;">
+                        <h1 class="titulo">Creciendo Juntos</h1>
+                        <p class="subtitulo"><?php echo htmlspecialchars($nombreSistema, ENT_QUOTES, 'UTF-8'); ?></p>
+                        <p class="meta">Movimientos por socio — Generado: <?php echo htmlspecialchars($fechaGeneracion, ENT_QUOTES, 'UTF-8'); ?></p>
+                    </td>
+                </tr>
+            </table>
+        </div>
 
-        $recursos = "/Font << /F1 $fuenteNormal 0 R /F2 $fuenteNegrita 0 R >>";
-        if ($logo) {
-            $recursos .= " /XObject << /ImLogo " . $logo['id'] . " 0 R >>";
-        }
+        <h2 class="section-title">Datos del socio</h2>
+        <?php echo tablaHtml(['Campo', 'Valor'], array_map(fn($d) => [$d['Campo'], $d['Valor']], $datosSocio)); ?>
 
-        $paginasIds[] = reservarObjeto($objetos);
-        $pageObj = "<< /Type /Page /Parent $idPaginas 0 R /MediaBox [0 0 $ancho $alto] /Resources << $recursos >> /Contents " . end($contenidoIds) . " 0 R >>";
-        definirObjeto($objetos, end($paginasIds), $pageObj);
-    }
+        <h2 class="section-title">Pagos de cuota</h2>
+        <?php echo tablaHtml(['Mes', 'Valor'], $filasCuotas); ?>
 
-    $kids = array_map(fn($id) => "$id 0 R", $paginasIds);
-    definirObjeto($objetos, $idPaginas, '<< /Type /Pages /Count ' . count($paginasIds) . ' /Kids [' . implode(' ', $kids) . '] >>');
+        <h2 class="section-title">Detalle cuotas con saldo</h2>
+        <?php echo tablaHtml(['Fecha', 'Actividad', 'Valor', 'Saldo después'], $filasDetalles); ?>
 
-    $idCatalogo = reservarObjeto($objetos);
-    definirObjeto($objetos, $idCatalogo, "<< /Type /Catalog /Pages $idPaginas 0 R >>");
+        <h2 class="section-title">Pagos de pollas</h2>
+        <?php echo tablaHtml(['Mes', 'Valor', 'Número ganador'], $filasPollas); ?>
 
-    $pdf = "%PDF-1.4\n";
-    $offsets = [];
-    foreach ($objetos as $index => $obj) {
-        $offsets[] = strlen($pdf);
-        $pdf .= ($index + 1) . " 0 obj\n" . $obj . "\nendobj\n";
-    }
+        <h2 class="section-title">Estado de préstamos</h2>
+        <?php echo tablaHtml(['Identificador', 'Deudor', 'Capital pendiente', 'Intereses pendientes'], $filasPrestamos); ?>
 
-    $xref = strlen($pdf);
-    $pdf .= "xref\n0 " . (count($objetos) + 1) . "\n";
-    $pdf .= "0000000000 65535 f \n";
-    foreach ($offsets as $off) {
-        $pdf .= sprintf("%010d 00000 n \n", $off);
-    }
-    $pdf .= "trailer\n<< /Size " . (count($objetos) + 1) . " /Root $idCatalogo 0 R >>\nstartxref\n" . $xref . "\n%%EOF";
+        <?php if (!empty($data['prestamos']) || !empty($data['pagosIntereses'])): ?>
+            <h2 class="section-title">Pago de intereses de préstamos</h2>
+            <?php echo tablaHtml(['Fecha', 'Concepto', 'Valor'], $filasIntereses); ?>
+        <?php endif; ?>
 
-    return $pdf;
+        <?php if ($htmlMensajes): ?>
+            <h2 class="section-title">Noticias de la natillera</h2>
+            <?php echo $htmlMensajes; ?>
+        <?php endif; ?>
+
+        <p class="footer">Documento generado electrónicamente — no requiere firma física.</p>
+    </body>
+    </html>
+    <?php
+    return (string) ob_get_clean();
 }
 
-function nombreArchivoSocio(array $socio): string
+function generarPdf(string $html): string
 {
-    $seguro = preg_replace('/[^A-Za-z0-9_\-]/', '_', $socio['nombre_completo']);
-    $seguro = trim($seguro, '_');
-    return $seguro !== '' ? $seguro : ('socio_' . (int)$socio['id_socio']);
+    $options = new Options();
+    $options->set('isHtml5ParserEnabled', true);
+    $options->set('isRemoteEnabled', true);
+    $options->setChroot(__DIR__ . '/..');
+
+    $dompdf = new Dompdf($options);
+    $dompdf->loadHtml($html, 'UTF-8');
+    $dompdf->setPaper('A4', 'portrait');
+    $dompdf->render();
+
+    return $dompdf->output();
 }
 
 $modo = $_GET['modo'] ?? 'individual';
@@ -431,6 +405,8 @@ $filtros = [
 
 asegurarTablaResultadosPolla($pdo);
 $resultadosPollaIndex = indexResultadosPollaPorMes($pdo);
+$config = getConfiguracionGeneral($pdo);
+$logo = prepararLogo($config);
 
 if ($modo === 'colectivo') {
     $rutaCarpeta = trim($_GET['ruta'] ?? 'exportes_movimientos');
@@ -450,16 +426,31 @@ if ($modo === 'colectivo') {
         exit('No se pudo preparar el archivo comprimido.');
     }
 
-    $config = getConfiguracionGeneral($pdo);
     foreach ($socios as $s) {
         try {
             $socioDetalle = obtenerSocio((int)$s['id_socio'], $pdo);
             $filtros['socio'] = (int)$s['id_socio'];
             $movs = obtenerMovimientos($pdo, $filtros);
             [$prestamos, $totalCapital, $totalIntereses] = obtenerPrestamos($pdo, (int)$s['id_socio']);
+            $pagosIntereses = obtenerPagosIntereses($pdo, (int)$s['id_socio']);
             [$cuotasPorMes, $pollasPorMes] = agruparMovimientos($movs);
             $detallesCuotas = construirDetalleCuotas($movs);
-            $pdf = crearPdfSocio($socioDetalle, $cuotasPorMes, $pollasPorMes, $prestamos, $totalCapital, $totalIntereses, $config, $resultadosPollaIndex, $detallesCuotas, $mensajeUsuario);
+
+            $html = construirHtmlPdf([
+                'socio' => $socioDetalle,
+                'cuotasPorMes' => $cuotasPorMes,
+                'pollasPorMes' => $pollasPorMes,
+                'prestamos' => $prestamos,
+                'totalCapital' => $totalCapital,
+                'totalIntereses' => $totalIntereses,
+                'config' => $config,
+                'resultadosPolla' => $resultadosPollaIndex,
+                'detallesCuotas' => $detallesCuotas,
+                'pagosIntereses' => $pagosIntereses,
+                'logo' => $logo,
+                'mensajeUsuario' => $mensajeUsuario,
+            ]);
+            $pdf = generarPdf($html);
             $nombreArchivo = ($rutaCarpeta ? $rutaCarpeta.'/' : '') . nombreArchivoSocio($socioDetalle) . '_movimientos.pdf';
             $zip->addFromString($nombreArchivo, $pdf);
         } catch (Throwable $e) {
@@ -484,11 +475,26 @@ if (!$idSocio) {
 $socio = obtenerSocio($idSocio, $pdo);
 $movimientos = obtenerMovimientos($pdo, $filtros);
 [$prestamos, $totalCapital, $totalIntereses] = obtenerPrestamos($pdo, $idSocio);
-$config = getConfiguracionGeneral($pdo);
-
+$pagosIntereses = obtenerPagosIntereses($pdo, $idSocio);
 [$cuotasPorMes, $pollasPorMes] = agruparMovimientos($movimientos);
 $detallesCuotas = construirDetalleCuotas($movimientos);
-$pdf = crearPdfSocio($socio, $cuotasPorMes, $pollasPorMes, $prestamos, $totalCapital, $totalIntereses, $config, $resultadosPollaIndex, $detallesCuotas, $mensajeUsuario);
+
+$html = construirHtmlPdf([
+    'socio' => $socio,
+    'cuotasPorMes' => $cuotasPorMes,
+    'pollasPorMes' => $pollasPorMes,
+    'prestamos' => $prestamos,
+    'totalCapital' => $totalCapital,
+    'totalIntereses' => $totalIntereses,
+    'config' => $config,
+    'resultadosPolla' => $resultadosPollaIndex,
+    'detallesCuotas' => $detallesCuotas,
+    'pagosIntereses' => $pagosIntereses,
+    'logo' => $logo,
+    'mensajeUsuario' => $mensajeUsuario,
+]);
+
+$pdf = generarPdf($html);
 $nombre = nombreArchivoSocio($socio) . '_movimientos.pdf';
 
 header('Content-Type: application/pdf');
