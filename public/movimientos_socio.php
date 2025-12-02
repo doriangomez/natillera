@@ -179,6 +179,11 @@ unset($m);
                         <input type="file" id="selectorRuta" webkitdirectory directory multiple style="display:none;">
                         <div class="form-text">El archivo ZIP se descargará en tu carpeta de descargas; este nombre define la carpeta interna.</div>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="mensajeNoticias">Noticias o mensaje para el PDF</label>
+                        <textarea class="form-control" id="mensajeNoticias" rows="3" placeholder="Comparte avisos importantes que quedarán visibles en el PDF"></textarea>
+                        <div class="form-text">Si lo dejas vacío solo se mostrarán las notas generales configuradas.</div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
@@ -272,6 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const modo = document.querySelector('input[name="modoExportacion"]:checked').value;
             const socioSeleccionado = socioSelect.value;
             const rutaDestino = rutaInput.value.trim();
+            const mensajeNoticias = (document.getElementById('mensajeNoticias')?.value || '').trim();
 
             socioSelect.classList.remove('is-invalid');
             if (modo === 'individual' && !socioSeleccionado) {
@@ -289,6 +295,9 @@ document.addEventListener('DOMContentLoaded', () => {
             params.set('modo', modo);
             if (modo === 'colectivo' && rutaDestino) {
                 params.set('ruta', rutaDestino);
+            }
+            if (mensajeNoticias) {
+                params.set('mensaje', mensajeNoticias);
             }
 
             modalInstance.hide();
