@@ -211,97 +211,8 @@ function tablaHtml(array $headers, array $rows, string $class = 'table'): string
     return '<table class="' . $class . '">' . $thead . $tbody . '</table>';
 }
 
-function construirHtmlPdf(array $data): string
+function renderPlantillaPDF(string $html_body): string
 {
-    $logo = $data['logo'];
-    $socio = $data['socio'];
-    $config = $data['config'];
-    $resultadosPolla = $data['resultadosPolla'];
-    $fechaGeneracion = date('Y-m-d H:i');
-
-    $datosSocio = [
-        ['Campo' => 'Nombre', 'Valor' => $socio['nombre_completo']],
-        ['Campo' => 'Teléfono', 'Valor' => $socio['telefono'] ?: 'Sin teléfono'],
-        ['Campo' => 'Tipo de pago', 'Valor' => $socio['periodicidad_pago']],
-        ['Campo' => 'Valor cuota', 'Valor' => formatearMoneda((float)$socio['valor_presupuestado'])],
-        ['Campo' => 'Saldo socio', 'Valor' => formatearMoneda((float)$socio['saldo_socio'])],
-    ];
-    if (!empty($socio['numero_polla'])) {
-        $datosSocio[] = ['Campo' => 'Número de polla', 'Valor' => $socio['numero_polla']];
-    }
-
-    $filasCuotas = [];
-    $totalCuotas = 0;
-    foreach ($data['cuotasPorMes'] as $c) {
-        $filasCuotas[] = [$c['label'], formatearMoneda((float)$c['total'])];
-        $totalCuotas += (float)$c['total'];
-    }
-    if ($filasCuotas) {
-        $filasCuotas[] = ['Total aportado', formatearMoneda($totalCuotas)];
-    }
-
-    $filasDetalles = [];
-    foreach ($data['detallesCuotas'] as $detalle) {
-        $filasDetalles[] = [
-            $detalle['fecha'] . ($detalle['quincena'] ? ' (Q' . $detalle['quincena'] . ')' : ''),
-            $detalle['actividad'],
-            formatearMoneda($detalle['valor']),
-            formatearMoneda($detalle['saldo']),
-        ];
-    }
-
-    $filasPollas = [];
-    $totalPollas = 0;
-    foreach ($data['pollasPorMes'] as $p) {
-        $numero = $resultadosPolla[$p['clave']]['numero_ganador'] ?? '—';
-        $filasPollas[] = [$p['label'], formatearMoneda((float)$p['total']), $numero];
-        $totalPollas += (float)$p['total'];
-    }
-    if ($filasPollas) {
-        $filasPollas[] = ['Total pagado', formatearMoneda($totalPollas), ''];
-    }
-
-    $filasPrestamos = [];
-    foreach ($data['prestamos'] as $p) {
-        $filasPrestamos[] = [
-            'Préstamo #' . (int)$p['id_prestamo'],
-            $p['nombre_deudor'],
-            formatearMoneda((float)$p['saldo_capital_actual']),
-            formatearMoneda((float)$p['saldo_intereses_actual']),
-        ];
-    }
-    if ($filasPrestamos) {
-        $filasPrestamos[] = ['Totales', '', formatearMoneda($data['totalCapital']), formatearMoneda($data['totalIntereses'])];
-    }
-
-    $filasIntereses = [];
-    foreach ($data['pagosIntereses'] as $pago) {
-        $concepto = 'Interés cuota #' . (int)$pago['numero_cuota'] . ' - Préstamo #' . (int)$pago['id_prestamo'];
-        $filasIntereses[] = [
-            $pago['fecha_pago'] ?: 'Sin fecha',
-            $concepto,
-            formatearMoneda((float)$pago['valor_interes_pagado']),
-        ];
-    }
-
-    $mensajes = [];
-    if (!empty($config['datos_globales'])) {
-        $mensajes[] = trim($config['datos_globales']);
-    }
-    if (trim($data['mensajeUsuario']) !== '') {
-        $mensajes[] = trim($data['mensajeUsuario']);
-    }
-
-    $htmlMensajes = '';
-    foreach ($mensajes as $mensaje) {
-        $lineas = explode("\n", $mensaje);
-        foreach ($lineas as $linea) {
-            $htmlMensajes .= '<p class="nota">' . htmlspecialchars($linea, ENT_QUOTES, 'UTF-8') . '</p>';
-        }
-    }
-
-    $nombreSistema = $config['nombre_sistema'] ?? 'Creciendo Juntos';
-
     ob_start();
     ?>
     <!DOCTYPE html>
@@ -311,6 +222,18 @@ function construirHtmlPdf(array $data): string
         <style>
             @page { margin: 1.5cm; }
             :root { color-scheme: light; }
+            @font-face {
+                font-family: 'DejaVu Sans';
+                font-style: normal;
+                font-weight: normal;
+                src: local('DejaVu Sans'), local('DejaVuSans');
+            }
+            @font-face {
+                font-family: 'DejaVu Sans';
+                font-style: normal;
+                font-weight: bold;
+                src: local('DejaVu Sans Bold'), local('DejaVuSans-Bold');
+            }
             body {
                 font-family: 'DejaVu Sans', 'Inter', 'Segoe UI', sans-serif;
                 color: #0f172a;
@@ -432,63 +355,163 @@ function construirHtmlPdf(array $data): string
         </style>
     </head>
     <body>
-        <div class="layout">
-            <div class="header">
-                <img src="<?php echo htmlspecialchars($logo, ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
-                <div>
-                    <p class="eyebrow">Reporte detallado</p>
-                    <h1 class="titulo"><?php echo htmlspecialchars($nombreSistema, ENT_QUOTES, 'UTF-8'); ?></h1>
-                    <p class="subtitulo">Movimientos por socio</p>
-                    <p class="meta">Generado: <?php echo htmlspecialchars($fechaGeneracion, ENT_QUOTES, 'UTF-8'); ?></p>
-                </div>
-                <div class="pill">Creciendo Juntos</div>
-            </div>
-
-            <div class="section">
-                <h2 class="section-title">Datos del socio</h2>
-                <?php echo tablaHtml(['Campo', 'Valor'], array_map(fn($d) => [$d['Campo'], $d['Valor']], $datosSocio)); ?>
-            </div>
-
-            <div class="section">
-                <h2 class="section-title">Pagos de cuota</h2>
-                <?php echo tablaHtml(['Mes', 'Valor'], $filasCuotas); ?>
-            </div>
-
-            <div class="section">
-                <h2 class="section-title">Detalle cuotas con saldo</h2>
-                <?php echo tablaHtml(['Fecha', 'Actividad', 'Valor', 'Saldo después'], $filasDetalles); ?>
-            </div>
-
-            <div class="section">
-                <h2 class="section-title">Pagos de pollas</h2>
-                <?php echo tablaHtml(['Mes', 'Valor', 'Número ganador'], $filasPollas); ?>
-            </div>
-
-            <div class="section">
-                <h2 class="section-title">Estado de préstamos</h2>
-                <?php echo tablaHtml(['Identificador', 'Deudor', 'Capital pendiente', 'Intereses pendientes'], $filasPrestamos); ?>
-            </div>
-
-            <?php if (!empty($data['prestamos']) || !empty($data['pagosIntereses'])): ?>
-                <div class="section">
-                    <h2 class="section-title">Pago de intereses de préstamos</h2>
-                    <?php echo tablaHtml(['Fecha', 'Concepto', 'Valor'], $filasIntereses); ?>
-                </div>
-            <?php endif; ?>
-
-            <?php if ($htmlMensajes): ?>
-                <div class="section">
-                    <h2 class="section-title">Noticias y recordatorios</h2>
-                    <?php echo $htmlMensajes; ?>
-                </div>
-            <?php endif; ?>
-
-            <p class="footer">Documento generado electrónicamente — no requiere firma física.</p>
-        </div>
+        <?php echo $html_body; ?>
     </body>
     </html>
     <?php
     return (string) ob_get_clean();
+}
+
+function construirHtmlPdf(array $data): string
+{
+    $logo = $data['logo'];
+    $socio = $data['socio'];
+    $config = $data['config'];
+    $resultadosPolla = $data['resultadosPolla'];
+    $fechaGeneracion = date('Y-m-d H:i');
+
+    $datosSocio = [
+        ['Campo' => 'Nombre', 'Valor' => $socio['nombre_completo']],
+        ['Campo' => 'Teléfono', 'Valor' => $socio['telefono'] ?: 'Sin teléfono'],
+        ['Campo' => 'Tipo de pago', 'Valor' => $socio['periodicidad_pago']],
+        ['Campo' => 'Valor cuota', 'Valor' => formatearMoneda((float)$socio['valor_presupuestado'])],
+        ['Campo' => 'Saldo socio', 'Valor' => formatearMoneda((float)$socio['saldo_socio'])],
+    ];
+    if (!empty($socio['numero_polla'])) {
+        $datosSocio[] = ['Campo' => 'Número de polla', 'Valor' => $socio['numero_polla']];
+    }
+
+    $filasCuotas = [];
+    $totalCuotas = 0;
+    foreach ($data['cuotasPorMes'] as $c) {
+        $filasCuotas[] = [$c['label'], formatearMoneda((float)$c['total'])];
+        $totalCuotas += (float)$c['total'];
+    }
+    if ($filasCuotas) {
+        $filasCuotas[] = ['Total aportado', formatearMoneda($totalCuotas)];
+    }
+
+    $filasDetalles = [];
+    foreach ($data['detallesCuotas'] as $detalle) {
+        $filasDetalles[] = [
+            $detalle['fecha'] . ($detalle['quincena'] ? ' (Q' . $detalle['quincena'] . ')' : ''),
+            $detalle['actividad'],
+            formatearMoneda($detalle['valor']),
+            formatearMoneda($detalle['saldo']),
+        ];
+    }
+
+    $filasPollas = [];
+    $totalPollas = 0;
+    foreach ($data['pollasPorMes'] as $p) {
+        $numero = $resultadosPolla[$p['clave']]['numero_ganador'] ?? '—';
+        $filasPollas[] = [$p['label'], formatearMoneda((float)$p['total']), $numero];
+        $totalPollas += (float)$p['total'];
+    }
+    if ($filasPollas) {
+        $filasPollas[] = ['Total pagado', formatearMoneda($totalPollas), ''];
+    }
+
+    $filasPrestamos = [];
+    foreach ($data['prestamos'] as $p) {
+        $filasPrestamos[] = [
+            'Préstamo #' . (int)$p['id_prestamo'],
+            $p['nombre_deudor'],
+            formatearMoneda((float)$p['saldo_capital_actual']),
+            formatearMoneda((float)$p['saldo_intereses_actual']),
+        ];
+    }
+    if ($filasPrestamos) {
+        $filasPrestamos[] = ['Totales', '', formatearMoneda($data['totalCapital']), formatearMoneda($data['totalIntereses'])];
+    }
+
+    $filasIntereses = [];
+    foreach ($data['pagosIntereses'] as $pago) {
+        $concepto = 'Interés cuota #' . (int)$pago['numero_cuota'] . ' - Préstamo #' . (int)$pago['id_prestamo'];
+        $filasIntereses[] = [
+            $pago['fecha_pago'] ?: 'Sin fecha',
+            $concepto,
+            formatearMoneda((float)$pago['valor_interes_pagado']),
+        ];
+    }
+
+    $mensajes = [];
+    if (!empty($config['datos_globales'])) {
+        $mensajes[] = trim($config['datos_globales']);
+    }
+    if (trim($data['mensajeUsuario']) !== '') {
+        $mensajes[] = trim($data['mensajeUsuario']);
+    }
+
+    $htmlMensajes = '';
+    foreach ($mensajes as $mensaje) {
+        $lineas = explode("\n", $mensaje);
+        foreach ($lineas as $linea) {
+            $htmlMensajes .= '<p class="nota">' . htmlspecialchars($linea, ENT_QUOTES, 'UTF-8') . '</p>';
+        }
+    }
+
+    $nombreSistema = $config['nombre_sistema'] ?? 'Creciendo Juntos';
+
+    ob_start();
+    ?>
+    <div class="layout">
+        <div class="header">
+            <img src="<?php echo htmlspecialchars($logo, ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
+            <div>
+                <p class="eyebrow">Reporte detallado</p>
+                <h1 class="titulo"><?php echo htmlspecialchars($nombreSistema, ENT_QUOTES, 'UTF-8'); ?></h1>
+                <p class="subtitulo">Movimientos por socio</p>
+                <p class="meta">Generado: <?php echo htmlspecialchars($fechaGeneracion, ENT_QUOTES, 'UTF-8'); ?></p>
+            </div>
+            <div class="pill">Creciendo Juntos</div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Datos del socio</h2>
+            <?php echo tablaHtml(['Campo', 'Valor'], array_map(fn($d) => [$d['Campo'], $d['Valor']], $datosSocio)); ?>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Pagos de cuota</h2>
+            <?php echo tablaHtml(['Mes', 'Valor'], $filasCuotas); ?>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Detalle cuotas con saldo</h2>
+            <?php echo tablaHtml(['Fecha', 'Actividad', 'Valor', 'Saldo después'], $filasDetalles); ?>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Pagos de pollas</h2>
+            <?php echo tablaHtml(['Mes', 'Valor', 'Número ganador'], $filasPollas); ?>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Estado de préstamos</h2>
+            <?php echo tablaHtml(['Identificador', 'Deudor', 'Capital pendiente', 'Intereses pendientes'], $filasPrestamos); ?>
+        </div>
+
+        <?php if (!empty($data['prestamos']) || !empty($data['pagosIntereses'])): ?>
+            <div class="section">
+                <h2 class="section-title">Pago de intereses de préstamos</h2>
+                <?php echo tablaHtml(['Fecha', 'Concepto', 'Valor'], $filasIntereses); ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($htmlMensajes): ?>
+            <div class="section">
+                <h2 class="section-title">Noticias y recordatorios</h2>
+                <?php echo $htmlMensajes; ?>
+            </div>
+        <?php endif; ?>
+
+        <p class="footer">Documento generado electrónicamente — no requiere firma física.</p>
+    </div>
+    <?php
+    $contenidoSocio = (string) ob_get_clean();
+
+    return renderPlantillaPDF($contenidoSocio);
 }
 
 $modo = $_GET['modo'] ?? 'individual';
