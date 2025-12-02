@@ -7,10 +7,13 @@ $totalSocios = (int) ($pdo->query("SELECT COUNT(*) AS total FROM socios WHERE ac
 $totalesMovimientos = $pdo->query("
     WITH mov_signado AS (
         SELECT m.id_movimiento, m.valor, m.id_actividad,
-               CASE a.afecta_saldo_socio
-                    WHEN 'suma' THEN m.valor
-                    WHEN 'resta' THEN -m.valor
-                    ELSE 0 END AS valor_socio,
+               CASE WHEN a.es_polla = 1 THEN 0 ELSE
+                    CASE a.afecta_saldo_socio
+                        WHEN 'suma' THEN m.valor
+                        WHEN 'resta' THEN -m.valor
+                        ELSE 0
+                    END
+               END AS valor_socio,
                CASE a.afecta_saldo_natillera
                     WHEN 'suma' THEN m.valor
                     WHEN 'resta' THEN -m.valor
@@ -82,10 +85,13 @@ $movimientosStmt = $pdo->prepare("
         $sqlWhere
     ), mov_signado AS (
         SELECT mov_filtrado.*,
-               CASE mov_filtrado.afecta_saldo_socio
-                    WHEN 'suma' THEN mov_filtrado.valor
-                    WHEN 'resta' THEN -mov_filtrado.valor
-                    ELSE 0 END AS valor_socio,
+               CASE WHEN mov_filtrado.es_polla = 1 THEN 0 ELSE
+                    CASE mov_filtrado.afecta_saldo_socio
+                        WHEN 'suma' THEN mov_filtrado.valor
+                        WHEN 'resta' THEN -mov_filtrado.valor
+                        ELSE 0
+                    END
+               END AS valor_socio,
                CASE mov_filtrado.afecta_saldo_natillera
                     WHEN 'suma' THEN mov_filtrado.valor
                     WHEN 'resta' THEN -mov_filtrado.valor
