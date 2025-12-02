@@ -105,6 +105,8 @@ foreach ($conciliacionesCerradas as $cc) {
     $totalesCerradas['conciliado'] += (float) $cc['valor_conciliado'];
     $totalesCerradas['diferencia'] += (float) $cc['diferencia'];
 }
+
+$diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
