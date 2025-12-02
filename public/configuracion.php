@@ -7,6 +7,13 @@ require_once __DIR__ . '/../includes/functions.php';
 $config = getConfiguracionGeneral($pdo);
 $actividades = getActividades($pdo, false, true);
 $medios = getMediosPago($pdo, true);
+$periodosConfig = getPeriodosConfiguracion($pdo);
+$periodoError = $_GET['periodo_error'] ?? '';
+$periodoGuardado = isset($_GET['periodo_guardado']);
+$anioActual = (int) date('Y');
+$maxAnioPermitido = max($anioActual + 3, 2026);
+$minAnioPermitido = min($anioActual - 1, 2020);
+$aniosPeriodo = range($minAnioPermitido, $maxAnioPermitido);
 $editId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $editData = $editId ? getActividad($pdo, $editId) : null;
 $medioId = isset($_GET['medio_id']) ? (int) $_GET['medio_id'] : 0;
@@ -96,6 +103,86 @@ $medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
                         <a class="btn btn-outline-secondary" href="index.php">Volver al panel</a>
                     </div>
                 </form>
+            </div>
+        </div>
+        <div class="card mt-3" id="periodos">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h2 class="h6 mb-0">Periodos configurados</h2>
+                        <p class="text-muted small mb-0">Define los meses habilitados para movimientos y conciliación</p>
+                    </div>
+                    <span class="badge bg-dark">Admin</span>
+                </div>
+                <?php if ($periodoError): ?>
+                    <div class="alert alert-danger py-2"><?php echo clean($periodoError); ?></div>
+                <?php elseif ($periodoGuardado): ?>
+                    <div class="alert alert-success py-2 mb-2">Periodo guardado correctamente.</div>
+                <?php endif; ?>
+                <form class="row g-2 align-items-end" method="POST" action="../actions/periodos_configuracion_save.php">
+                    <div class="col-md-5">
+                        <label class="form-label">Año</label>
+                        <select name="anio" class="form-select">
+                            <?php foreach ($aniosPeriodo as $a): ?>
+                                <option value="<?php echo $a; ?>"><?php echo $a; ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Mes</label>
+                        <select name="mes" class="form-select">
+                            <?php for ($m = 1; $m <= 12; $m++): ?>
+                                <option value="<?php echo $m; ?>"><?php echo strftime('%B', mktime(0, 0, 0, $m, 1)); ?></option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Activo</label>
+                        <select name="activo" class="form-select">
+                            <option value="1" selected>Sí</option>
+                            <option value="0">No</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <button class="btn btn-primary" type="submit">Agregar / actualizar periodo</button>
+                    </div>
+                </form>
+                <div class="table-responsive mt-3">
+                    <table class="table table-striped align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Mes</th>
+                                <th>Año</th>
+                                <th>Estado</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($periodosConfig)): ?>
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted small">No hay periodos configurados. Agrega uno para habilitar la conciliación.</td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($periodosConfig as $p): ?>
+                                    <tr>
+                                        <td><?php echo strftime('%B', mktime(0, 0, 0, $p['mes'], 1)); ?></td>
+                                        <td><?php echo $p['anio']; ?></td>
+                                        <td><span class="badge <?php echo $p['activo'] ? 'bg-success' : 'bg-secondary'; ?>"><?php echo $p['activo'] ? 'Activo' : 'Inactivo'; ?></span></td>
+                                        <td class="text-end">
+                                            <form method="POST" action="../actions/periodos_configuracion_save.php" class="d-inline">
+                                                <input type="hidden" name="toggle_id" value="<?php echo $p['id']; ?>">
+                                                <input type="hidden" name="estado" value="<?php echo $p['activo'] ? 0 : 1; ?>">
+                                                <button class="btn btn-sm <?php echo $p['activo'] ? 'btn-outline-danger' : 'btn-outline-success'; ?>" type="submit">
+                                                    <?php echo $p['activo'] ? 'Desactivar' : 'Activar'; ?>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

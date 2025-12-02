@@ -6,6 +6,30 @@ $socios = getSocios($pdo);
 $actividades = getActividades($pdo);
 $mediosPago = getMediosPago($pdo);
 
+$periodosConfig = $pdo
+    ->query('SELECT anio, mes FROM periodos_configuracion WHERE activo = 1 ORDER BY anio DESC, mes DESC')
+    ->fetchAll();
+
+$nombresMeses = [
+    1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+    5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+    9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre',
+];
+
+$periodosPorAnio = [];
+foreach ($periodosConfig as $p) {
+    $periodosPorAnio[$p['anio']][] = (int) $p['mes'];
+}
+if (!empty($periodosPorAnio)) {
+    krsort($periodosPorAnio);
+}
+
+$aniosDisponibles = array_keys($periodosPorAnio);
+$anioDefault = !empty($aniosDisponibles) ? (int) reset($aniosDisponibles) : (int) date('Y');
+$mesesDefault = $periodosPorAnio[$anioDefault] ?? [(int) date('n')];
+$mesDefault = (int) (reset($mesesDefault) ?: date('n'));
+$fechaDefault = sprintf('%04d-%02d-01', $anioDefault, $mesDefault);
+
 $filtroSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
 $filtroActividad = isset($_GET['actividad']) ? (int) $_GET['actividad'] : 0;
 $filtroFechaIni = $_GET['desde'] ?? '';
@@ -89,24 +113,35 @@ foreach ($movimientos as $m) {
 <div class="card mb-3">
     <div class="card-header category-gastos"><i class="bi bi-plus-circle"></i><span>Registrar movimiento</span></div>
     <div class="card-body">
+        <?php if (empty($periodosPorAnio)): ?>
+            <div class="alert alert-warning">Configure los periodos en el módulo de configuración para habilitar los meses y años permitidos.</div>
+        <?php endif; ?>
         <form method="POST" action="../actions/movimientos_save.php">
             <div class="row g-2">
                 <div class="col-md-2">
                     <label class="form-label"><span class="text-danger">*</span> Fecha</label>
-                    <input type="date" name="fecha" class="form-control" required value="<?php echo date('Y-m-d'); ?>">
+                    <input type="date" name="fecha" class="form-control" required value="<?php echo $fechaDefault; ?>">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label"><span class="text-danger">*</span> Año</label>
                     <select name="anio" class="form-select" required>
-                        <option value="2025">2025</option>
-                        <option value="2026">2026</option>
+                        <?php if (!empty($periodosPorAnio)): ?>
+                            <?php foreach ($periodosPorAnio as $anio => $meses): ?>
+                                <option value="<?php echo $anio; ?>" <?php echo ($anioDefault === (int) $anio) ? 'selected' : ''; ?>><?php echo $anio; ?></option>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <option value="<?php echo $anioDefault; ?>" selected><?php echo $anioDefault; ?></option>
+                        <?php endif; ?>
                     </select>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label"><span class="text-danger">*</span> Mes</label>
                     <select name="mes" class="form-select" required>
                         <?php for($m=1;$m<=12;$m++): ?>
-                            <option value="<?php echo $m; ?>" <?php echo $m===12?'selected':''; ?>><?php echo $m; ?></option>
+                            <?php
+                                $habilitado = empty($periodosPorAnio) || in_array($m, $mesesDefault, true);
+                            ?>
+                            <option value="<?php echo $m; ?>" <?php echo $m === $mesDefault ? 'selected' : ''; ?> <?php echo $habilitado ? '' : 'disabled'; ?>><?php echo $nombresMeses[$m]; ?></option>
                         <?php endfor; ?>
                     </select>
                 </div>
@@ -203,6 +238,9 @@ const anioSelect = document.querySelector('select[name="anio"]');
 const mesSelect = document.querySelector('select[name="mes"]');
 const valorInput = document.querySelector('input[name="valor"]');
 const formularioMovimiento = document.querySelector('form[action="../actions/movimientos_save.php"]');
+const fechaInput = document.querySelector('input[name="fecha"]');
+const periodosPorAnio = <?php echo json_encode($periodosPorAnio); ?>;
+const nombresMeses = <?php echo json_encode($nombresMeses); ?>;
 
 function actualizarTipoActividad(){
     const regla = actividadSelect.selectedOptions[0]?.dataset.regla || '';
@@ -212,20 +250,32 @@ function actualizarTipoActividad(){
     else tipoActividadInput.value = 'Neutral (no afecta saldo)';
 }
 function actualizarMeses(){
+    if(!mesSelect || !anioSelect) return;
     const anio = parseInt(anioSelect.value, 10);
-    mesSelect.querySelectorAll('option').forEach(opt => {
-        const val = parseInt(opt.value, 10);
-        let habilitado = true;
-        if (anio === 2025) {
-            habilitado = val === 12;
-        } else if (anio === 2026) {
-            habilitado = val >= 1 && val <= 11;
-        }
-        opt.disabled = !habilitado;
+    const mesesDisponibles = Object.keys(periodosPorAnio).length
+        ? (periodosPorAnio[anio] ?? [])
+        : Array.from({length: 12}, (_, i) => i + 1);
+    mesSelect.querySelectorAll('option').forEach(opt => opt.remove());
+    mesesDisponibles.forEach(val => {
+        const option = document.createElement('option');
+        option.value = val;
+        option.textContent = nombresMeses[val] || val;
+        mesSelect.appendChild(option);
     });
-    if (mesSelect.selectedOptions[0]?.disabled) {
-        mesSelect.value = anio === 2025 ? '12' : '1';
+    if (!mesesDisponibles.includes(parseInt(mesSelect.value, 10))) {
+        mesSelect.value = mesesDisponibles[0] ?? '';
     }
+    actualizarFecha();
+}
+
+function actualizarFecha(){
+    if(!fechaInput || !anioSelect || !mesSelect) return;
+    const anio = anioSelect.value;
+    const mes = mesSelect.value.toString().padStart(2, '0');
+    const diaActual = (fechaInput.value?.split('-')[2]) || '01';
+    const maxDia = new Date(parseInt(anio, 10), parseInt(mes, 10), 0).getDate();
+    const dia = String(Math.min(parseInt(diaActual, 10) || 1, maxDia)).padStart(2, '0');
+    fechaInput.value = `${anio}-${mes}-${dia}`;
 }
 if(actividadSelect){
     actividadSelect.addEventListener('change', actualizarTipoActividad);
@@ -233,6 +283,7 @@ if(actividadSelect){
 }
 if(anioSelect && mesSelect){
     anioSelect.addEventListener('change', actualizarMeses);
+    mesSelect.addEventListener('change', actualizarFecha);
     actualizarMeses();
 }
 
