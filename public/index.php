@@ -8,13 +8,13 @@ $totalesMovimientos = $pdo->query("
     WITH mov_signado AS (
         SELECT m.id_movimiento, m.valor, m.id_actividad,
                CASE WHEN a.es_polla = 1 THEN 0 ELSE
-                    CASE a.afecta_saldo_socio
+                    CASE LOWER(TRIM(a.afecta_saldo_socio))
                         WHEN 'suma' THEN m.valor
                         WHEN 'resta' THEN -m.valor
                         ELSE 0
                     END
                END AS valor_socio,
-               CASE a.afecta_saldo_natillera
+               CASE LOWER(TRIM(a.afecta_saldo_natillera))
                     WHEN 'suma' THEN m.valor
                     WHEN 'resta' THEN -m.valor
                     ELSE 0 END AS valor_natillera,
@@ -75,7 +75,9 @@ $sqlWhere = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 $movimientosStmt = $pdo->prepare("
     WITH mov_filtrado AS (
         SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad,
-               s.nombre_completo, a.nombre_actividad, a.afecta_saldo_socio, a.afecta_saldo_natillera,
+               s.nombre_completo, a.nombre_actividad,
+               LOWER(TRIM(a.afecta_saldo_socio)) AS afecta_saldo_socio,
+               LOWER(TRIM(a.afecta_saldo_natillera)) AS afecta_saldo_natillera,
                a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general,
                COALESCE(mp.nombre, m.medio_consignacion) AS medio_nombre
         FROM movimientos m
@@ -104,7 +106,12 @@ $movimientosStmt = $pdo->prepare("
                    ROWS UNBOUNDED PRECEDING
                ) AS saldo_natillera,
                CASE WHEN mov_signado.id_socio IS NOT NULL THEN
-                    SUM(CASE WHEN mov_signado.es_polla = 1 THEN 0 ELSE mov_signado.valor_socio END) OVER (
+                    SUM(
+                        CASE
+                            WHEN mov_signado.afecta_saldo_socio = 'neutral' OR mov_signado.es_polla = 1 THEN 0
+                            ELSE mov_signado.valor_socio
+                        END
+                    ) OVER (
                         PARTITION BY mov_signado.id_socio
                         ORDER BY mov_signado.fecha, mov_signado.id_movimiento
                         ROWS UNBOUNDED PRECEDING
