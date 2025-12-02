@@ -112,6 +112,8 @@ $pdo->prepare('UPDATE prestamos SET saldo_capital_actual=:cap, saldo_intereses_a
 
 $actividad = getActividad($pdo, $idActividad);
 $valorTotal = $capPagado + $intPagado;
+$reglaSocio = normalizarReglaAfectacion($actividad['afecta_saldo_socio'] ?? 'neutral');
+$reglaNatillera = normalizarReglaAfectacion($actividad['afecta_saldo_natillera'] ?? 'neutral');
 
 $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, 1, 0, :obs, :usuario, NOW(), :modulo)');
 $stmtMov->execute([
@@ -126,8 +128,8 @@ $stmtMov->execute([
     ':modulo' => 'cuotas',
 ]);
 
-actualizarSaldoSocio($pdo, $prestamo['id_socio'], $valorTotal, $actividad['afecta_saldo_socio']);
-actualizarSaldoNatillera($pdo, $valorTotal, $actividad['afecta_saldo_natillera']);
+actualizarSaldoSocio($pdo, $prestamo['id_socio'], $valorTotal, $reglaSocio);
+actualizarSaldoNatillera($pdo, $valorTotal, $reglaNatillera);
 
 header('Location: ../public/prestamos.php');
 ?>
