@@ -1,4 +1,7 @@
 <?php
+use Dompdf\Dompdf;
+use Dompdf\Options;
+
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 
@@ -547,6 +550,56 @@ function construirHtmlPdf(array $data): string
     return renderPlantillaPDF($contenidoSocio);
 }
 
+function cargarAutoloadDompdf(): void
+{
+    static $autoloadCargado = false;
+    if ($autoloadCargado) {
+        return;
+    }
+
+    $autoloadPaths = [
+        __DIR__ . '/../vendor/autoload.php',
+        __DIR__ . '/vendor/autoload.php',
+    ];
+
+    foreach ($autoloadPaths as $autoload) {
+        if (file_exists($autoload)) {
+            require_once $autoload;
+            $autoloadCargado = true;
+            break;
+        }
+    }
+
+    if (!$autoloadCargado) {
+        exit('No se encontró vendor/autoload.php. Ejecute "composer install" en la raíz del proyecto.');
+    }
+}
+
+function crearDompdf(): Dompdf
+{
+    cargarAutoloadDompdf();
+
+    $opciones = new Options();
+    $opciones->set('isRemoteEnabled', true);
+
+    return new Dompdf($opciones);
+}
+
+function guardarPdfDesdeHtml(string $html, string $rutaDestino): void
+{
+    $dompdf = crearDompdf();
+    $dompdf->loadHtml($html);
+    $dompdf->setPaper('A4');
+    $dompdf->render();
+
+    $directorio = dirname($rutaDestino);
+    if (!is_dir($directorio)) {
+        mkdir($directorio, 0777, true);
+    }
+
+    file_put_contents($rutaDestino, $dompdf->output());
+}
+
 $modo = $_GET['modo'] ?? 'individual';
 $idSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
 $desde = $_GET['desde'] ?? '';
@@ -568,21 +621,16 @@ $config = getConfiguracionGeneral($pdo);
 $logo = prepararLogo($config);
 
 if ($modo === 'colectivo') {
-    $rutaHtml = __DIR__ . '/html_pdfs';
     $rutaPdf = __DIR__ . '/pdf_generados';
 
     if (isset($_GET['zip']) && $_GET['zip']) {
         exit('ZIP deshabilitado – sólo PDFs individuales permitidos');
     }
 
-    if (!is_dir($rutaHtml)) {
-        mkdir($rutaHtml, 0777, true);
-    }
     if (!is_dir($rutaPdf)) {
         mkdir($rutaPdf, 0777, true);
     }
 
-    limpiarCarpeta($rutaHtml);
     limpiarCarpeta($rutaPdf);
 
     $socios = $pdo->query('SELECT id_socio, nombre_completo FROM socios ORDER BY nombre_completo ASC')->fetchAll();
@@ -593,18 +641,13 @@ if ($modo === 'colectivo') {
     foreach ($socios as $s) {
         try {
             $html = renderHtmlSocioIndividual((int)$s['id_socio'], $filtros, $pdo, $config, $resultadosPollaIndex, $logo, $mensajeUsuario);
-            $nombreArchivo = nombreArchivoSocio(['id_socio' => $s['id_socio'], 'nombre_completo' => $s['nombre_completo']]) . '.html';
-            file_put_contents($rutaHtml . '/' . $nombreArchivo, $html);
+            $nombreBase = nombreArchivoSocio(['id_socio' => $s['id_socio'], 'nombre_completo' => $s['nombre_completo']]);
+            $rutaArchivo = $rutaPdf . '/' . $nombreBase . '.pdf';
+            guardarPdfDesdeHtml($html, $rutaArchivo);
         } catch (Throwable $e) {
             continue;
         }
     }
-
-    limpiarCarpeta($rutaPdf);
-
-    $rutaHtmlParaConversion = $rutaHtml;
-    $rutaPdfGenerados = $rutaPdf;
-    require __DIR__ . '/convertir_html_a_pdf.php';
     $nombreCarpetaZip = preg_replace('/[^A-Za-z0-9_\-]/', '_', $carpetaDestino) ?: 'reportes_movimientos';
     $nombreZip = $nombreCarpetaZip . '_' . date('Ymd_His') . '.zip';
     $rutaZip = sys_get_temp_dir() . '/' . $nombreZip;
@@ -615,7 +658,7 @@ if ($modo === 'colectivo') {
     }
 
     $prefijo = $nombreCarpetaZip;
-    foreach (glob($rutaPdfGenerados . '/*.pdf') as $archivoPdf) {
+    foreach (glob($rutaPdf . '/*.pdf') as $archivoPdf) {
         $nombreInterno = $prefijo ? ($prefijo . '/' . basename($archivoPdf)) : basename($archivoPdf);
         $zip->addFile($archivoPdf, $nombreInterno);
     }
@@ -633,7 +676,12 @@ if (!$idSocio) {
 
 $html = renderHtmlSocioIndividual($idSocio, $filtros, $pdo, $config, $resultadosPollaIndex, $logo, $mensajeUsuario);
 $socio = obtenerSocio($idSocio, $pdo);
-$nombre = nombreArchivoSocio($socio) . '_movimientos.html';
-header('Content-Type: text/html; charset=UTF-8');
+$nombre = nombreArchivoSocio($socio) . '_movimientos.pdf';
+$dompdf = crearDompdf();
+$dompdf->loadHtml($html);
+$dompdf->setPaper('A4');
+$dompdf->render();
+
+header('Content-Type: application/pdf');
 header('Content-Disposition: inline; filename="' . $nombre . '"');
-echo $html;
+echo $dompdf->output();
