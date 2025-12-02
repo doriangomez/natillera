@@ -141,9 +141,45 @@ function agruparMovimientos(array $movimientos): array
     return [$cuotasPorMes, $pollasPorMes];
 }
 
+function construirDetalleCuotas(array $movimientos): array
+{
+    $detalles = [];
+    $saldo = 0;
+    foreach ($movimientos as $m) {
+        if (!empty($m['es_polla']) || !empty($m['es_prestamo']) || !empty($m['es_pago_prestamo'])) {
+            continue;
+        }
+        $reglaSocio = normalizarReglaAfectacion($m['afecta_saldo_socio'] ?? 'neutral');
+        if ($reglaSocio === 'neutral') {
+            continue;
+        }
+        $valor = $reglaSocio === 'suma' ? (float)$m['valor'] : -(float)$m['valor'];
+        $saldo += $valor;
+        $detalles[] = [
+            'fecha' => $m['fecha'],
+            'quincena' => (int)($m['quincena'] ?? 0),
+            'actividad' => $m['nombre_actividad'],
+            'valor' => $valor,
+            'saldo' => $saldo,
+        ];
+    }
+
+    return $detalles;
+}
+
+function textoPdf(string $texto): string
+{
+    $texto = (string) $texto;
+    $convertido = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $texto);
+    if ($convertido === false) {
+        $convertido = $texto;
+    }
+    return $convertido;
+}
+
 function escaparPdfTexto(string $texto): string
 {
-    return str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $texto);
+    return str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], textoPdf($texto));
 }
 
 function reservarObjeto(array &$objetos): int
@@ -157,7 +193,7 @@ function definirObjeto(array &$objetos, int $id, string $contenido): void
     $objetos[$id - 1] = $contenido;
 }
 
-function crearPdfSocio(array $socio, array $cuotasPorMes, array $pollasPorMes, array $prestamos, float $totalCapital, float $totalIntereses, array $config, array $resultadosPolla): string
+function crearPdfSocio(array $socio, array $cuotasPorMes, array $pollasPorMes, array $prestamos, float $totalCapital, float $totalIntereses, array $config, array $resultadosPolla, array $detallesCuotas, string $mensajeUsuario): string
 {
     $ancho = 595; // A4 en puntos
     $alto = 842;
@@ -195,7 +231,7 @@ function crearPdfSocio(array $socio, array $cuotasPorMes, array $pollasPorMes, a
     };
 
     $agregarTabla = function(array $headers, array $rows, array $anchos, int $tam = 10) use (&$paginas, &$paginaActual, &$y, $margen, $alto) {
-        $rowHeight = 18;
+        $rowHeight = 20;
         $totalAncho = array_sum($anchos);
         $seccion = & $paginas[$paginaActual];
 
@@ -204,7 +240,7 @@ function crearPdfSocio(array $socio, array $cuotasPorMes, array $pollasPorMes, a
             $fuente = $esHeader ? 'F2' : 'F1';
             $seccion .= ($margen) . ' ' . $y . ' m ' . ($margen + array_sum($anchos)) . ' ' . $y . " l S\n";
             foreach ($celdas as $i => $texto) {
-                $seccion .= "BT /$fuente " . ($esHeader ? $tam+1 : $tam) . " Tf 1 0 0 1 " . ($x + 4) . " " . ($y - 12) . " Tm (" . escaparPdfTexto((string)$texto) . ") Tj ET\n";
+                $seccion .= "BT /$fuente " . ($esHeader ? $tam+1 : $tam) . " Tf 1 0 0 1 " . ($x + 4) . " " . ($y - 13) . " Tm (" . escaparPdfTexto((string)$texto) . ") Tj ET\n";
                 $x += $anchos[$i];
             }
             $seccion .= ($margen) . ' ' . ($y - $rowHeight) . ' m ' . ($margen + array_sum($anchos)) . ' ' . ($y - $rowHeight) . " l S\n";
@@ -263,6 +299,22 @@ function crearPdfSocio(array $socio, array $cuotasPorMes, array $pollasPorMes, a
         $agregarTabla(['Mes', 'Valor'], $filasCuotas, [300, 220]);
     }
 
+    $agregarTitulo('Detalle de cuotas con saldo');
+    if (!$detallesCuotas) {
+        $agregarLinea('No hay registros de cuotas en el rango filtrado.', 11);
+    } else {
+        $filasDetalles = [];
+        foreach ($detallesCuotas as $detalle) {
+            $filasDetalles[] = [
+                $detalle['fecha'] . ($detalle['quincena'] ? ' (Q' . $detalle['quincena'] . ')' : ''),
+                $detalle['actividad'],
+                formatearMoneda($detalle['valor']),
+                formatearMoneda($detalle['saldo']),
+            ];
+        }
+        $agregarTabla(['Fecha', 'Actividad', 'Valor', 'Saldo después'], $filasDetalles, [150, 170, 100, 130]);
+    }
+
     $agregarTitulo('Pagos de pollas por mes');
     if (!$pollasPorMes) {
         $agregarLinea('No hay pagos de pollas registrados.', 11);
@@ -295,11 +347,21 @@ function crearPdfSocio(array $socio, array $cuotasPorMes, array $pollasPorMes, a
         $agregarTabla(['Identificador', 'Deudor', 'Capital pendiente', 'Intereses pendientes'], $filasPrestamos, [140, 180, 120, 120]);
     }
 
+    $mensajes = [];
     if (!empty($config['datos_globales'])) {
-        $agregarTitulo('Notas generales');
-        $lineas = explode("\n", trim($config['datos_globales']));
-        foreach ($lineas as $l) {
-            $agregarLinea($l, 10);
+        $mensajes[] = trim($config['datos_globales']);
+    }
+    if (trim($mensajeUsuario) !== '') {
+        $mensajes[] = trim($mensajeUsuario);
+    }
+    if ($mensajes) {
+        $agregarTitulo('Noticias de la natillera');
+        foreach ($mensajes as $mensaje) {
+            $lineas = explode("\n", $mensaje);
+            foreach ($lineas as $l) {
+                $agregarLinea($l, 10);
+            }
+            $y -= 4;
         }
     }
 
@@ -358,6 +420,7 @@ $idSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
 $desde = $_GET['desde'] ?? '';
 $hasta = $_GET['hasta'] ?? '';
 $actividad = isset($_GET['actividad']) ? (int) $_GET['actividad'] : 0;
+$mensajeUsuario = $_GET['mensaje'] ?? '';
 
 $filtros = [
     'socio' => $idSocio,
@@ -395,7 +458,8 @@ if ($modo === 'colectivo') {
             $movs = obtenerMovimientos($pdo, $filtros);
             [$prestamos, $totalCapital, $totalIntereses] = obtenerPrestamos($pdo, (int)$s['id_socio']);
             [$cuotasPorMes, $pollasPorMes] = agruparMovimientos($movs);
-            $pdf = crearPdfSocio($socioDetalle, $cuotasPorMes, $pollasPorMes, $prestamos, $totalCapital, $totalIntereses, $config, $resultadosPollaIndex);
+            $detallesCuotas = construirDetalleCuotas($movs);
+            $pdf = crearPdfSocio($socioDetalle, $cuotasPorMes, $pollasPorMes, $prestamos, $totalCapital, $totalIntereses, $config, $resultadosPollaIndex, $detallesCuotas, $mensajeUsuario);
             $nombreArchivo = ($rutaCarpeta ? $rutaCarpeta.'/' : '') . nombreArchivoSocio($socioDetalle) . '_movimientos.pdf';
             $zip->addFromString($nombreArchivo, $pdf);
         } catch (Throwable $e) {
@@ -423,7 +487,8 @@ $movimientos = obtenerMovimientos($pdo, $filtros);
 $config = getConfiguracionGeneral($pdo);
 
 [$cuotasPorMes, $pollasPorMes] = agruparMovimientos($movimientos);
-$pdf = crearPdfSocio($socio, $cuotasPorMes, $pollasPorMes, $prestamos, $totalCapital, $totalIntereses, $config, $resultadosPollaIndex);
+$detallesCuotas = construirDetalleCuotas($movimientos);
+$pdf = crearPdfSocio($socio, $cuotasPorMes, $pollasPorMes, $prestamos, $totalCapital, $totalIntereses, $config, $resultadosPollaIndex, $detallesCuotas, $mensajeUsuario);
 $nombre = nombreArchivoSocio($socio) . '_movimientos.pdf';
 
 header('Content-Type: application/pdf');
