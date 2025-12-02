@@ -163,6 +163,41 @@ function nombreArchivoSocio(array $socio): string
     return $seguro !== '' ? $seguro : ('socio_' . (int)$socio['id_socio']);
 }
 
+function renderHtmlSocioIndividual(
+    int $idSocio,
+    array $filtros,
+    PDO $pdo,
+    array $config,
+    array $resultadosPollaIndex,
+    string $logo,
+    string $mensajeUsuario
+): string {
+    $socio = obtenerSocio($idSocio, $pdo);
+    $filtrosSocio = $filtros;
+    $filtrosSocio['socio'] = $idSocio;
+
+    $movimientos = obtenerMovimientos($pdo, $filtrosSocio);
+    [$prestamos, $totalCapital, $totalIntereses] = obtenerPrestamos($pdo, $idSocio);
+    $pagosIntereses = obtenerPagosIntereses($pdo, $idSocio);
+    [$cuotasPorMes, $pollasPorMes] = agruparMovimientos($movimientos);
+    $detallesCuotas = construirDetalleCuotas($movimientos);
+
+    return construirHtmlPdf([
+        'socio' => $socio,
+        'cuotasPorMes' => $cuotasPorMes,
+        'pollasPorMes' => $pollasPorMes,
+        'prestamos' => $prestamos,
+        'totalCapital' => $totalCapital,
+        'totalIntereses' => $totalIntereses,
+        'config' => $config,
+        'resultadosPolla' => $resultadosPollaIndex,
+        'detallesCuotas' => $detallesCuotas,
+        'pagosIntereses' => $pagosIntereses,
+        'logo' => $logo,
+        'mensajeUsuario' => $mensajeUsuario,
+    ]);
+}
+
 function prepararLogo(array $config): string
 {
     if (empty($config['logo_archivo'])) {
@@ -537,7 +572,7 @@ if ($modo === 'colectivo') {
     $rutaPdf = __DIR__ . '/pdf_generados';
 
     if (isset($_GET['zip']) && $_GET['zip']) {
-        exit('ZIP NO PERMITIDO – flujo inválido');
+        exit('ZIP deshabilitado – sólo PDFs individuales permitidos');
     }
 
     if (!is_dir($rutaHtml)) {
@@ -557,29 +592,8 @@ if ($modo === 'colectivo') {
 
     foreach ($socios as $s) {
         try {
-            $socioDetalle = obtenerSocio((int)$s['id_socio'], $pdo);
-            $filtros['socio'] = (int)$s['id_socio'];
-            $movs = obtenerMovimientos($pdo, $filtros);
-            [$prestamos, $totalCapital, $totalIntereses] = obtenerPrestamos($pdo, (int)$s['id_socio']);
-            $pagosIntereses = obtenerPagosIntereses($pdo, (int)$s['id_socio']);
-            [$cuotasPorMes, $pollasPorMes] = agruparMovimientos($movs);
-            $detallesCuotas = construirDetalleCuotas($movs);
-
-            $html = construirHtmlPdf([
-                'socio' => $socioDetalle,
-                'cuotasPorMes' => $cuotasPorMes,
-                'pollasPorMes' => $pollasPorMes,
-                'prestamos' => $prestamos,
-                'totalCapital' => $totalCapital,
-                'totalIntereses' => $totalIntereses,
-                'config' => $config,
-                'resultadosPolla' => $resultadosPollaIndex,
-                'detallesCuotas' => $detallesCuotas,
-                'pagosIntereses' => $pagosIntereses,
-                'logo' => $logo,
-                'mensajeUsuario' => $mensajeUsuario,
-            ]);
-            $nombreArchivo = nombreArchivoSocio($socioDetalle) . '.html';
+            $html = renderHtmlSocioIndividual((int)$s['id_socio'], $filtros, $pdo, $config, $resultadosPollaIndex, $logo, $mensajeUsuario);
+            $nombreArchivo = nombreArchivoSocio(['id_socio' => $s['id_socio'], 'nombre_completo' => $s['nombre_completo']]) . '.html';
             file_put_contents($rutaHtml . '/' . $nombreArchivo, $html);
         } catch (Throwable $e) {
             continue;
@@ -617,28 +631,8 @@ if (!$idSocio) {
     exit('Debe seleccionar un socio para exportar el reporte.');
 }
 
+$html = renderHtmlSocioIndividual($idSocio, $filtros, $pdo, $config, $resultadosPollaIndex, $logo, $mensajeUsuario);
 $socio = obtenerSocio($idSocio, $pdo);
-$movimientos = obtenerMovimientos($pdo, $filtros);
-[$prestamos, $totalCapital, $totalIntereses] = obtenerPrestamos($pdo, $idSocio);
-$pagosIntereses = obtenerPagosIntereses($pdo, $idSocio);
-[$cuotasPorMes, $pollasPorMes] = agruparMovimientos($movimientos);
-$detallesCuotas = construirDetalleCuotas($movimientos);
-
-$html = construirHtmlPdf([
-    'socio' => $socio,
-    'cuotasPorMes' => $cuotasPorMes,
-    'pollasPorMes' => $pollasPorMes,
-    'prestamos' => $prestamos,
-    'totalCapital' => $totalCapital,
-    'totalIntereses' => $totalIntereses,
-    'config' => $config,
-    'resultadosPolla' => $resultadosPollaIndex,
-    'detallesCuotas' => $detallesCuotas,
-    'pagosIntereses' => $pagosIntereses,
-    'logo' => $logo,
-    'mensajeUsuario' => $mensajeUsuario,
-]);
-
 $nombre = nombreArchivoSocio($socio) . '_movimientos.html';
 header('Content-Type: text/html; charset=UTF-8');
 header('Content-Disposition: inline; filename="' . $nombre . '"');
