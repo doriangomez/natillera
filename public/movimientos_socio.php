@@ -73,7 +73,7 @@ unset($m);
             data-desde="<?php echo $fDesde; ?>"
             data-hasta="<?php echo $fHasta; ?>"
             data-actividad="<?php echo $fActividad; ?>">
-            Exportar movimientos PDF
+            Exportar reporte de movimientos
         </button>
     </div>
 </div>
@@ -209,8 +209,13 @@ unset($m);
                         <div class="form-text">El archivo ZIP se descargará en tu carpeta de descargas; este nombre define la carpeta interna.</div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label" for="mensajeNoticias">Noticias o mensaje para el PDF</label>
-                        <textarea class="form-control" id="mensajeNoticias" rows="3" placeholder="Comparte avisos importantes que quedarán visibles en el PDF"></textarea>
+                        <label class="form-label" for="formatoExport">Formato de reporte</label>
+                        <input type="text" readonly class="form-control" id="formatoExport" value="HTML (abre en la aplicación)">
+                        <div class="form-text">La exportación individual se abrirá en esta aplicación como página HTML.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="mensajeNoticias">Noticias o mensaje para el reporte</label>
+                        <textarea class="form-control" id="mensajeNoticias" rows="3" placeholder="Comparte avisos importantes que quedarán visibles en el reporte"></textarea>
                         <div class="form-text">Si lo dejas vacío solo se mostrarán las notas generales configuradas.</div>
                     </div>
                 </div>
@@ -307,6 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const socioSeleccionado = socioSelect.value;
             const rutaDestino = rutaInput.value.trim();
             const mensajeNoticias = (document.getElementById('mensajeNoticias')?.value || '').trim();
+            const formato = 'html';
 
             socioSelect.classList.remove('is-invalid');
             if (modo === 'individual' && !socioSeleccionado) {
@@ -328,9 +334,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (mensajeNoticias) {
                 params.set('mensaje', mensajeNoticias);
             }
+            params.set('formato', formato);
 
             modalInstance.hide();
-            window.location.href = '../actions/export_movimiento_socio_pdf.php?' + params.toString();
+            const url = '../actions/export_movimiento_socio_pdf.php?' + params.toString();
+            if (modo === 'individual') {
+                window.location.href = url;
+            } else {
+                window.location.href = url;
+            }
         });
     }
 });
