@@ -275,7 +275,7 @@ function renderPlantillaPDF(string $html_body): string
                 color: #0f172a;
                 font-size: 12px;
                 line-height: 1.6;
-                background: #f5f7fb;
+                background: #f3f6fb;
             }
             .layout {
                 max-width: 960px;
@@ -283,7 +283,7 @@ function renderPlantillaPDF(string $html_body): string
                 background: #ffffff;
                 border-radius: 16px;
                 padding: 24px 28px;
-                box-shadow: 0 14px 36px rgba(15, 23, 42, 0.08);
+                box-shadow: 0 16px 44px rgba(15, 23, 42, 0.08);
             }
             .header {
                 display: grid;
@@ -292,10 +292,10 @@ function renderPlantillaPDF(string $html_body): string
                 gap: 16px;
                 padding: 16px 18px;
                 border-radius: 14px;
-                background: linear-gradient(120deg, #0f62fe, #17b3c1);
+                background: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.12), transparent 40%), linear-gradient(120deg, #0f62fe, #17b3c1);
                 color: #fff;
                 margin-bottom: 18px;
-            }
+                }
             .header img {
                 width: 110px;
                 height: 110px;
@@ -312,18 +312,30 @@ function renderPlantillaPDF(string $html_body): string
                 opacity: 0.85;
                 margin: 0 0 4px 0;
             }
-            .titulo { font-size: 24px; margin: 0 0 4px 0; font-weight: 700; }
-            .subtitulo { margin: 0 0 2px 0; opacity: 0.9; }
-            .meta { font-size: 11px; margin: 0; opacity: 0.8; }
+            .titulo { font-size: 24px; margin: 0 0 4px 0; font-weight: 800; letter-spacing: -0.02em; }
+            .subtitulo { margin: 0 0 6px 0; opacity: 0.92; font-weight: 600; }
+            .meta { font-size: 11px; margin: 0; opacity: 0.84; }
             .pill {
                 justify-self: end;
+                background: rgba(255,255,255,0.22);
+                border: 1px solid rgba(255,255,255,0.28);
+                color: #fff;
+                padding: 8px 12px;
+                border-radius: 14px;
+                font-weight: 700;
+                text-align: center;
+                box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+            }
+            .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+            .badge {
                 background: rgba(255,255,255,0.16);
                 border: 1px solid rgba(255,255,255,0.2);
                 color: #fff;
-                padding: 8px 12px;
-                border-radius: 12px;
-                font-weight: 600;
-                text-align: center;
+                padding: 4px 8px;
+                border-radius: 999px;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.02em;
             }
             .section {
                 margin-top: 18px;
@@ -349,6 +361,38 @@ function renderPlantillaPDF(string $html_body): string
                 background: linear-gradient(120deg, #0f62fe, #17b3c1);
                 display: inline-block;
             }
+            .summary-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                gap: 12px;
+                margin: 8px 0 4px;
+            }
+            .summary-card {
+                background: linear-gradient(180deg, #fff, #f6f8fb);
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 10px 12px;
+                box-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
+            }
+            .summary-label {
+                font-size: 11px;
+                color: #6b7280;
+                margin: 0 0 4px 0;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                font-weight: 700;
+            }
+            .summary-value {
+                font-size: 18px;
+                margin: 0;
+                color: #0f172a;
+                font-weight: 800;
+            }
+            .summary-subtext {
+                margin: 0;
+                font-size: 11px;
+                color: #94a3b8;
+            }
             .table {
                 width: 100%;
                 border-collapse: collapse;
@@ -365,6 +409,7 @@ function renderPlantillaPDF(string $html_body): string
                 padding: 8px 10px;
                 font-size: 11px;
                 letter-spacing: 0.01em;
+                text-transform: uppercase;
             }
             .table td {
                 padding: 8px 10px;
@@ -449,6 +494,8 @@ function construirHtmlPdf(array $data): string
     }
 
     $filasPrestamos = [];
+    $totalPrestamoCapital = 0;
+    $totalPrestamoInteres = 0;
     foreach ($data['prestamos'] as $p) {
         $filasPrestamos[] = [
             'Préstamo #' . (int)$p['id_prestamo'],
@@ -456,6 +503,8 @@ function construirHtmlPdf(array $data): string
             formatearMoneda((float)$p['saldo_capital_actual']),
             formatearMoneda((float)$p['saldo_intereses_actual']),
         ];
+        $totalPrestamoCapital += (float)$p['saldo_capital_actual'];
+        $totalPrestamoInteres += (float)$p['saldo_intereses_actual'];
     }
     if ($filasPrestamos) {
         $filasPrestamos[] = ['Totales', '', formatearMoneda($data['totalCapital']), formatearMoneda($data['totalIntereses'])];
@@ -488,6 +537,24 @@ function construirHtmlPdf(array $data): string
     }
 
     $nombreSistema = $config['nombre_sistema'] ?? 'Creciendo Juntos';
+    $etiquetasSocio = [];
+    if (!empty($socio['periodicidad_pago'])) { $etiquetasSocio[] = 'Periodicidad: ' . htmlspecialchars($socio['periodicidad_pago'], ENT_QUOTES, 'UTF-8'); }
+    if (!empty($socio['numero_polla'])) { $etiquetasSocio[] = 'Polla #' . htmlspecialchars($socio['numero_polla'], ENT_QUOTES, 'UTF-8'); }
+    $etiquetasSocio[] = 'Valor cuota: ' . formatearMoneda((float)$socio['valor_presupuestado']);
+    $etiquetasSocio[] = 'Teléfono: ' . ($socio['telefono'] ?: 'Sin teléfono');
+
+    $resumenes = [
+        ['label' => 'Saldo socio', 'valor' => formatearMoneda((float)$socio['saldo_socio']), 'sub' => 'Saldo actual a la fecha'],
+        ['label' => 'Total aportado', 'valor' => formatearMoneda($totalCuotas), 'sub' => 'Cuotas registradas'],
+        ['label' => 'Pagos de pollas', 'valor' => formatearMoneda($totalPollas), 'sub' => 'Incluye números ganadores'],
+    ];
+    if ($totalPrestamoCapital > 0 || $totalPrestamoInteres > 0) {
+        $resumenes[] = [
+            'label' => 'Préstamos vigentes',
+            'valor' => formatearMoneda($totalPrestamoCapital + $totalPrestamoInteres),
+            'sub' => 'Capital + intereses pendientes',
+        ];
+    }
 
     ob_start();
     ?>
@@ -499,8 +566,23 @@ function construirHtmlPdf(array $data): string
                 <h1 class="titulo"><?php echo htmlspecialchars($nombreSistema, ENT_QUOTES, 'UTF-8'); ?></h1>
                 <p class="subtitulo">Movimientos por socio</p>
                 <p class="meta">Generado: <?php echo htmlspecialchars($fechaGeneracion, ENT_QUOTES, 'UTF-8'); ?></p>
+                <div class="badges">
+                    <?php foreach ($etiquetasSocio as $etiqueta): ?>
+                        <span class="badge"><?php echo $etiqueta; ?></span>
+                    <?php endforeach; ?>
+                </div>
             </div>
-            <div class="pill">Creciendo Juntos</div>
+            <div class="pill">Socio #<?php echo (int)$socio['id_socio']; ?></div>
+        </div>
+
+        <div class="summary-grid">
+            <?php foreach ($resumenes as $r): ?>
+                <div class="summary-card">
+                    <p class="summary-label"><?php echo htmlspecialchars($r['label'], ENT_QUOTES, 'UTF-8'); ?></p>
+                    <p class="summary-value"><?php echo htmlspecialchars($r['valor'], ENT_QUOTES, 'UTF-8'); ?></p>
+                    <p class="summary-subtext"><?php echo htmlspecialchars($r['sub'], ENT_QUOTES, 'UTF-8'); ?></p>
+                </div>
+            <?php endforeach; ?>
         </div>
 
         <div class="section">
