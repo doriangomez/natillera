@@ -221,7 +221,7 @@ function prepararLogo(array $config): string
     return 'data:' . $mime . ';base64,' . base64_encode($contenido);
 }
 
-function tablaHtml(array $headers, array $rows, string $class = 'table'): string
+function tablaHtml(array $headers, array $rows, string $class = 'table', array $alignments = []): string
 {
     $thead = '<thead><tr>';
     foreach ($headers as $h) {
@@ -236,8 +236,10 @@ function tablaHtml(array $headers, array $rows, string $class = 'table'): string
     } else {
         foreach ($rows as $row) {
             $tbody .= '<tr>';
-            foreach ($row as $cell) {
-                $tbody .= '<td>' . htmlspecialchars((string)$cell, ENT_QUOTES, 'UTF-8') . '</td>';
+            foreach ($row as $index => $cell) {
+                $alignClass = $alignments[$index] ?? '';
+                $classAttr = $alignClass !== '' ? ' class="' . htmlspecialchars($alignClass, ENT_QUOTES, 'UTF-8') . '"' : '';
+                $tbody .= '<td' . $classAttr . '>' . htmlspecialchars((string)$cell, ENT_QUOTES, 'UTF-8') . '</td>';
             }
             $tbody .= '</tr>';
         }
@@ -274,7 +276,7 @@ function renderPlantillaPDF(string $html_body): string
                 font-family: 'DejaVu Sans', sans-serif;
                 color: #111827;
                 font-size: 10.5pt;
-                line-height: 1.4;
+                line-height: 1.35;
                 margin: 0;
                 padding: 0;
                 background: #fff;
@@ -287,7 +289,7 @@ function renderPlantillaPDF(string $html_body): string
                 align-items: center;
                 gap: 12px;
                 padding: 0 0 8px;
-                margin-bottom: 10px;
+                margin-bottom: 6px;
                 border-bottom: 2px solid #003366;
             }
             .header img {
@@ -307,7 +309,7 @@ function renderPlantillaPDF(string $html_body): string
                 color: #4b5563;
             }
             .section {
-                margin-bottom: 12px;
+                margin-bottom: 10px;
             }
             .section-title {
                 font-size: 14pt;
@@ -334,6 +336,8 @@ function renderPlantillaPDF(string $html_body): string
             .table tr:nth-child(even) td {
                 background: #F4F4F4;
             }
+            .text-right { text-align: right; }
+            .text-center { text-align: center; }
             .nota {
                 margin: 0;
                 font-size: 10pt;
@@ -478,27 +482,27 @@ function construirHtmlPdf(array $data): string
 
     <div class="section" data-section="pagos-cuota">
         <h2 class="section-title">Pagos de cuota</h2>
-        <?php echo tablaHtml(['Mes', 'Valor'], $filasCuotas); ?>
+        <?php echo tablaHtml(['Mes', 'Valor'], $filasCuotas, 'table', ['','text-right']); ?>
     </div>
 
     <div class="section" data-section="detalle-cuotas">
         <h2 class="section-title">Detalle de cuotas</h2>
-        <?php echo tablaHtml(['Fecha', 'Actividad', 'Valor', 'Saldo después'], $filasDetalles); ?>
+        <?php echo tablaHtml(['Fecha', 'Actividad', 'Valor', 'Saldo después'], $filasDetalles, 'table', ['', '', 'text-right', 'text-right']); ?>
     </div>
 
     <div class="section" data-section="pagos-pollas">
         <h2 class="section-title">Pagos de pollas</h2>
-        <?php echo tablaHtml(['Mes', 'Valor', 'Número ganador'], $filasPollas); ?>
+        <?php echo tablaHtml(['Mes', 'Valor', 'Número ganador'], $filasPollas, 'table', ['', 'text-right', 'text-center']); ?>
     </div>
 
     <div class="section" data-section="estado-prestamos">
         <h2 class="section-title">Estado de préstamos</h2>
-        <?php echo tablaHtml(['Identificador', 'Deudor', 'Capital pendiente', 'Intereses pendientes'], $filasPrestamos); ?>
+        <?php echo tablaHtml(['Identificador', 'Deudor', 'Capital pendiente', 'Intereses pendientes'], $filasPrestamos, 'table', ['', '', 'text-right', 'text-right']); ?>
     </div>
 
     <div class="section" data-section="pago-intereses">
         <h2 class="section-title">Pago de intereses</h2>
-        <?php echo tablaHtml(['Fecha', 'Concepto', 'Valor'], $filasIntereses); ?>
+        <?php echo tablaHtml(['Fecha', 'Concepto', 'Valor'], $filasIntereses, 'table', ['', '', 'text-right']); ?>
     </div>
 
     <div class="section" data-section="observaciones">
