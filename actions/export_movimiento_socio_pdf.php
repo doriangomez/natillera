@@ -4,7 +4,6 @@ use Dompdf\Options;
 
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
-require __DIR__ . '/vendor/autoload.php';
 
 
 
@@ -12,8 +11,8 @@ require __DIR__ . '/vendor/autoload.php';
 checkAuth();
 
 // Validación de dependencias y codificación
-$autoloadPath = __DIR__ . '/../vendor/autoload.php';
-if (!file_exists($autoloadPath)) {
+$autoloadPath = realpath(__DIR__ . '/../vendor/autoload.php');
+if ($autoloadPath === false || !file_exists($autoloadPath)) {
     exit('No se encuentra el autoload de Dompdf. Asegúrese de instalar las dependencias con Composer.');
 }
 require_once $autoloadPath;
