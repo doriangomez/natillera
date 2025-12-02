@@ -3,7 +3,7 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 
 $autoloadPaths = [
-    __DIR__ . '/../vendor/autoload.php',
+    
     __DIR__ . '/vendor/autoload.php',
 ];
 
