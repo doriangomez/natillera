@@ -9,6 +9,17 @@ checkAuth();
 
 $formato = 'html';
 
+function limpiarCarpeta($ruta) {
+    foreach (glob($ruta . '/*') as $archivo) {
+        if (is_dir($archivo)) {
+            limpiarCarpeta($archivo);
+            rmdir($archivo);
+        } else {
+            unlink($archivo);
+        }
+    }
+}
+
 function obtenerSocio(int $idSocio, PDO $pdo): array
 {
     $socioStmt = $pdo->prepare('SELECT id_socio, nombre_completo, telefono, numero_polla, periodicidad_pago, valor_presupuestado, saldo_socio FROM socios WHERE id_socio = :id');
@@ -500,21 +511,21 @@ $config = getConfiguracionGeneral($pdo);
 $logo = prepararLogo($config);
 
 if ($modo === 'colectivo') {
-    $rutaCarpeta = trim($_GET['ruta'] ?? 'exportes_movimientos');
-    if ($rutaCarpeta === '') {
-        $rutaCarpeta = 'exportes_movimientos';
+    $rutaHtml = __DIR__ . '/html_pdfs';
+    $rutaPdf = __DIR__ . '/pdf_generados';
+
+    if (!is_dir($rutaHtml)) {
+        mkdir($rutaHtml, 0777, true);
     }
-    $rutaCarpeta = trim(preg_replace('/[^A-Za-z0-9_\-\/]/', '_', $rutaCarpeta), '/');
+    if (!is_dir($rutaPdf)) {
+        mkdir($rutaPdf, 0777, true);
+    }
+
+    limpiarCarpeta($rutaHtml);
 
     $socios = $pdo->query('SELECT id_socio, nombre_completo FROM socios ORDER BY nombre_completo ASC')->fetchAll();
     if (!$socios) {
         exit('No hay socios para exportar.');
-    }
-
-    $zip = new ZipArchive();
-    $tmpFile = tempnam(sys_get_temp_dir(), 'movs_').'.zip';
-    if ($zip->open($tmpFile, ZipArchive::CREATE)!==TRUE) {
-        exit('No se pudo preparar el archivo comprimido.');
     }
 
     foreach ($socios as $s) {
@@ -541,21 +552,21 @@ if ($modo === 'colectivo') {
                 'logo' => $logo,
                 'mensajeUsuario' => $mensajeUsuario,
             ]);
-            $nombreArchivo = ($rutaCarpeta ? $rutaCarpeta.'/' : '') . nombreArchivoSocio($socioDetalle) . '_movimientos.html';
-            $contenidoArchivo = $html;
-            $zip->addFromString($nombreArchivo, $contenidoArchivo);
+            $nombreArchivo = nombreArchivoSocio($socioDetalle) . '_movimientos.html';
+            file_put_contents($rutaHtml . '/' . $nombreArchivo, $html);
         } catch (Throwable $e) {
             continue;
         }
     }
 
-    $zip->close();
+    limpiarCarpeta($rutaPdf);
 
-    header('Content-Type: application/zip');
-    header('Content-Disposition: attachment; filename="movimientos_socios_' . $formato . '.zip"');
-    header('Content-Length: ' . filesize($tmpFile));
-    readfile($tmpFile);
-    unlink($tmpFile);
+    $rutaHtmlParaConversion = $rutaHtml;
+    $rutaPdfGenerados = $rutaPdf;
+    require __DIR__ . '/convertir_html_a_pdf.php';
+
+    header('Content-Type: text/plain; charset=UTF-8');
+    echo 'Exportación masiva completada';
     exit;
 }
 
