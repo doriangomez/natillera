@@ -18,6 +18,14 @@ function getSocios($pdo, $search = '') {
     return $stmt->fetchAll();
 }
 
+function normalizarReglaAfectacion($regla) {
+    $regla = strtolower(trim((string)$regla));
+    if (!in_array($regla, ['suma', 'resta', 'neutral'], true)) {
+        $regla = 'neutral';
+    }
+    return $regla;
+}
+
 function obtenerSiguienteIdSocioDisponible(PDO $pdo): int {
     $ids = $pdo->query('SELECT id_socio FROM socios ORDER BY id_socio')->fetchAll(PDO::FETCH_COLUMN);
 
@@ -79,6 +87,7 @@ function getSaldoNatillera($pdo) {
 }
 
 function actualizarSaldoNatillera($pdo, $monto, $regla) {
+    $regla = normalizarReglaAfectacion($regla);
     if ($regla === 'neutral') {
         return;
     }
@@ -88,6 +97,7 @@ function actualizarSaldoNatillera($pdo, $monto, $regla) {
 }
 
 function actualizarSaldoSocio($pdo, $idSocio, $monto, $regla) {
+    $regla = normalizarReglaAfectacion($regla);
     if (!$idSocio || $regla === 'neutral') {
         return;
     }
