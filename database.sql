@@ -122,6 +122,16 @@ CREATE TABLE configuracion_general (
 INSERT INTO configuracion_general (id_config, nombre_sistema, logo_archivo, datos_globales) VALUES
 (1, 'Aplicativo de Natillera creado por Dorian Gómez', NULL, 'Datos generales de la natillera');
 
+CREATE TABLE polla_resultados (
+    id_resultado INT AUTO_INCREMENT PRIMARY KEY,
+    anio INT NOT NULL,
+    mes INT NOT NULL,
+    numero_ganador VARCHAR(50) NOT NULL,
+    observaciones TEXT,
+    fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_polla_mes (anio, mes)
+);
+
 CREATE TABLE conciliaciones_medios_pago (
     id INT AUTO_INCREMENT PRIMARY KEY,
     id_medio INT NOT NULL,

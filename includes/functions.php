@@ -143,4 +143,34 @@ function generarCSV($header, $rows) {
     }
     fclose($fh);
 }
+
+function asegurarTablaResultadosPolla(PDO $pdo): void {
+    $sql = "CREATE TABLE IF NOT EXISTS polla_resultados (
+        id_resultado INT AUTO_INCREMENT PRIMARY KEY,
+        anio INT NOT NULL,
+        mes INT NOT NULL,
+        numero_ganador VARCHAR(50) NOT NULL,
+        observaciones TEXT,
+        fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_polla_mes (anio, mes)
+    )";
+
+    $pdo->exec($sql);
+}
+
+function obtenerResultadosPolla(PDO $pdo): array {
+    asegurarTablaResultadosPolla($pdo);
+    $stmt = $pdo->query('SELECT id_resultado, anio, mes, numero_ganador, observaciones FROM polla_resultados ORDER BY anio DESC, mes DESC');
+    return $stmt->fetchAll();
+}
+
+function indexResultadosPollaPorMes(PDO $pdo): array {
+    $resultados = obtenerResultadosPolla($pdo);
+    $index = [];
+    foreach ($resultados as $r) {
+        $mesClave = sprintf('%04d-%02d', (int)$r['anio'], (int)$r['mes']);
+        $index[$mesClave] = $r;
+    }
+    return $index;
+}
 ?>
