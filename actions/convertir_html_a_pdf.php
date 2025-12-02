@@ -2,8 +2,23 @@
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
-require __DIR__ . '/vendor/autoload.php';
+$autoloadPaths = [
+    
+    __DIR__ . '/vendor/autoload.php',
+];
 
+$autoloadEncontrado = false;
+foreach ($autoloadPaths as $autoload) {
+    if (file_exists($autoload)) {
+        require_once $autoload;
+        $autoloadEncontrado = true;
+        break;
+    }
+}
+
+if (!$autoloadEncontrado) {
+    exit('No se encontró vendor/autoload.php. Ejecute "composer install" en la raíz del proyecto.');
+}
 
 $rutaHtmlParaConversion = $rutaHtmlParaConversion ?? (__DIR__ . '/html_pdfs');
 $rutaPdfGenerados = $rutaPdfGenerados ?? (__DIR__ . '/pdf_generados');
