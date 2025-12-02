@@ -271,182 +271,89 @@ function renderPlantillaPDF(string $html_body): string
                 src: local('DejaVu Sans Bold'), local('DejaVuSans-Bold');
             }
             body {
-                font-family: 'DejaVu Sans', 'Inter', 'Segoe UI', sans-serif;
-                color: #0f172a;
-                font-size: 12px;
-                line-height: 1.55;
-                background: radial-gradient(circle at 30% 20%, #e0f2fe, transparent 28%),
-                            radial-gradient(circle at 80% 10%, #e5e7eb, transparent 32%),
-                            #f6f8fb;
+                font-family: 'DejaVu Sans', sans-serif;
+                color: #111827;
+                font-size: 10.5pt;
+                line-height: 1.4;
+                margin: 0;
+                padding: 0;
+                background: #fff;
             }
-            .layout {
-                max-width: 980px;
-                margin: 8px auto;
-                background: #ffffff;
-                border-radius: 14px;
-                padding: 20px 22px;
-                box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
-                border: 1px solid #e5e7eb;
+            .document {
+                width: 100%;
             }
             .header {
-                display: grid;
-                grid-template-columns: 95px 1fr 120px;
-                align-items: center;
-                gap: 14px;
-                padding: 14px 16px;
-                border-radius: 12px;
-                background: linear-gradient(120deg, #0f62fe, #2563eb 40%, #0ea5e9);
-                color: #fff;
-                margin-bottom: 14px;
-                border: 1px solid rgba(255,255,255,0.18);
-            }
-            .header img {
-                width: 95px;
-                height: 95px;
-                object-fit: contain;
-                background: rgba(255,255,255,0.08);
-                border-radius: 12px;
-                padding: 8px;
-                border: 1px solid rgba(255,255,255,0.15);
-            }
-            .eyebrow {
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-                font-size: 10px;
-                opacity: 0.85;
-                margin: 0 0 4px 0;
-            }
-            .titulo { font-size: 22px; margin: 0 0 2px 0; font-weight: 800; letter-spacing: -0.02em; }
-            .subtitulo { margin: 0 0 4px 0; opacity: 0.94; font-weight: 600; }
-            .meta { font-size: 10px; margin: 0; opacity: 0.9; letter-spacing: 0.01em; }
-            .pill {
-                justify-self: end;
-                background: rgba(255,255,255,0.16);
-                border: 1px solid rgba(255,255,255,0.25);
-                color: #fff;
-                padding: 7px 12px;
-                border-radius: 12px;
-                font-weight: 700;
-                text-align: center;
-                box-shadow: 0 8px 18px rgba(0,0,0,0.08);
-            }
-            .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
-            .badge {
-                background: rgba(255,255,255,0.16);
-                border: 1px solid rgba(255,255,255,0.2);
-                color: #fff;
-                padding: 3px 8px;
-                border-radius: 999px;
-                font-size: 9px;
-                font-weight: 700;
-                letter-spacing: 0.04em;
-            }
-            .section {
-                padding: 12px 14px;
-                border-radius: 12px;
-                background: linear-gradient(180deg, #ffffff, #f8fafc);
-                border: 1px solid #e5e7eb;
-                box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
-            }
-            .section-title {
-                color: #0f172a;
-                font-size: 13px;
-                margin: 0 0 6px 0;
                 display: flex;
                 align-items: center;
-                gap: 6px;
+                gap: 12px;
+                padding: 0 0 8px;
+                margin-bottom: 10px;
+                border-bottom: 2px solid #003366;
+            }
+            .header img {
+                width: 80px;
+                height: 80px;
+                object-fit: contain;
+            }
+            .header-title {
+                font-size: 14pt;
                 font-weight: 700;
-            }
-            .section-title::before {
-                content: '';
-                width: 10px;
-                height: 10px;
-                border-radius: 50%;
-                background: linear-gradient(120deg, #0f62fe, #17b3c1);
-                display: inline-block;
-            }
-            .section-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-                gap: 10px;
-                margin-top: 10px;
-            }
-            .summary-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-                gap: 10px;
-                margin: 6px 0 2px;
-            }
-            .summary-card {
-                background: linear-gradient(180deg, #ffffff, #f3f6fb);
-                border: 1px solid #e5e7eb;
-                border-radius: 12px;
-                padding: 9px 11px;
-                box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-            }
-            .summary-label {
-                font-size: 11px;
-                color: #6b7280;
-                margin: 0 0 4px 0;
-                text-transform: uppercase;
-                letter-spacing: 0.04em;
-                font-weight: 700;
-            }
-            .summary-value {
-                font-size: 17px;
-                margin: 0 0 2px 0;
-                color: #0b1224;
-                font-weight: 800;
-            }
-            .summary-subtext {
                 margin: 0;
-                font-size: 11px;
-                color: #94a3b8;
+                color: #0b1f33;
+            }
+            .meta {
+                margin: 2px 0 0;
+                font-size: 9.5pt;
+                color: #4b5563;
+            }
+            .section {
+                margin-bottom: 12px;
+            }
+            .section-title {
+                font-size: 14pt;
+                font-weight: 700;
+                color: #003366;
+                margin: 0 0 6px 0;
             }
             .table {
                 width: 100%;
                 border-collapse: collapse;
-                margin: 8px 0 4px;
-                background: #ffffff;
-                border-radius: 10px;
-                overflow: hidden;
-                box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+                font-size: 10pt;
             }
             .table th {
-                background: linear-gradient(120deg, #0f62fe, #0ea5e9);
-                color: #ffffff;
+                background: #003366;
+                color: #fff;
+                padding: 5px;
+                border: 1px solid #999;
                 text-align: left;
-                padding: 7px 9px;
-                font-size: 10px;
-                letter-spacing: 0.01em;
-                text-transform: uppercase;
             }
             .table td {
-                padding: 7px 9px;
-                font-size: 11px;
-                border-bottom: 1px solid #eef2f7;
+                padding: 4px;
+                border: 1px solid #999;
             }
-            .table tr:last-child td { border-bottom: none; }
-            .table tbody tr:nth-child(odd) { background: #f8fafc; }
+            .table tr:nth-child(even) td {
+                background: #F4F4F4;
+            }
             .nota {
-                margin: 4px 0;
-                font-size: 11px;
-                color: #0f172a;
-                background: #e0f2fe;
-                border: 1px solid #bfdbfe;
-                padding: 7px 9px;
-                border-radius: 8px;
+                margin: 0;
+                font-size: 10pt;
+                color: #111827;
+                background: #eef2ff;
+                border: 1px solid #c7d2fe;
+                padding: 6px 8px;
             }
             .footer {
                 text-align: center;
-                color: #6b7280;
-                font-size: 10px;
-                margin-top: 12px;
+                color: #4b5563;
+                font-size: 9.5pt;
+                margin-top: 10px;
             }
         </style>
     </head>
     <body>
-        <?php echo $html_body; ?>
+        <div class="document">
+            <?php echo $html_body; ?>
+        </div>
     </body>
     </html>
     <?php
@@ -553,96 +460,88 @@ function construirHtmlPdf(array $data): string
     $etiquetasSocio[] = 'Valor cuota: ' . formatearMoneda((float)$socio['valor_presupuestado']);
     $etiquetasSocio[] = 'Teléfono: ' . ($socio['telefono'] ?: 'Sin teléfono');
 
-    $resumenes = [
-        ['label' => 'Saldo socio', 'valor' => formatearMoneda((float)$socio['saldo_socio']), 'sub' => 'Saldo actual a la fecha'],
-        ['label' => 'Total aportado', 'valor' => formatearMoneda($totalCuotas), 'sub' => 'Cuotas registradas'],
-        ['label' => 'Pagos de pollas', 'valor' => formatearMoneda($totalPollas), 'sub' => 'Incluye números ganadores'],
-    ];
-    if ($totalPrestamoCapital > 0 || $totalPrestamoInteres > 0) {
-        $resumenes[] = [
-            'label' => 'Préstamos vigentes',
-            'valor' => formatearMoneda($totalPrestamoCapital + $totalPrestamoInteres),
-            'sub' => 'Capital + intereses pendientes',
-        ];
-    }
-
     ob_start();
     ?>
-    <div class="layout">
-        <div class="header">
-            <img src="<?php echo htmlspecialchars($logo, ENT_QUOTES, 'UTF-8'); ?>" alt="Logo">
-            <div>
-                <p class="eyebrow">Reporte detallado</p>
-                <h1 class="titulo"><?php echo htmlspecialchars($nombreSistema, ENT_QUOTES, 'UTF-8'); ?></h1>
-                <p class="subtitulo">Movimientos por socio</p>
-                <p class="meta">Generado: <?php echo htmlspecialchars($fechaGeneracion, ENT_QUOTES, 'UTF-8'); ?></p>
-                <div class="badges">
-                    <?php foreach ($etiquetasSocio as $etiqueta): ?>
-                        <span class="badge"><?php echo $etiqueta; ?></span>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-            <div class="pill">Socio #<?php echo (int)$socio['id_socio']; ?></div>
+    <div class="header">
+        <img src="<?php echo htmlspecialchars($logo, ENT_QUOTES, 'UTF-8'); ?>" alt="Logo" data-role="logo">
+        <div>
+            <p class="header-title">Creciendo Juntos – Estado de Cuenta del Socio</p>
+            <p class="meta">Generado: <?php echo htmlspecialchars($fechaGeneracion, ENT_QUOTES, 'UTF-8'); ?> · Socio #<?php echo (int)$socio['id_socio']; ?></p>
+            <p class="meta"><?php echo htmlspecialchars($nombreSistema, ENT_QUOTES, 'UTF-8'); ?></p>
         </div>
-
-        <div class="summary-grid">
-            <?php foreach ($resumenes as $r): ?>
-                <div class="summary-card">
-                    <p class="summary-label"><?php echo htmlspecialchars($r['label'], ENT_QUOTES, 'UTF-8'); ?></p>
-                    <p class="summary-value"><?php echo htmlspecialchars($r['valor'], ENT_QUOTES, 'UTF-8'); ?></p>
-                    <p class="summary-subtext"><?php echo htmlspecialchars($r['sub'], ENT_QUOTES, 'UTF-8'); ?></p>
-                </div>
-            <?php endforeach; ?>
-        </div>
-
-        <div class="section-grid">
-            <div class="section">
-                <h2 class="section-title">Datos del socio</h2>
-                <?php echo tablaHtml(['Campo', 'Valor'], array_map(fn($d) => [$d['Campo'], $d['Valor']], $datosSocio)); ?>
-            </div>
-            <div class="section">
-                <h2 class="section-title">Pagos de cuota</h2>
-                <?php echo tablaHtml(['Mes', 'Valor'], $filasCuotas); ?>
-            </div>
-        </div>
-
-        <div class="section-grid">
-            <div class="section">
-                <h2 class="section-title">Detalle cuotas con saldo</h2>
-                <?php echo tablaHtml(['Fecha', 'Actividad', 'Valor', 'Saldo después'], $filasDetalles); ?>
-            </div>
-            <div class="section">
-                <h2 class="section-title">Pagos de pollas</h2>
-                <?php echo tablaHtml(['Mes', 'Valor', 'Número ganador'], $filasPollas); ?>
-            </div>
-        </div>
-
-        <div class="section-grid">
-            <div class="section">
-                <h2 class="section-title">Estado de préstamos</h2>
-                <?php echo tablaHtml(['Identificador', 'Deudor', 'Capital pendiente', 'Intereses pendientes'], $filasPrestamos); ?>
-            </div>
-            <?php if (!empty($data['prestamos']) || !empty($data['pagosIntereses'])): ?>
-                <div class="section">
-                    <h2 class="section-title">Pago de intereses de préstamos</h2>
-                    <?php echo tablaHtml(['Fecha', 'Concepto', 'Valor'], $filasIntereses); ?>
-                </div>
-            <?php endif; ?>
-        </div>
-
-        <?php if ($htmlMensajes): ?>
-            <div class="section" style="margin-top: 10px;">
-                <h2 class="section-title">Noticias y recordatorios</h2>
-                <?php echo $htmlMensajes; ?>
-            </div>
-        <?php endif; ?>
-
-        <p class="footer">Documento generado electrónicamente — no requiere firma física.</p>
     </div>
+
+    <div class="section" data-section="datos-socio">
+        <h2 class="section-title">Datos del socio</h2>
+        <?php echo tablaHtml(['Campo', 'Valor'], array_map(fn($d) => [$d['Campo'], $d['Valor']], $datosSocio)); ?>
+    </div>
+
+    <div class="section" data-section="pagos-cuota">
+        <h2 class="section-title">Pagos de cuota</h2>
+        <?php echo tablaHtml(['Mes', 'Valor'], $filasCuotas); ?>
+    </div>
+
+    <div class="section" data-section="detalle-cuotas">
+        <h2 class="section-title">Detalle de cuotas</h2>
+        <?php echo tablaHtml(['Fecha', 'Actividad', 'Valor', 'Saldo después'], $filasDetalles); ?>
+    </div>
+
+    <div class="section" data-section="pagos-pollas">
+        <h2 class="section-title">Pagos de pollas</h2>
+        <?php echo tablaHtml(['Mes', 'Valor', 'Número ganador'], $filasPollas); ?>
+    </div>
+
+    <div class="section" data-section="estado-prestamos">
+        <h2 class="section-title">Estado de préstamos</h2>
+        <?php echo tablaHtml(['Identificador', 'Deudor', 'Capital pendiente', 'Intereses pendientes'], $filasPrestamos); ?>
+    </div>
+
+    <div class="section" data-section="pago-intereses">
+        <h2 class="section-title">Pago de intereses</h2>
+        <?php echo tablaHtml(['Fecha', 'Concepto', 'Valor'], $filasIntereses); ?>
+    </div>
+
+    <div class="section" data-section="observaciones">
+        <h2 class="section-title">Observaciones</h2>
+        <?php echo $htmlMensajes ?: '<p class="nota">Sin observaciones registradas.</p>'; ?>
+    </div>
+
+    <p class="footer">Documento generado electrónicamente — no requiere firma física.</p>
     <?php
     $contenidoSocio = (string) ob_get_clean();
 
     return renderPlantillaPDF($contenidoSocio);
+}
+
+function validarHtmlPremium(string $html): void
+{
+    if (!preg_match('/data-role="logo"/', $html)) {
+        exit('Validación fallida: el HTML no incluye el logo corporativo.');
+    }
+
+    $tieneTablaCorporativa = strpos($html, 'border-collapse: collapse') !== false
+        && strpos($html, 'table {') !== false
+        && strpos($html, 'tr:nth-child(even) td') !== false;
+
+    if (!$tieneTablaCorporativa) {
+        exit('Validación fallida: faltan los estilos corporativos de tablas.');
+    }
+
+    $seccionesObligatorias = [
+        'Datos del socio',
+        'Pagos de cuota',
+        'Detalle de cuotas',
+        'Pagos de pollas',
+        'Estado de préstamos',
+        'Pago de intereses',
+        'Observaciones',
+    ];
+
+    foreach ($seccionesObligatorias as $seccion) {
+        if (strpos($html, $seccion) === false) {
+            exit('Validación fallida: falta la sección obligatoria: ' . $seccion . '.');
+        }
+    }
 }
 
 function cargarAutoloadDompdf(): void
@@ -736,6 +635,7 @@ if ($modo === 'colectivo') {
     foreach ($socios as $s) {
         try {
             $html = renderHtmlSocioIndividual((int)$s['id_socio'], $filtros, $pdo, $config, $resultadosPollaIndex, $logo, $mensajeUsuario);
+            validarHtmlPremium($html);
             $nombreBase = nombreArchivoSocio(['id_socio' => $s['id_socio'], 'nombre_completo' => $s['nombre_completo']]);
             $rutaArchivo = $rutaPdf . '/' . $nombreBase . '.pdf';
             guardarPdfDesdeHtml($html, $rutaArchivo);
@@ -743,25 +643,9 @@ if ($modo === 'colectivo') {
             continue;
         }
     }
-    $nombreCarpetaZip = preg_replace('/[^A-Za-z0-9_\-]/', '_', $carpetaDestino) ?: 'reportes_movimientos';
-    $nombreZip = $nombreCarpetaZip . '_' . date('Ymd_His') . '.zip';
-    $rutaZip = sys_get_temp_dir() . '/' . $nombreZip;
-
-    $zip = new ZipArchive();
-    if ($zip->open($rutaZip, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-        exit('No se pudo crear el archivo ZIP.');
-    }
-
-    $prefijo = $nombreCarpetaZip;
-    foreach (glob($rutaPdf . '/*.pdf') as $archivoPdf) {
-        $nombreInterno = $prefijo ? ($prefijo . '/' . basename($archivoPdf)) : basename($archivoPdf);
-        $zip->addFile($archivoPdf, $nombreInterno);
-    }
-
-    $zip->close();
 
     header('Content-Type: text/plain; charset=UTF-8');
-    echo 'Exportación masiva finalizada correctamente';
+    echo 'Exportación masiva finalizada: archivos disponibles en /actions/pdf_generados/';
     exit;
 }
 
@@ -770,6 +654,7 @@ if (!$idSocio) {
 }
 
 $html = renderHtmlSocioIndividual($idSocio, $filtros, $pdo, $config, $resultadosPollaIndex, $logo, $mensajeUsuario);
+validarHtmlPremium($html);
 $socio = obtenerSocio($idSocio, $pdo);
 $nombre = nombreArchivoSocio($socio) . '_movimientos.pdf';
 $dompdf = crearDompdf();
