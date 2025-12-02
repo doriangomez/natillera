@@ -553,6 +553,7 @@ $desde = $_GET['desde'] ?? '';
 $hasta = $_GET['hasta'] ?? '';
 $actividad = isset($_GET['actividad']) ? (int) $_GET['actividad'] : 0;
 $mensajeUsuario = $_GET['mensaje'] ?? '';
+$carpetaDestino = $_GET['ruta'] ?? '';
 
 $filtros = [
     'socio' => $idSocio,
@@ -604,6 +605,22 @@ if ($modo === 'colectivo') {
     $rutaHtmlParaConversion = $rutaHtml;
     $rutaPdfGenerados = $rutaPdf;
     require __DIR__ . '/convertir_html_a_pdf.php';
+    $nombreCarpetaZip = preg_replace('/[^A-Za-z0-9_\-]/', '_', $carpetaDestino) ?: 'reportes_movimientos';
+    $nombreZip = $nombreCarpetaZip . '_' . date('Ymd_His') . '.zip';
+    $rutaZip = sys_get_temp_dir() . '/' . $nombreZip;
+
+    $zip = new ZipArchive();
+    if ($zip->open($rutaZip, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+        exit('No se pudo crear el archivo ZIP.');
+    }
+
+    $prefijo = $nombreCarpetaZip;
+    foreach (glob($rutaPdfGenerados . '/*.pdf') as $archivoPdf) {
+        $nombreInterno = $prefijo ? ($prefijo . '/' . basename($archivoPdf)) : basename($archivoPdf);
+        $zip->addFile($archivoPdf, $nombreInterno);
+    }
+
+    $zip->close();
 
     header('Content-Type: text/plain; charset=UTF-8');
     echo 'Exportación masiva finalizada correctamente';
