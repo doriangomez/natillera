@@ -1,6 +1,3 @@
-<?php
-require_once __DIR__ . '/../includes/header.php';
-require_once __DIR__ . '/../includes/functions.php';
 
 $totalSocios = (int) ($pdo->query("SELECT COUNT(*) AS total FROM socios WHERE activo = 1")->fetch()['total'] ?? 0);
 
