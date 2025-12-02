@@ -10,6 +10,12 @@ $periodosConfig = $pdo
     ->query('SELECT anio, mes FROM periodos_configuracion WHERE activo = 1 ORDER BY anio DESC, mes DESC')
     ->fetchAll();
 
+$nombresMeses = [
+    1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+    5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+    9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre',
+];
+
 $periodosPorAnio = [];
 foreach ($periodosConfig as $p) {
     $periodosPorAnio[$p['anio']][] = (int) $p['mes'];
@@ -135,7 +141,7 @@ foreach ($movimientos as $m) {
                             <?php
                                 $habilitado = empty($periodosPorAnio) || in_array($m, $mesesDefault, true);
                             ?>
-                            <option value="<?php echo $m; ?>" <?php echo $m === $mesDefault ? 'selected' : ''; ?> <?php echo $habilitado ? '' : 'disabled'; ?>><?php echo $m; ?></option>
+                            <option value="<?php echo $m; ?>" <?php echo $m === $mesDefault ? 'selected' : ''; ?> <?php echo $habilitado ? '' : 'disabled'; ?>><?php echo $nombresMeses[$m]; ?></option>
                         <?php endfor; ?>
                     </select>
                 </div>
@@ -234,6 +240,7 @@ const valorInput = document.querySelector('input[name="valor"]');
 const formularioMovimiento = document.querySelector('form[action="../actions/movimientos_save.php"]');
 const fechaInput = document.querySelector('input[name="fecha"]');
 const periodosPorAnio = <?php echo json_encode($periodosPorAnio); ?>;
+const nombresMeses = <?php echo json_encode($nombresMeses); ?>;
 
 function actualizarTipoActividad(){
     const regla = actividadSelect.selectedOptions[0]?.dataset.regla || '';
@@ -248,10 +255,12 @@ function actualizarMeses(){
     const mesesDisponibles = Object.keys(periodosPorAnio).length
         ? (periodosPorAnio[anio] ?? [])
         : Array.from({length: 12}, (_, i) => i + 1);
-    mesSelect.querySelectorAll('option').forEach(opt => {
-        const val = parseInt(opt.value, 10);
-        const habilitado = mesesDisponibles.includes(val);
-        opt.disabled = !habilitado;
+    mesSelect.querySelectorAll('option').forEach(opt => opt.remove());
+    mesesDisponibles.forEach(val => {
+        const option = document.createElement('option');
+        option.value = val;
+        option.textContent = nombresMeses[val] || val;
+        mesSelect.appendChild(option);
     });
     if (!mesesDisponibles.includes(parseInt(mesSelect.value, 10))) {
         mesSelect.value = mesesDisponibles[0] ?? '';

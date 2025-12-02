@@ -100,6 +100,8 @@ try {
 
     if ($hayDescuadre) {
         $_SESSION['warning'] = 'Se detectaron diferencias en la conciliación. Verifique las notas y los valores registrados.';
+    } else {
+        unset($_SESSION['warning']);
     }
 } catch (Exception $e) {
     if ($pdo->inTransaction()) {

@@ -7,6 +7,12 @@ $periodosConfig = $pdo
     ->query('SELECT anio, mes FROM periodos_configuracion WHERE activo = 1 ORDER BY anio DESC, mes DESC')
     ->fetchAll();
 
+$nombresMeses = [
+    1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+    5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+    9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre',
+];
+
 $periodosCerrados = $pdo
     ->query('SELECT DISTINCT anio, mes FROM conciliaciones_medios_pago WHERE cerrado = 1')
     ->fetchAll();
@@ -134,7 +140,7 @@ $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
                     <select name="mes" class="form-select">
                         <?php foreach ($mesesDisponibles as $mesDisponible): ?>
                             <option value="<?php echo $mesDisponible; ?>" <?php echo (int) $mesDisponible === (int) $mes ? 'selected' : ''; ?>>
-                                <?php echo strftime('%B', mktime(0, 0, 0, $mesDisponible, 1)); ?>
+                                <?php echo $nombresMeses[$mesDisponible] ?? $mesDisponible; ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -261,6 +267,36 @@ $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
         </div>
     </form>
 <?php endif; ?>
+
+<script>
+const selectAnio = document.querySelector('select[name="anio"]');
+const selectMes = document.querySelector('select[name="mes"]');
+const periodosPorAnio = <?php echo json_encode($periodosPorAnio); ?>;
+const nombresMeses = <?php echo json_encode($nombresMeses); ?>;
+
+function actualizarMesesConciliacion() {
+    if (!selectAnio || !selectMes) return;
+    const anio = parseInt(selectAnio.value, 10);
+    const meses = periodosPorAnio[anio] ?? [];
+    selectMes.querySelectorAll('option').forEach(opt => opt.remove());
+    meses.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = nombresMeses[m] || m;
+        selectMes.appendChild(opt);
+    });
+    if (!meses.includes(parseInt(selectMes.value, 10))) {
+        selectMes.value = meses[0] ?? '';
+    }
+}
+
+if (selectAnio && selectMes) {
+    selectAnio.addEventListener('change', () => {
+        actualizarMesesConciliacion();
+    });
+    actualizarMesesConciliacion();
+}
+</script>
 
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
