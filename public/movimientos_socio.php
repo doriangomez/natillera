@@ -189,40 +189,53 @@ unset($m);
     </div>
 </div>
 <script>
-const btnExportar = document.getElementById('btnExportarMovimientos');
-let exportModal;
-let folderInput;
+document.addEventListener('DOMContentLoaded', () => {
+    const btnExportar = document.getElementById('btnExportarMovimientos');
+    if (!btnExportar) return;
 
-function actualizarVisibilidadCampos(modo) {
-    const campoSocio = document.getElementById('campoSocio');
-    const campoRuta = document.getElementById('campoRuta');
-    if (modo === 'individual') {
-        campoSocio.style.display = '';
-        campoRuta.style.display = 'none';
-        document.getElementById('socioExport').setAttribute('required', 'required');
-    } else {
-        campoSocio.style.display = 'none';
-        campoRuta.style.display = '';
-        document.getElementById('socioExport').removeAttribute('required');
-    }
-}
+    let exportModal;
+    const modalEl = document.getElementById('exportModal');
+    const folderInput = document.getElementById('selectorRuta');
+    const socioSelect = document.getElementById('socioExport');
+    const rutaInput = document.getElementById('rutaExport');
 
-function obtenerNombreCarpetaSeleccionada(fileInput) {
-    if (!fileInput || !fileInput.files || fileInput.files.length === 0) return '';
-    const primeraRuta = fileInput.files[0].webkitRelativePath || fileInput.files[0].name || '';
-    return primeraRuta.split('/')[0] || '';
-}
+    const actualizarVisibilidadCampos = (modo) => {
+        const campoSocio = document.getElementById('campoSocio');
+        const campoRuta = document.getElementById('campoRuta');
+        if (modo === 'individual') {
+            campoSocio.style.display = '';
+            campoRuta.style.display = 'none';
+            socioSelect.setAttribute('required', 'required');
+        } else {
+            campoSocio.style.display = 'none';
+            campoRuta.style.display = '';
+            socioSelect.removeAttribute('required');
+        }
+    };
 
-if (btnExportar) {
-    exportModal = new bootstrap.Modal(document.getElementById('exportModal'));
-    folderInput = document.getElementById('selectorRuta');
+    const obtenerNombreCarpetaSeleccionada = (fileInput) => {
+        if (!fileInput || !fileInput.files || fileInput.files.length === 0) return '';
+        const primeraRuta = fileInput.files[0].webkitRelativePath || fileInput.files[0].name || '';
+        return primeraRuta.split('/')[0] || '';
+    };
+
+    const obtenerModal = () => {
+        if (!window.bootstrap || !modalEl) return null;
+        if (!exportModal) {
+            exportModal = new bootstrap.Modal(modalEl);
+        }
+        return exportModal;
+    };
 
     btnExportar.addEventListener('click', () => {
-        document.getElementById('socioExport').value = btnExportar.dataset.socio || '';
-        document.getElementById('rutaExport').value = '';
+        const modalInstance = obtenerModal();
+        if (!modalInstance) return;
+
+        socioSelect.value = btnExportar.dataset.socio || '';
+        rutaInput.value = '';
         document.getElementById('modoIndividual').checked = true;
         actualizarVisibilidadCampos('individual');
-        exportModal.show();
+        modalInstance.show();
     });
 
     document.querySelectorAll('input[name="modoExportacion"]').forEach(radio => {
@@ -231,48 +244,57 @@ if (btnExportar) {
         });
     });
 
-    document.getElementById('btnSeleccionarRuta').addEventListener('click', () => {
-        if (folderInput && folderInput.showPicker) {
-            folderInput.showPicker().catch(() => {});
-        } else if (folderInput) {
-            folderInput.click();
-        }
-    });
-
-    folderInput.addEventListener('change', () => {
-        const nombreCarpeta = obtenerNombreCarpetaSeleccionada(folderInput);
-        if (nombreCarpeta) {
-            document.getElementById('rutaExport').value = nombreCarpeta;
-        }
-    });
-
-    document.getElementById('exportForm').addEventListener('submit', (event) => {
-        event.preventDefault();
-        const modo = document.querySelector('input[name="modoExportacion"]:checked').value;
-        const socioSeleccionado = document.getElementById('socioExport').value;
-        const rutaDestino = document.getElementById('rutaExport').value.trim();
-
-        document.getElementById('socioExport').classList.remove('is-invalid');
-        if (modo === 'individual' && !socioSeleccionado) {
-            event.stopPropagation();
-            document.getElementById('socioExport').classList.add('is-invalid');
-            return;
-        }
-
-        const params = new URLSearchParams({
-            socio: modo === 'individual' ? socioSeleccionado : (btnExportar.dataset.socio || ''),
-            desde: btnExportar.dataset.desde || '',
-            hasta: btnExportar.dataset.hasta || '',
-            actividad: btnExportar.dataset.actividad || ''
+    const btnSeleccionarRuta = document.getElementById('btnSeleccionarRuta');
+    if (btnSeleccionarRuta && folderInput) {
+        btnSeleccionarRuta.addEventListener('click', () => {
+            if (folderInput.showPicker) {
+                folderInput.showPicker().catch(() => {});
+            } else {
+                folderInput.click();
+            }
         });
-        params.set('modo', modo);
-        if (modo === 'colectivo' && rutaDestino) {
-            params.set('ruta', rutaDestino);
-        }
 
-        exportModal.hide();
-        window.location.href = '../actions/export_movimiento_socio_pdf.php?' + params.toString();
-    });
-}
+        folderInput.addEventListener('change', () => {
+            const nombreCarpeta = obtenerNombreCarpetaSeleccionada(folderInput);
+            if (nombreCarpeta) {
+                rutaInput.value = nombreCarpeta;
+            }
+        });
+    }
+
+    const exportForm = document.getElementById('exportForm');
+    if (exportForm) {
+        exportForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const modalInstance = obtenerModal();
+            if (!modalInstance) return;
+
+            const modo = document.querySelector('input[name="modoExportacion"]:checked').value;
+            const socioSeleccionado = socioSelect.value;
+            const rutaDestino = rutaInput.value.trim();
+
+            socioSelect.classList.remove('is-invalid');
+            if (modo === 'individual' && !socioSeleccionado) {
+                event.stopPropagation();
+                socioSelect.classList.add('is-invalid');
+                return;
+            }
+
+            const params = new URLSearchParams({
+                socio: modo === 'individual' ? socioSeleccionado : (btnExportar.dataset.socio || ''),
+                desde: btnExportar.dataset.desde || '',
+                hasta: btnExportar.dataset.hasta || '',
+                actividad: btnExportar.dataset.actividad || ''
+            });
+            params.set('modo', modo);
+            if (modo === 'colectivo' && rutaDestino) {
+                params.set('ruta', rutaDestino);
+            }
+
+            modalInstance.hide();
+            window.location.href = '../actions/export_movimiento_socio_pdf.php?' + params.toString();
+        });
+    }
+});
 </script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
