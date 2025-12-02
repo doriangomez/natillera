@@ -30,7 +30,10 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $movs = $stmt->fetchAll();
 
-$totales = ['ingresos'=>0,'egresos'=>0];
+$totales = [
+    'socio' => ['ingresos' => 0, 'egresos' => 0],
+    'natillera' => ['ingresos' => 0, 'egresos' => 0],
+];
 foreach ($movs as &$m) {
     $reglaSocio = normalizarReglaAfectacion($m['afecta_saldo_socio'] ?? 'neutral');
     $afectaSocio = $m['es_polla'] ? 'neutral' : $reglaSocio;
@@ -41,8 +44,20 @@ foreach ($movs as &$m) {
         $valorSocio = -$m['valor'];
     }
     $m['valor_socio'] = $valorSocio;
-    if ($valorSocio > 0) { $totales['ingresos'] += $valorSocio; }
-    if ($valorSocio < 0) { $totales['egresos'] += $valorSocio; }
+
+    $reglaNatillera = normalizarReglaAfectacion($m['afecta_saldo_natillera'] ?? 'neutral');
+    $valorNatillera = 0;
+    if ($reglaNatillera === 'suma') {
+        $valorNatillera = $m['valor'];
+    } elseif ($reglaNatillera === 'resta') {
+        $valorNatillera = -$m['valor'];
+    }
+    $m['valor_natillera'] = $valorNatillera;
+
+    if ($valorSocio > 0) { $totales['socio']['ingresos'] += $valorSocio; }
+    if ($valorSocio < 0) { $totales['socio']['egresos'] += $valorSocio; }
+    if ($valorNatillera > 0) { $totales['natillera']['ingresos'] += $valorNatillera; }
+    if ($valorNatillera < 0) { $totales['natillera']['egresos'] += $valorNatillera; }
 }
 unset($m);
 ?>
@@ -109,6 +124,7 @@ unset($m);
                 <th>Ingreso</th>
                 <th>Egreso</th>
                 <th>Afectación saldo socio</th>
+                <th>Afectación natillera</th>
                 <th>Observaciones</th>
             </tr>
         </thead>
@@ -120,6 +136,12 @@ unset($m);
                     $claseAfectacion = 'bg-secondary-subtle text-secondary';
                     if ($afectaSocio === 'suma') { $etiquetaAfectacion = 'Suma'; $claseAfectacion = 'bg-success-subtle text-success'; }
                     if ($afectaSocio === 'resta') { $etiquetaAfectacion = 'Resta'; $claseAfectacion = 'bg-danger-subtle text-danger'; }
+
+                    $reglaNatillera = normalizarReglaAfectacion($m['afecta_saldo_natillera'] ?? 'neutral');
+                    $etiquetaNatillera = 'No afecta';
+                    $claseNatillera = 'bg-secondary-subtle text-secondary';
+                    if ($reglaNatillera === 'suma') { $etiquetaNatillera = 'Suma'; $claseNatillera = 'bg-success-subtle text-success'; }
+                    if ($reglaNatillera === 'resta') { $etiquetaNatillera = 'Resta'; $claseNatillera = 'bg-danger-subtle text-danger'; }
                 ?>
                 <tr>
                     <td><?php echo $m['fecha']; ?></td>
@@ -133,13 +155,20 @@ unset($m);
                         <div><span class="badge <?php echo $claseAfectacion; ?>"><?php echo $etiquetaAfectacion; ?></span></div>
                         <div class="small text-muted">$<?php echo number_format($m['valor_socio'],0,',','.'); ?></div>
                     </td>
+                    <td>
+                        <div><span class="badge <?php echo $claseNatillera; ?>"><?php echo $etiquetaNatillera; ?></span></div>
+                        <div class="small text-muted">$<?php echo number_format($m['valor_natillera'],0,',','.'); ?></div>
+                    </td>
                     <td class="small text-muted"><?php echo clean($m['observaciones']); ?></td>
                 </tr>
             <?php endforeach; ?>
         </tbody>
     </table>
 </div>
-<div class="alert alert-info">Ingresos socio: $<?php echo number_format($totales['ingresos'],0,',','.'); ?> | Egresos socio: $<?php echo number_format(abs($totales['egresos']),0,',','.'); ?> | Saldo neto socio: $<?php echo number_format($totales['ingresos']+$totales['egresos'],0,',','.'); ?></div>
+<div class="alert alert-info">
+    <div><strong>Socio:</strong> Ingresos $<?php echo number_format($totales['socio']['ingresos'],0,',','.'); ?> | Egresos $<?php echo number_format(abs($totales['socio']['egresos']),0,',','.'); ?> | Saldo neto $<?php echo number_format($totales['socio']['ingresos']+$totales['socio']['egresos'],0,',','.'); ?></div>
+    <div class="mt-1"><strong>Natillera:</strong> Ingresos $<?php echo number_format($totales['natillera']['ingresos'],0,',','.'); ?> | Egresos $<?php echo number_format(abs($totales['natillera']['egresos']),0,',','.'); ?> | Saldo neto $<?php echo number_format($totales['natillera']['ingresos']+$totales['natillera']['egresos'],0,',','.'); ?></div>
+</div>
 <div class="modal fade" id="exportModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
