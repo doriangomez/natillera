@@ -132,15 +132,18 @@ CREATE TABLE polla_resultados (
     UNIQUE KEY uq_polla_mes (anio, mes)
 );
 
+-- Conciliación mensual por medio de pago (una fila por medio y periodo)
 CREATE TABLE conciliaciones_medios_pago (
     id INT AUTO_INCREMENT PRIMARY KEY,
     id_medio INT NOT NULL,
     anio INT NOT NULL,
     mes INT NOT NULL,
-    total_sistema DECIMAL(12,2) DEFAULT 0,
-    valor_banco DECIMAL(12,2) DEFAULT 0,
-    diferencia DECIMAL(12,2) DEFAULT 0,
+    saldo_sistema DECIMAL(14,2) DEFAULT 0,
+    valor_conciliado DECIMAL(14,2) DEFAULT 0,
+    diferencia DECIMAL(14,2) DEFAULT 0,
+    nota TEXT,
     fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_concilia (id_medio, anio, mes),
+    cerrado TINYINT(1) DEFAULT 0,
+    UNIQUE KEY uq_conciliacion_mensual (id_medio, anio, mes),
     FOREIGN KEY (id_medio) REFERENCES medios_pago(id)
 );
