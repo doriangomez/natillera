@@ -1,5 +1,7 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 function checkAuth() {
     if (!isset($_SESSION['usuario'])) {
         header('Location: ../public/login.php');
