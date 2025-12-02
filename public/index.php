@@ -99,9 +99,16 @@ $movimientosStmt = $pdo->prepare("
         FROM mov_filtrado
     ), calculado AS (
         SELECT mov_signado.*,
-               SUM(mov_signado.valor_natillera) OVER (ORDER BY mov_signado.fecha, mov_signado.id_movimiento ROWS UNBOUNDED PRECEDING) AS saldo_natillera,
+               SUM(mov_signado.valor_natillera) OVER (
+                   ORDER BY mov_signado.fecha, mov_signado.id_movimiento
+                   ROWS UNBOUNDED PRECEDING
+               ) AS saldo_natillera,
                CASE WHEN mov_signado.id_socio IS NOT NULL THEN
-                    SUM(mov_signado.valor_socio) OVER (PARTITION BY mov_signado.id_socio ORDER BY mov_signado.fecha, mov_signado.id_movimiento ROWS UNBOUNDED PRECEDING)
+                    SUM(CASE WHEN mov_signado.es_polla = 1 THEN 0 ELSE mov_signado.valor_socio END) OVER (
+                        PARTITION BY mov_signado.id_socio
+                        ORDER BY mov_signado.fecha, mov_signado.id_movimiento
+                        ROWS UNBOUNDED PRECEDING
+                    )
                END AS saldo_socio
         FROM mov_signado
     )
