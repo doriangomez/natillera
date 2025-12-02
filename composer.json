@@ -1,0 +1,15 @@
+{
+    "name": "natillera/app",
+    "description": "Gestor de natillera con generación de reportes PDF",
+    "type": "project",
+    "require": {
+        "dompdf/dompdf": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Natillera\\": "includes/"
+        }
+    },
+    "minimum-stability": "stable",
+    "license": "MIT"
+}
