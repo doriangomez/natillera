@@ -87,6 +87,8 @@ $movimientosStmt = $pdo->prepare("
                    WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'resta' THEN 'resta'
                    ELSE 'neutral'
                END AS afecta_saldo_natillera,
+               LOWER(a.afecta_saldo_socio) AS afecta_saldo_socio,
+               LOWER(a.afecta_saldo_natillera) AS afecta_saldo_natillera,
                a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general,
                COALESCE(mp.nombre, m.medio_consignacion) AS medio_nombre
         FROM movimientos m
