@@ -274,35 +274,39 @@ function renderPlantillaPDF(string $html_body): string
                 font-family: 'DejaVu Sans', 'Inter', 'Segoe UI', sans-serif;
                 color: #0f172a;
                 font-size: 12px;
-                line-height: 1.6;
-                background: #f3f6fb;
+                line-height: 1.55;
+                background: radial-gradient(circle at 30% 20%, #e0f2fe, transparent 28%),
+                            radial-gradient(circle at 80% 10%, #e5e7eb, transparent 32%),
+                            #f6f8fb;
             }
             .layout {
-                max-width: 960px;
-                margin: 0 auto;
+                max-width: 980px;
+                margin: 8px auto;
                 background: #ffffff;
-                border-radius: 16px;
-                padding: 24px 28px;
-                box-shadow: 0 16px 44px rgba(15, 23, 42, 0.08);
+                border-radius: 14px;
+                padding: 20px 22px;
+                box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+                border: 1px solid #e5e7eb;
             }
             .header {
                 display: grid;
-                grid-template-columns: 110px 1fr 110px;
+                grid-template-columns: 95px 1fr 120px;
                 align-items: center;
-                gap: 16px;
-                padding: 16px 18px;
-                border-radius: 14px;
-                background: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.12), transparent 40%), linear-gradient(120deg, #0f62fe, #17b3c1);
+                gap: 14px;
+                padding: 14px 16px;
+                border-radius: 12px;
+                background: linear-gradient(120deg, #0f62fe, #2563eb 40%, #0ea5e9);
                 color: #fff;
-                margin-bottom: 18px;
-                }
+                margin-bottom: 14px;
+                border: 1px solid rgba(255,255,255,0.18);
+            }
             .header img {
-                width: 110px;
-                height: 110px;
+                width: 95px;
+                height: 95px;
                 object-fit: contain;
                 background: rgba(255,255,255,0.08);
-                border-radius: 14px;
-                padding: 10px;
+                border-radius: 12px;
+                padding: 8px;
                 border: 1px solid rgba(255,255,255,0.15);
             }
             .eyebrow {
@@ -312,42 +316,42 @@ function renderPlantillaPDF(string $html_body): string
                 opacity: 0.85;
                 margin: 0 0 4px 0;
             }
-            .titulo { font-size: 24px; margin: 0 0 4px 0; font-weight: 800; letter-spacing: -0.02em; }
-            .subtitulo { margin: 0 0 6px 0; opacity: 0.92; font-weight: 600; }
-            .meta { font-size: 11px; margin: 0; opacity: 0.84; }
+            .titulo { font-size: 22px; margin: 0 0 2px 0; font-weight: 800; letter-spacing: -0.02em; }
+            .subtitulo { margin: 0 0 4px 0; opacity: 0.94; font-weight: 600; }
+            .meta { font-size: 10px; margin: 0; opacity: 0.9; letter-spacing: 0.01em; }
             .pill {
                 justify-self: end;
-                background: rgba(255,255,255,0.22);
-                border: 1px solid rgba(255,255,255,0.28);
+                background: rgba(255,255,255,0.16);
+                border: 1px solid rgba(255,255,255,0.25);
                 color: #fff;
-                padding: 8px 12px;
-                border-radius: 14px;
+                padding: 7px 12px;
+                border-radius: 12px;
                 font-weight: 700;
                 text-align: center;
-                box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+                box-shadow: 0 8px 18px rgba(0,0,0,0.08);
             }
             .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
             .badge {
                 background: rgba(255,255,255,0.16);
                 border: 1px solid rgba(255,255,255,0.2);
                 color: #fff;
-                padding: 4px 8px;
+                padding: 3px 8px;
                 border-radius: 999px;
-                font-size: 10px;
+                font-size: 9px;
                 font-weight: 700;
-                letter-spacing: 0.02em;
+                letter-spacing: 0.04em;
             }
             .section {
-                margin-top: 18px;
-                padding: 14px 16px;
+                padding: 12px 14px;
                 border-radius: 12px;
-                background: #f9fafb;
+                background: linear-gradient(180deg, #ffffff, #f8fafc);
                 border: 1px solid #e5e7eb;
+                box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
             }
             .section-title {
                 color: #0f172a;
-                font-size: 14px;
-                margin: 0 0 8px 0;
+                font-size: 13px;
+                margin: 0 0 6px 0;
                 display: flex;
                 align-items: center;
                 gap: 6px;
@@ -361,18 +365,24 @@ function renderPlantillaPDF(string $html_body): string
                 background: linear-gradient(120deg, #0f62fe, #17b3c1);
                 display: inline-block;
             }
+            .section-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+                gap: 10px;
+                margin-top: 10px;
+            }
             .summary-grid {
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-                gap: 12px;
-                margin: 8px 0 4px;
+                grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+                gap: 10px;
+                margin: 6px 0 2px;
             }
             .summary-card {
-                background: linear-gradient(180deg, #fff, #f6f8fb);
+                background: linear-gradient(180deg, #ffffff, #f3f6fb);
                 border: 1px solid #e5e7eb;
                 border-radius: 12px;
-                padding: 10px 12px;
-                box-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
+                padding: 9px 11px;
+                box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
             }
             .summary-label {
                 font-size: 11px;
@@ -383,9 +393,9 @@ function renderPlantillaPDF(string $html_body): string
                 font-weight: 700;
             }
             .summary-value {
-                font-size: 18px;
-                margin: 0;
-                color: #0f172a;
+                font-size: 17px;
+                margin: 0 0 2px 0;
+                color: #0b1224;
                 font-weight: 800;
             }
             .summary-subtext {
@@ -396,42 +406,42 @@ function renderPlantillaPDF(string $html_body): string
             .table {
                 width: 100%;
                 border-collapse: collapse;
-                margin: 10px 0 6px;
+                margin: 8px 0 4px;
                 background: #ffffff;
-                border-radius: 12px;
+                border-radius: 10px;
                 overflow: hidden;
-                box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+                box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
             }
             .table th {
                 background: linear-gradient(120deg, #0f62fe, #0ea5e9);
                 color: #ffffff;
                 text-align: left;
-                padding: 8px 10px;
-                font-size: 11px;
+                padding: 7px 9px;
+                font-size: 10px;
                 letter-spacing: 0.01em;
                 text-transform: uppercase;
             }
             .table td {
-                padding: 8px 10px;
+                padding: 7px 9px;
                 font-size: 11px;
                 border-bottom: 1px solid #eef2f7;
             }
             .table tr:last-child td { border-bottom: none; }
             .table tbody tr:nth-child(odd) { background: #f8fafc; }
             .nota {
-                margin: 6px 0;
+                margin: 4px 0;
                 font-size: 11px;
                 color: #0f172a;
-                background: #ecfeff;
-                border: 1px solid #bae6fd;
-                padding: 8px 10px;
-                border-radius: 10px;
+                background: #e0f2fe;
+                border: 1px solid #bfdbfe;
+                padding: 7px 9px;
+                border-radius: 8px;
             }
             .footer {
                 text-align: center;
                 color: #6b7280;
                 font-size: 10px;
-                margin-top: 18px;
+                margin-top: 12px;
             }
         </style>
     </head>
@@ -585,40 +595,43 @@ function construirHtmlPdf(array $data): string
             <?php endforeach; ?>
         </div>
 
-        <div class="section">
-            <h2 class="section-title">Datos del socio</h2>
-            <?php echo tablaHtml(['Campo', 'Valor'], array_map(fn($d) => [$d['Campo'], $d['Valor']], $datosSocio)); ?>
-        </div>
-
-        <div class="section">
-            <h2 class="section-title">Pagos de cuota</h2>
-            <?php echo tablaHtml(['Mes', 'Valor'], $filasCuotas); ?>
-        </div>
-
-        <div class="section">
-            <h2 class="section-title">Detalle cuotas con saldo</h2>
-            <?php echo tablaHtml(['Fecha', 'Actividad', 'Valor', 'Saldo después'], $filasDetalles); ?>
-        </div>
-
-        <div class="section">
-            <h2 class="section-title">Pagos de pollas</h2>
-            <?php echo tablaHtml(['Mes', 'Valor', 'Número ganador'], $filasPollas); ?>
-        </div>
-
-        <div class="section">
-            <h2 class="section-title">Estado de préstamos</h2>
-            <?php echo tablaHtml(['Identificador', 'Deudor', 'Capital pendiente', 'Intereses pendientes'], $filasPrestamos); ?>
-        </div>
-
-        <?php if (!empty($data['prestamos']) || !empty($data['pagosIntereses'])): ?>
+        <div class="section-grid">
             <div class="section">
-                <h2 class="section-title">Pago de intereses de préstamos</h2>
-                <?php echo tablaHtml(['Fecha', 'Concepto', 'Valor'], $filasIntereses); ?>
+                <h2 class="section-title">Datos del socio</h2>
+                <?php echo tablaHtml(['Campo', 'Valor'], array_map(fn($d) => [$d['Campo'], $d['Valor']], $datosSocio)); ?>
             </div>
-        <?php endif; ?>
+            <div class="section">
+                <h2 class="section-title">Pagos de cuota</h2>
+                <?php echo tablaHtml(['Mes', 'Valor'], $filasCuotas); ?>
+            </div>
+        </div>
+
+        <div class="section-grid">
+            <div class="section">
+                <h2 class="section-title">Detalle cuotas con saldo</h2>
+                <?php echo tablaHtml(['Fecha', 'Actividad', 'Valor', 'Saldo después'], $filasDetalles); ?>
+            </div>
+            <div class="section">
+                <h2 class="section-title">Pagos de pollas</h2>
+                <?php echo tablaHtml(['Mes', 'Valor', 'Número ganador'], $filasPollas); ?>
+            </div>
+        </div>
+
+        <div class="section-grid">
+            <div class="section">
+                <h2 class="section-title">Estado de préstamos</h2>
+                <?php echo tablaHtml(['Identificador', 'Deudor', 'Capital pendiente', 'Intereses pendientes'], $filasPrestamos); ?>
+            </div>
+            <?php if (!empty($data['prestamos']) || !empty($data['pagosIntereses'])): ?>
+                <div class="section">
+                    <h2 class="section-title">Pago de intereses de préstamos</h2>
+                    <?php echo tablaHtml(['Fecha', 'Concepto', 'Valor'], $filasIntereses); ?>
+                </div>
+            <?php endif; ?>
+        </div>
 
         <?php if ($htmlMensajes): ?>
-            <div class="section">
+            <div class="section" style="margin-top: 10px;">
                 <h2 class="section-title">Noticias y recordatorios</h2>
                 <?php echo $htmlMensajes; ?>
             </div>
