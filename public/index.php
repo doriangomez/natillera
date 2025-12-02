@@ -62,12 +62,14 @@ $filtroActividad = isset($_GET['actividad']) ? (int) $_GET['actividad'] : 0;
 $filtroFechaIni = $_GET['desde'] ?? '';
 $filtroFechaFin = $_GET['hasta'] ?? '';
 
+
+// Reuse the same positional filters across the three subqueries below.
 $where = [];
-$params = [];
-if ($filtroSocio) { $where[] = 'm.id_socio = :s'; $params[':s'] = $filtroSocio; }
-if ($filtroActividad) { $where[] = 'm.id_actividad = :a'; $params[':a'] = $filtroActividad; }
-if ($filtroFechaIni) { $where[] = 'm.fecha >= :fi'; $params[':fi'] = $filtroFechaIni; }
-if ($filtroFechaFin) { $where[] = 'm.fecha <= :ff'; $params[':ff'] = $filtroFechaFin; }
+$paramsBase = [];
+if ($filtroSocio) { $where[] = 'm.id_socio = ?'; $paramsBase[] = $filtroSocio; }
+if ($filtroActividad) { $where[] = 'm.id_actividad = ?'; $paramsBase[] = $filtroActividad; }
+if ($filtroFechaIni) { $where[] = 'm.fecha >= ?'; $paramsBase[] = $filtroFechaIni; }
+if ($filtroFechaFin) { $where[] = 'm.fecha <= ?'; $paramsBase[] = $filtroFechaFin; }
 
 $sqlWhere = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
@@ -190,6 +192,7 @@ $movimientosStmt = $pdo->prepare("
     ) AS calculado
     ORDER BY calculado.fecha DESC, calculado.id_movimiento DESC
 ");
+$params = array_merge($paramsBase, $paramsBase, $paramsBase);
 $movimientosStmt->execute($params);
 $movimientos = $movimientosStmt->fetchAll();
 ?>
