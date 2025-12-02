@@ -2,7 +2,8 @@
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/vendor/autoload.php';
+
 
 $rutaHtmlParaConversion = $rutaHtmlParaConversion ?? (__DIR__ . '/html_pdfs');
 $rutaPdfGenerados = $rutaPdfGenerados ?? (__DIR__ . '/pdf_generados');
