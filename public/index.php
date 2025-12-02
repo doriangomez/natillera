@@ -63,7 +63,7 @@ $filtroFechaIni = $_GET['desde'] ?? '';
 $filtroFechaFin = $_GET['hasta'] ?? '';
 
 
-// Reuse the same positional filters across the three subqueries below.
+// Reuse the same positional filters in the movimientos query.
 $where = [];
 $paramsBase = [];
 if ($filtroSocio) { $where[] = 'm.id_socio = ?'; $paramsBase[] = $filtroSocio; }
@@ -73,128 +73,81 @@ if ($filtroFechaFin) { $where[] = 'm.fecha <= ?'; $paramsBase[] = $filtroFechaFi
 
 $sqlWhere = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
+
 $movimientosStmt = $pdo->prepare("
-    SELECT calculado.*
+    SELECT mf.id_movimiento, mf.fecha, mf.valor, mf.id_socio, mf.id_actividad,
+           mf.nombre_completo, mf.nombre_actividad, mf.afecta_saldo_socio, mf.afecta_saldo_natillera,
+           mf.es_prestamo, mf.es_pago_prestamo, mf.es_polla, mf.es_gasto_general, mf.medio_nombre,
+           CASE WHEN mf.es_polla = 1 THEN 0 ELSE
+                CASE mf.afecta_saldo_socio
+                    WHEN 'suma' THEN mf.valor
+                    WHEN 'resta' THEN -mf.valor
+                    ELSE 0
+                END
+           END AS valor_socio,
+           CASE mf.afecta_saldo_natillera
+                WHEN 'suma' THEN mf.valor
+                WHEN 'resta' THEN -mf.valor
+                ELSE 0 END AS valor_natillera
     FROM (
-        SELECT mov_signado.*,
-            (
-                SELECT SUM(ms2.valor_natillera)
-                FROM (
-                    SELECT mf2.id_movimiento, mf2.fecha,
-                           CASE WHEN mf2.es_polla = 1 THEN 0 ELSE
-                                CASE mf2.afecta_saldo_socio
-                                    WHEN 'suma' THEN mf2.valor
-                                    WHEN 'resta' THEN -mf2.valor
-                                    ELSE 0
-                                END
-                           END AS valor_socio,
-                           CASE mf2.afecta_saldo_natillera
-                                WHEN 'suma' THEN mf2.valor
-                                WHEN 'resta' THEN -mf2.valor
-                                ELSE 0 END AS valor_natillera
-                    FROM (
-                        SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad,
-                               CASE
-                                   WHEN a.es_polla = 1 THEN 'neutral'
-                                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'suma' THEN 'suma'
-                                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'resta' THEN 'resta'
-                                   ELSE 'neutral'
-                               END AS afecta_saldo_socio,
-                               CASE
-                                   WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'suma' THEN 'suma'
-                                   WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'resta' THEN 'resta'
-                                   ELSE 'neutral'
-                               END AS afecta_saldo_natillera,
-                               a.es_polla
-                        FROM movimientos m
-                        JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
-                        $sqlWhere
-                    ) AS mf2
-                ) AS ms2
-                WHERE ms2.fecha < mov_signado.fecha
-                   OR (ms2.fecha = mov_signado.fecha AND ms2.id_movimiento <= mov_signado.id_movimiento)
-            ) AS saldo_natillera,
-            CASE WHEN mov_signado.id_socio IS NOT NULL THEN (
-                SELECT SUM(
-                        CASE
-                            WHEN ms2.afecta_saldo_socio = 'neutral' OR ms2.es_polla = 1 THEN 0
-                            ELSE ms2.valor_socio
-                        END)
-                FROM (
-                    SELECT mf2.id_movimiento, mf2.fecha, mf2.id_socio,
-                           CASE
-                               WHEN mf2.es_polla = 1 THEN 'neutral'
-                               WHEN LOWER(TRIM(mf2.afecta_saldo_socio)) = 'suma' THEN 'suma'
-                               WHEN LOWER(TRIM(mf2.afecta_saldo_socio)) = 'resta' THEN 'resta'
-                               ELSE 'neutral'
-                           END AS afecta_saldo_socio,
-                           CASE mf2.afecta_saldo_socio
-                               WHEN 'suma' THEN mf2.valor
-                               WHEN 'resta' THEN -mf2.valor
-                               ELSE 0 END AS valor_socio,
-                           mf2.es_polla
-                    FROM (
-                        SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad,
-                               CASE
-                                   WHEN a.es_polla = 1 THEN 'neutral'
-                                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'suma' THEN 'suma'
-                                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'resta' THEN 'resta'
-                                   ELSE 'neutral'
-                               END AS afecta_saldo_socio,
-                               a.es_polla
-                        FROM movimientos m
-                        JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
-                        $sqlWhere
-                    ) AS mf2
-                ) AS ms2
-                WHERE ms2.id_socio = mov_signado.id_socio
-                  AND (ms2.fecha < mov_signado.fecha
-                       OR (ms2.fecha = mov_signado.fecha AND ms2.id_movimiento <= mov_signado.id_movimiento))
-            ) END AS saldo_socio
-        FROM (
-            SELECT mf.id_movimiento, mf.fecha, mf.valor, mf.id_socio, mf.id_actividad,
-                   mf.nombre_completo, mf.nombre_actividad, mf.afecta_saldo_socio, mf.afecta_saldo_natillera,
-                   mf.es_prestamo, mf.es_pago_prestamo, mf.es_polla, mf.es_gasto_general, mf.medio_nombre,
-                   CASE WHEN mf.es_polla = 1 THEN 0 ELSE
-                        CASE mf.afecta_saldo_socio
-                            WHEN 'suma' THEN mf.valor
-                            WHEN 'resta' THEN -mf.valor
-                            ELSE 0
-                        END
-                   END AS valor_socio,
-                   CASE mf.afecta_saldo_natillera
-                        WHEN 'suma' THEN mf.valor
-                        WHEN 'resta' THEN -mf.valor
-                        ELSE 0 END AS valor_natillera
-            FROM (
-                SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad,
-                       s.nombre_completo, a.nombre_actividad,
-                       CASE
-                           WHEN a.es_polla = 1 THEN 'neutral'
-                           WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'suma' THEN 'suma'
-                           WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'resta' THEN 'resta'
-                           ELSE 'neutral'
-                       END AS afecta_saldo_socio,
-                       CASE
-                           WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'suma' THEN 'suma'
-                           WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'resta' THEN 'resta'
-                           ELSE 'neutral'
-                       END AS afecta_saldo_natillera,
-                       a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general,
-                       COALESCE(mp.nombre, m.medio_consignacion) AS medio_nombre
-                FROM movimientos m
-                LEFT JOIN socios s ON m.id_socio = s.id_socio
-                JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
-                LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id
-                $sqlWhere
-            ) AS mf
-        ) AS mov_signado
-    ) AS calculado
-    ORDER BY calculado.fecha DESC, calculado.id_movimiento DESC
+        SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad,
+               s.nombre_completo, a.nombre_actividad,
+               CASE
+                   WHEN a.es_polla = 1 THEN 'neutral'
+                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'suma' THEN 'suma'
+                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'resta' THEN 'resta'
+                   ELSE 'neutral'
+               END AS afecta_saldo_socio,
+               CASE
+                   WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'suma' THEN 'suma'
+                   WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'resta' THEN 'resta'
+                   ELSE 'neutral'
+               END AS afecta_saldo_natillera,
+               a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general,
+               COALESCE(mp.nombre, m.medio_consignacion) AS medio_nombre
+        FROM movimientos m
+        LEFT JOIN socios s ON m.id_socio = s.id_socio
+        JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+        LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id
+        $sqlWhere
+    ) AS mf
+    ORDER BY mf.fecha DESC, mf.id_movimiento DESC
 ");
-$params = array_merge($paramsBase, $paramsBase, $paramsBase);
-$movimientosStmt->execute($params);
+$movimientosStmt->execute($paramsBase);
 $movimientos = $movimientosStmt->fetchAll();
+
+// Calcula saldos acumulados en PHP usando las reglas aportadas.
+$mostrarSaldoSocio = $filtroSocio > 0;
+$saldoSocio = 0;
+$saldoGeneral = 0;
+$movimientosAsc = array_reverse($movimientos);
+$movimientosCalculados = [];
+
+foreach ($movimientosAsc as $mov) {
+    $valor = (float) $mov['valor'];
+
+    if ($mov['afecta_saldo_natillera'] === 'suma') {
+        $saldoGeneral += $valor;
+    } elseif ($mov['afecta_saldo_natillera'] === 'resta') {
+        $saldoGeneral -= $valor;
+    }
+
+    if ($mostrarSaldoSocio) {
+        if ($mov['afecta_saldo_socio'] === 'suma') {
+            $saldoSocio += $valor;
+        } elseif ($mov['afecta_saldo_socio'] === 'resta') {
+            $saldoSocio -= $valor;
+        }
+        $mov['saldo_socio'] = $saldoSocio;
+    } else {
+        $mov['saldo_socio'] = null;
+    }
+
+    $mov['saldo_natillera'] = $saldoGeneral;
+    $movimientosCalculados[] = $mov;
+}
+
+$movimientos = array_reverse($movimientosCalculados);
 ?>
 <div class="mt-2">
     <div class="d-flex justify-content-between align-items-center mb-3">
