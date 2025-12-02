@@ -72,12 +72,11 @@ function obtenerLogoDataUri(array $config): ?string
     return 'data:' . $mime . ';base64,' . base64_encode($contenido);
 }
 
-function construirHtmlSocio(array $socio, array $movimientos, array $prestamos, float $totalCapital, float $totalIntereses, array $config): string
+function agruparMovimientos(array $movimientos): array
 {
     $meses = [1=>'Enero',2=>'Febrero',3=>'Marzo',4=>'Abril',5=>'Mayo',6=>'Junio',7=>'Julio',8=>'Agosto',9=>'Septiembre',10=>'Octubre',11=>'Noviembre',12=>'Diciembre'];
     $cuotasPorMes = [];
     $pollasPorMes = [];
-    $logoDataUri = obtenerLogoDataUri($config);
 
     foreach ($movimientos as $m) {
         $fecha = $m['fecha'];
@@ -100,170 +99,167 @@ function construirHtmlSocio(array $socio, array $movimientos, array $prestamos, 
         }
     }
 
-    ob_start();
-    ?>
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-        <meta charset="UTF-8">
-        <title>Movimientos socio <?php echo clean($socio['nombre_completo']); ?></title>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
-        <style>
-            body { padding: 32px; background: #f8fafc; color: #0f172a; }
-            h1, h2 { color: #0f172a; }
-            .section-title { border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; letter-spacing: 0.2px; }
-            .summary-table td { padding: 8px 12px; }
-            .card-like { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06); padding: 18px; margin-bottom: 18px; }
-            .header-brand { border-bottom: 2px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 18px; }
-            .logo-frame { width: 86px; height: 86px; border-radius: 16px; background: linear-gradient(135deg,#0ea5e9,#2563eb); display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 8px 20px rgba(37, 99, 235, 0.25); }
-            .logo-frame img { max-width: 82px; max-height: 82px; object-fit: contain; background: #fff; padding: 8px; border-radius: 12px; }
-            .badge-soft { background: #eff6ff; color: #1d4ed8; border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: 0.85rem; }
-            .table thead th { background: #f1f5f9; color: #0f172a; border-bottom: 2px solid #e2e8f0; }
-            .table-sm td, .table-sm th { padding: 0.6rem 0.75rem; }
-            .muted-row { color: #64748b; }
-        </style>
-    </head>
-    <body>
-        <div class="header-brand d-flex align-items-center justify-content-between">
-            <div class="d-flex align-items-center gap-3">
-                <?php if ($logoDataUri): ?>
-                    <div class="logo-frame">
-                        <img src="<?php echo $logoDataUri; ?>" alt="Logo">
-                    </div>
-                <?php endif; ?>
-                <div>
-                    <p class="text-uppercase text-muted fw-semibold mb-1" style="letter-spacing:1px;">Reporte de movimientos</p>
-                    <h1 class="h3 mb-0">Socio: <?php echo clean($socio['nombre_completo']); ?></h1>
-                    <div class="text-muted small">Generado: <?php echo date('Y-m-d H:i'); ?> | <?php echo clean($config['nombre_sistema'] ?? 'Natillera'); ?></div>
-                </div>
-            </div>
-            <div class="text-end">
-                <div class="badge-soft">ID <?php echo (int)$socio['id_socio']; ?></div>
-                <?php if (!empty($socio['numero_polla'])): ?>
-                    <div class="mt-2 small text-muted">Polla N° <?php echo clean($socio['numero_polla']); ?></div>
-                <?php endif; ?>
-            </div>
-        </div>
+    ksort($cuotasPorMes);
+    ksort($pollasPorMes);
 
-        <div class="card-like">
-            <h2 class="h5 section-title">Datos del socio</h2>
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <table class="table table-borderless summary-table">
-                        <tbody>
-                            <tr><th class="text-muted">Nombre</th><td><?php echo clean($socio['nombre_completo']); ?></td></tr>
-                            <tr><th class="text-muted">Teléfono</th><td><?php echo clean($socio['telefono']); ?></td></tr>
-                            <tr><th class="text-muted">Tipo de pago</th><td class="fw-semibold text-capitalize"><?php echo clean($socio['periodicidad_pago']); ?></td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="col-md-6">
-                    <table class="table table-borderless summary-table">
-                        <tbody>
-                            <tr><th class="text-muted">Valor cuota</th><td class="fw-semibold">$<?php echo number_format((float)$socio['valor_presupuestado'],0,',','.'); ?></td></tr>
-                            <tr><th class="text-muted">Número de polla</th><td><?php echo clean($socio['numero_polla']); ?></td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+    return [$cuotasPorMes, $pollasPorMes];
+}
 
-        <div class="card-like">
-            <h2 class="h5 section-title">Pagos de cuota socio (agrupado por mes/quincena)</h2>
-            <table class="table table-sm table-striped align-middle mb-0">
-                <thead><tr><th>Mes</th><th class="text-end">Valor</th></tr></thead>
-                <tbody>
-                    <?php if (!$cuotasPorMes): ?>
-                        <tr class="muted-row"><td colspan="2" class="text-center">No hay registros para las cuotas del socio.</td></tr>
-                    <?php else: ?>
-                        <?php foreach($cuotasPorMes as $mes => $valor): ?>
-                            <tr>
-                                <td><?php echo clean($mes); ?></td>
-                                <td class="text-end fw-semibold">$<?php echo number_format($valor,0,',','.'); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
+function escaparPdfTexto(string $texto): string
+{
+    return str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $texto);
+}
 
-        <div class="card-like">
-            <h2 class="h5 section-title">Pagos de pollas por mes</h2>
-            <table class="table table-sm table-striped align-middle mb-0">
-                <thead><tr><th>Mes</th><th class="text-end">Valor</th></tr></thead>
-                <tbody>
-                    <?php if (!$pollasPorMes): ?>
-                        <tr class="muted-row"><td colspan="2" class="text-center">No hay pagos de pollas registrados.</td></tr>
-                    <?php else: ?>
-                        <?php foreach($pollasPorMes as $mes => $valor): ?>
-                            <tr>
-                                <td><?php echo clean($mes); ?></td>
-                                <td class="text-end fw-semibold">$<?php echo number_format($valor,0,',','.'); ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
+function reservarObjeto(array &$objetos): int
+{
+    $objetos[] = null;
+    return count($objetos);
+}
 
-        <div class="row g-3">
-            <div class="col-md-6">
-                <div class="card-like h-100">
-                    <h2 class="h6 section-title">Estado de préstamos</h2>
-                    <table class="table table-sm table-bordered align-middle mb-0">
-                        <thead><tr><th>ID</th><th>Deudor</th><th class="text-end">Saldo capital</th></tr></thead>
-                        <tbody>
-                            <?php if (!$prestamos): ?>
-                                <tr class="muted-row"><td colspan="3" class="text-center">No hay préstamos asociados.</td></tr>
-                            <?php else: ?>
-                                <?php foreach($prestamos as $p): ?>
-                                    <tr>
-                                        <td><?php echo (int)$p['id_prestamo']; ?></td>
-                                        <td><?php echo clean($p['nombre_deudor']); ?></td>
-                                        <td class="text-end fw-semibold">$<?php echo number_format($p['saldo_capital_actual'],0,',','.'); ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                                <tr class="fw-semibold table-light">
-                                    <td colspan="2">Total</td>
-                                    <td class="text-end">$<?php echo number_format($totalCapital,0,',','.'); ?></td>
-                                </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card-like h-100">
-                    <h2 class="h6 section-title">Intereses por préstamos</h2>
-                    <table class="table table-sm table-bordered align-middle mb-0">
-                        <thead><tr><th>ID</th><th>Deudor</th><th class="text-end">Saldo intereses</th></tr></thead>
-                        <tbody>
-                            <?php if (!$prestamos): ?>
-                                <tr class="muted-row"><td colspan="3" class="text-center">No hay intereses pendientes.</td></tr>
-                            <?php else: ?>
-                                <?php foreach($prestamos as $p): ?>
-                                    <tr>
-                                        <td><?php echo (int)$p['id_prestamo']; ?></td>
-                                        <td><?php echo clean($p['nombre_deudor']); ?></td>
-                                        <td class="text-end fw-semibold">$<?php echo number_format($p['saldo_intereses_actual'],0,',','.'); ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                                <tr class="fw-semibold table-light">
-                                    <td colspan="2">Total intereses</td>
-                                    <td class="text-end">$<?php echo number_format($totalIntereses,0,',','.'); ?></td>
-                                </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+function definirObjeto(array &$objetos, int $id, string $contenido): void
+{
+    $objetos[$id - 1] = $contenido;
+}
 
-        <script>window.print();</script>
-    </body>
-    </html>
-    <?php
-    return ob_get_clean();
+function crearPdfSocio(array $socio, array $cuotasPorMes, array $pollasPorMes, array $prestamos, float $totalCapital, float $totalIntereses, array $config): string
+{
+    $ancho = 595; // A4 en puntos
+    $alto = 842;
+    $margen = 36;
+    $y = $alto - $margen;
+    $salto = 16;
+    $paginas = [''];
+    $paginaActual = 0;
+
+    $agregarLinea = function(string $texto, int $tam = 12, bool $negrita = false) use (&$paginas, &$paginaActual, &$y, $salto, $margen, $alto) {
+        $seccion = & $paginas[$paginaActual];
+        if ($y - $salto < $margen) {
+            $paginas[] = '';
+            $paginaActual++;
+            $y = $alto - $margen;
+            $seccion = & $paginas[$paginaActual];
+        }
+        $fuente = $negrita ? 'F2' : 'F1';
+        $seccion .= "BT /$fuente $tam Tf 1 0 0 1 $margen $y Tm (" . escaparPdfTexto($texto) . ") Tj ET\n";
+        $y -= $salto;
+    };
+
+    $dibujarLinea = function() use (&$paginas, &$paginaActual, &$y, $ancho, $margen, $alto, $salto) {
+        $seccion = & $paginas[$paginaActual];
+        if ($y - ($salto / 2) < $margen) {
+            $paginas[] = '';
+            $paginaActual++;
+            $y = $alto - $margen;
+            $seccion = & $paginas[$paginaActual];
+        }
+        $y -= ($salto / 2);
+        $seccion .= ($margen) . ' ' . $y . ' m ' . ($ancho - $margen) . ' ' . $y . " l S\n";
+        $y -= ($salto / 2);
+    };
+
+    $agregarLinea(trim(($config['nombre_sistema'] ?? 'Natillera') . ' • Movimientos por socio'), 14, true);
+    $agregarLinea('Generado: ' . date('Y-m-d H:i')); $dibujarLinea();
+
+    $agregarLinea('Datos del socio', 13, true);
+    $agregarLinea('Nombre: ' . $socio['nombre_completo']);
+    $agregarLinea('Teléfono: ' . $socio['telefono']);
+    $agregarLinea('Tipo de pago: ' . $socio['periodicidad_pago']);
+    $agregarLinea('Valor cuota: $' . number_format((float)$socio['valor_presupuestado'], 0, ',', '.'));
+    if (!empty($socio['numero_polla'])) {
+        $agregarLinea('Número de polla: ' . $socio['numero_polla']);
+    }
+    $dibujarLinea();
+
+    $agregarLinea('Pagos de cuota socio (por mes/quincena)', 13, true);
+    if (!$cuotasPorMes) {
+        $agregarLinea('No hay registros para las cuotas del socio.', 11);
+    } else {
+        foreach ($cuotasPorMes as $mes => $valor) {
+            $agregarLinea($mes . ': $' . number_format($valor, 0, ',', '.'), 11);
+        }
+    }
+    $dibujarLinea();
+
+    $agregarLinea('Pagos de pollas por mes', 13, true);
+    if (!$pollasPorMes) {
+        $agregarLinea('No hay pagos de pollas registrados.', 11);
+    } else {
+        foreach ($pollasPorMes as $mes => $valor) {
+            $agregarLinea($mes . ': $' . number_format($valor, 0, ',', '.'), 11);
+        }
+    }
+    $dibujarLinea();
+
+    $agregarLinea('Estado de préstamos', 13, true);
+    if (!$prestamos) {
+        $agregarLinea('No hay préstamos asociados.', 11);
+    } else {
+        foreach ($prestamos as $p) {
+            $agregarLinea('Préstamo ' . (int)$p['id_prestamo'] . ' — ' . $p['nombre_deudor'] . ': $' . number_format($p['saldo_capital_actual'], 0, ',', '.'));
+        }
+        $agregarLinea('Total capital: $' . number_format($totalCapital, 0, ',', '.'));
+    }
+    $dibujarLinea();
+
+    $agregarLinea('Intereses por préstamos', 13, true);
+    if (!$prestamos) {
+        $agregarLinea('No hay intereses pendientes.', 11);
+    } else {
+        foreach ($prestamos as $p) {
+            $agregarLinea('Préstamo ' . (int)$p['id_prestamo'] . ' — ' . $p['nombre_deudor'] . ': $' . number_format($p['saldo_intereses_actual'], 0, ',', '.'));
+        }
+        $agregarLinea('Total intereses: $' . number_format($totalIntereses, 0, ',', '.'));
+    }
+
+    $objetos = [];
+    $fuenteNormal = reservarObjeto($objetos);
+    definirObjeto($objetos, $fuenteNormal, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    $fuenteNegrita = reservarObjeto($objetos);
+    definirObjeto($objetos, $fuenteNegrita, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+
+    $idPaginas = reservarObjeto($objetos);
+    $contenidoIds = [];
+    $paginasIds = [];
+
+    foreach ($paginas as $contenido) {
+        $contenido = trim($contenido) . "\n";
+        $contenidoIds[] = reservarObjeto($objetos);
+        definirObjeto($objetos, end($contenidoIds), "<< /Length " . strlen($contenido) . " >>\nstream\n$contenido endstream");
+
+        $paginasIds[] = reservarObjeto($objetos);
+        $pageObj = "<< /Type /Page /Parent $idPaginas 0 R /MediaBox [0 0 $ancho $alto] /Resources << /Font << /F1 $fuenteNormal 0 R /F2 $fuenteNegrita 0 R >> >> /Contents " . end($contenidoIds) . " 0 R >>";
+        definirObjeto($objetos, end($paginasIds), $pageObj);
+    }
+
+    $kids = array_map(fn($id) => "$id 0 R", $paginasIds);
+    definirObjeto($objetos, $idPaginas, '<< /Type /Pages /Count ' . count($paginasIds) . ' /Kids [' . implode(' ', $kids) . '] >>');
+
+    $idCatalogo = reservarObjeto($objetos);
+    definirObjeto($objetos, $idCatalogo, "<< /Type /Catalog /Pages $idPaginas 0 R >>");
+
+    $pdf = "%PDF-1.4\n";
+    $offsets = [];
+    foreach ($objetos as $index => $obj) {
+        $offsets[] = strlen($pdf);
+        $pdf .= ($index + 1) . " 0 obj\n" . $obj . "\nendobj\n";
+    }
+
+    $xref = strlen($pdf);
+    $pdf .= "xref\n0 " . (count($objetos) + 1) . "\n";
+    $pdf .= "0000000000 65535 f \n";
+    foreach ($offsets as $off) {
+        $pdf .= sprintf("%010d 00000 n \n", $off);
+    }
+    $pdf .= "trailer\n<< /Size " . (count($objetos) + 1) . " /Root $idCatalogo 0 R >>\nstartxref\n" . $xref . "\n%%EOF";
+
+    return $pdf;
+}
+
+function nombreArchivoSocio(array $socio): string
+{
+    $seguro = preg_replace('/[^A-Za-z0-9_\-]/', '_', $socio['nombre_completo']);
+    $seguro = trim($seguro, '_');
+    return $seguro !== '' ? $seguro : ('socio_' . (int)$socio['id_socio']);
 }
 
 $modo = $_GET['modo'] ?? 'individual';
@@ -304,10 +300,10 @@ if ($modo === 'colectivo') {
             $filtros['socio'] = (int)$s['id_socio'];
             $movs = obtenerMovimientos($pdo, $filtros);
             [$prestamos, $totalCapital, $totalIntereses] = obtenerPrestamos($pdo, (int)$s['id_socio']);
-            $html = construirHtmlSocio($socioDetalle, $movs, $prestamos, $totalCapital, $totalIntereses, $config);
-            $nombreSeguro = preg_replace('/[^A-Za-z0-9_\-]/', '_', $socioDetalle['nombre_completo']);
-            $nombreArchivo = ($rutaCarpeta ? $rutaCarpeta.'/' : '').'movimientos_'.$nombreSeguro.'.html';
-            $zip->addFromString($nombreArchivo, $html);
+            [$cuotasPorMes, $pollasPorMes] = agruparMovimientos($movs);
+            $pdf = crearPdfSocio($socioDetalle, $cuotasPorMes, $pollasPorMes, $prestamos, $totalCapital, $totalIntereses, $config);
+            $nombreArchivo = ($rutaCarpeta ? $rutaCarpeta.'/' : '') . nombreArchivoSocio($socioDetalle) . '_movimientos.pdf';
+            $zip->addFromString($nombreArchivo, $pdf);
         } catch (Throwable $e) {
             continue;
         }
@@ -332,5 +328,11 @@ $movimientos = obtenerMovimientos($pdo, $filtros);
 [$prestamos, $totalCapital, $totalIntereses] = obtenerPrestamos($pdo, $idSocio);
 $config = getConfiguracionGeneral($pdo);
 
-header('Content-Type: text/html; charset=utf-8');
-echo construirHtmlSocio($socio, $movimientos, $prestamos, $totalCapital, $totalIntereses, $config);
+[$cuotasPorMes, $pollasPorMes] = agruparMovimientos($movimientos);
+$pdf = crearPdfSocio($socio, $cuotasPorMes, $pollasPorMes, $prestamos, $totalCapital, $totalIntereses, $config);
+$nombre = nombreArchivoSocio($socio) . '_movimientos.pdf';
+
+header('Content-Type: application/pdf');
+header('Content-Disposition: attachment; filename="' . $nombre . '"');
+header('Content-Length: ' . strlen($pdf));
+echo $pdf;
