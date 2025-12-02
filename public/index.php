@@ -17,6 +17,15 @@ $totalesMovimientos = $pdo->query("
                CASE LOWER(TRIM(a.afecta_saldo_natillera))
                     WHEN 'suma' THEN m.valor
                     WHEN 'resta' THEN -m.valor
+                    CASE
+                        WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'suma' THEN m.valor
+                        WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'resta' THEN -m.valor
+                        ELSE 0
+                    END
+               END AS valor_socio,
+               CASE
+                    WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'suma' THEN m.valor
+                    WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'resta' THEN -m.valor
                     ELSE 0 END AS valor_natillera,
                a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general
         FROM movimientos m
@@ -78,6 +87,19 @@ $movimientosStmt = $pdo->prepare("
                s.nombre_completo, a.nombre_actividad,
                LOWER(TRIM(a.afecta_saldo_socio)) AS afecta_saldo_socio,
                LOWER(TRIM(a.afecta_saldo_natillera)) AS afecta_saldo_natillera,
+               CASE
+                   WHEN a.es_polla = 1 THEN 'neutral'
+                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'suma' THEN 'suma'
+                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'resta' THEN 'resta'
+                   ELSE 'neutral'
+               END AS afecta_saldo_socio,
+               CASE
+                   WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'suma' THEN 'suma'
+                   WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'resta' THEN 'resta'
+                   ELSE 'neutral'
+               END AS afecta_saldo_natillera,
+               LOWER(a.afecta_saldo_socio) AS afecta_saldo_socio,
+               LOWER(a.afecta_saldo_natillera) AS afecta_saldo_natillera,
                a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general,
                COALESCE(mp.nombre, m.medio_consignacion) AS medio_nombre
         FROM movimientos m
