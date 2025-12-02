@@ -6,7 +6,6 @@ checkAuth();
 
 /* =======================
    FILTROS
-======================= */
 
 $desde     = $_GET['desde']  ?? '';
 $hasta     = $_GET['hasta']  ?? '';
@@ -40,7 +39,6 @@ $whereSQL = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
 /* =======================
    CONSULTA CONSOLIDADO
-======================= */
 
 $sql = "
 SELECT 
@@ -65,7 +63,6 @@ $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 /* =======================
    CÁLCULO DE SALDOS
-======================= */
 
 $saldoGeneral = 0;
 $saldosSocios = [];
@@ -106,7 +103,6 @@ foreach ($rows as &$row) {
 
 /* =======================
    LISTADOS AUXILIARES
-======================= */
 
 // SOCIOS
 $socios = $pdo->query("SELECT id, nombre FROM socios WHERE activo=1 ORDER BY nombre")->fetchAll();
