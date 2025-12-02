@@ -122,6 +122,15 @@ CREATE TABLE configuracion_general (
 INSERT INTO configuracion_general (id_config, nombre_sistema, logo_archivo, datos_globales) VALUES
 (1, 'Aplicativo de Natillera creado por Dorian Gómez', NULL, 'Datos generales de la natillera');
 
+-- Periodos configurados para controles y conciliaciones
+CREATE TABLE periodos_configuracion (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    anio INT NOT NULL,
+    mes INT NOT NULL,
+    activo TINYINT(1) DEFAULT 1,
+    UNIQUE KEY uq_periodo_configuracion (anio, mes)
+);
+
 CREATE TABLE polla_resultados (
     id_resultado INT AUTO_INCREMENT PRIMARY KEY,
     anio INT NOT NULL,

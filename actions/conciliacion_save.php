@@ -13,8 +13,11 @@ $cerrarMes = isset($_POST['cerrar_mes']);
 
 $redirect = '../public/conciliaciones.php?anio=' . $anio . '&mes=' . $mes;
 
-if ($anio < 2000 || $mes < 1 || $mes > 12) {
-    $_SESSION['error'] = 'Año o mes inválidos para la conciliación.';
+$stmtPeriodo = $pdo->prepare('SELECT COUNT(*) FROM periodos_configuracion WHERE anio = :anio AND mes = :mes AND activo = 1');
+$stmtPeriodo->execute([':anio' => $anio, ':mes' => $mes]);
+
+if ($mes < 1 || $mes > 12 || (int) $stmtPeriodo->fetchColumn() === 0) {
+    $_SESSION['error'] = 'El periodo seleccionado no está configurado o es inválido.';
     header('Location: ' . $redirect);
     exit;
 }

@@ -2,8 +2,50 @@
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-$anio = isset($_GET['anio']) ? (int) $_GET['anio'] : (int) date('Y');
-$mes = isset($_GET['mes']) ? (int) $_GET['mes'] : (int) date('n');
+
+$periodosConfig = $pdo
+    ->query('SELECT anio, mes FROM periodos_configuracion WHERE activo = 1 ORDER BY anio DESC, mes DESC')
+    ->fetchAll();
+
+$periodosCerrados = $pdo
+    ->query('SELECT DISTINCT anio, mes FROM conciliaciones_medios_pago WHERE cerrado = 1')
+    ->fetchAll();
+
+$periodosCerradosIndex = [];
+foreach ($periodosCerrados as $p) {
+    $periodosCerradosIndex[$p['anio'] . '-' . $p['mes']] = true;
+}
+
+$periodosDisponibles = [];
+$periodosPorAnio = [];
+foreach ($periodosConfig as $periodo) {
+    $key = $periodo['anio'] . '-' . $periodo['mes'];
+    if (isset($periodosCerradosIndex[$key])) {
+        continue;
+    }
+    $periodosDisponibles[] = $periodo;
+    $periodosPorAnio[$periodo['anio']][] = (int) $periodo['mes'];
+}
+
+if (!empty($periodosPorAnio)) {
+    krsort($periodosPorAnio);
+}
+
+$anio = isset($_GET['anio']) ? (int) $_GET['anio'] : null;
+$mes = isset($_GET['mes']) ? (int) $_GET['mes'] : null;
+
+if (empty($periodosDisponibles)) {
+    $anio = $anio ?: (int) date('Y');
+    $mes = $mes ?: (int) date('n');
+    $mesesDisponibles = range(1, 12);
+    $aniosDisponibles = [$anio];
+} else {
+    $aniosDisponibles = array_keys($periodosPorAnio);
+    $anio = in_array($anio, $aniosDisponibles, true) ? $anio : (int) reset($aniosDisponibles);
+    $mesesDisponibles = $periodosPorAnio[$anio] ?? [];
+    sort($mesesDisponibles);
+    $mes = in_array($mes, $mesesDisponibles, true) ? $mes : (int) reset($mesesDisponibles);
+}
 
 $medios = getMediosPago($pdo);
 
@@ -41,6 +83,30 @@ foreach ($medios as $medio) {
 }
 
 $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
+
+$conciliacionesCerradas = $pdo
+    ->query(
+        'SELECT cm.anio, cm.mes, mp.nombre AS medio_nombre, cm.saldo_sistema, cm.valor_conciliado, cm.diferencia
+         FROM conciliaciones_medios_pago cm
+         JOIN medios_pago mp ON mp.id = cm.id_medio
+         WHERE cm.cerrado = 1
+         ORDER BY cm.anio DESC, cm.mes DESC, mp.nombre'
+    )
+    ->fetchAll();
+
+$totalesCerradas = [
+    'sistema' => 0,
+    'conciliado' => 0,
+    'diferencia' => 0,
+];
+
+foreach ($conciliacionesCerradas as $cc) {
+    $totalesCerradas['sistema'] += (float) $cc['saldo_sistema'];
+    $totalesCerradas['conciliado'] += (float) $cc['valor_conciliado'];
+    $totalesCerradas['diferencia'] += (float) $cc['diferencia'];
+}
+
+$diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -53,29 +119,45 @@ $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
     <?php endif; ?>
 </div>
 
-<div class="card mb-3">
-    <div class="card-body">
-        <form class="row g-2" method="GET">
-            <div class="col-md-3">
-                <label class="form-label">Mes</label>
-                <select name="mes" class="form-select">
-                    <?php for ($i = 1; $i <= 12; $i++): ?>
-                        <option value="<?php echo $i; ?>" <?php echo $i === $mes ? 'selected' : ''; ?>><?php echo date('F', mktime(0, 0, 0, $i, 1)); ?></option>
-                    <?php endfor; ?>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Año</label>
-                <input type="number" name="anio" class="form-control" min="2000" value="<?php echo $anio; ?>">
-            </div>
-            <div class="col-md-2 align-self-end">
-                <button class="btn btn-primary">Consultar</button>
-            </div>
-        </form>
-    </div>
-</div>
+<?php if (empty($periodosConfig)): ?>
+    <div class="alert alert-warning">Configure los periodos disponibles en el módulo de configuración para habilitar la conciliación.</div>
+<?php elseif (empty($periodosDisponibles)): ?>
+    <div class="alert alert-info">Todos los periodos configurados están cerrados. No hay meses disponibles para conciliar.</div>
+<?php endif; ?>
 
-<?php if (empty($medios)): ?>
+<?php if (!empty($periodosDisponibles)): ?>
+    <div class="card mb-3">
+        <div class="card-body">
+            <form class="row g-2" method="GET">
+                <div class="col-md-3">
+                    <label class="form-label">Mes</label>
+                    <select name="mes" class="form-select">
+                        <?php foreach ($mesesDisponibles as $mesDisponible): ?>
+                            <option value="<?php echo $mesDisponible; ?>" <?php echo (int) $mesDisponible === (int) $mes ? 'selected' : ''; ?>>
+                                <?php echo strftime('%B', mktime(0, 0, 0, $mesDisponible, 1)); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Año</label>
+                    <select name="anio" class="form-select">
+                        <?php foreach ($aniosDisponibles as $anioDisponible): ?>
+                            <option value="<?php echo $anioDisponible; ?>" <?php echo (int) $anioDisponible === (int) $anio ? 'selected' : ''; ?>><?php echo $anioDisponible; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-2 align-self-end">
+                    <button class="btn btn-primary">Consultar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+<?php endif; ?>
+
+<?php if (empty($periodosDisponibles)): ?>
+    <div class="alert alert-secondary">No hay periodos abiertos para conciliar.</div>
+<?php elseif (empty($medios)): ?>
     <div class="alert alert-info">No hay medios de pago activos configurados. Configure medios en "Configuración → Medios de pago".</div>
 <?php else: ?>
     <form method="POST" action="../actions/conciliacion_save.php">
@@ -179,6 +261,56 @@ $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
         </div>
     </form>
 <?php endif; ?>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-calendar-check"></i>
+            <span>Meses conciliados</span>
+        </div>
+        <span class="text-muted small">Resumen de periodos cerrados</span>
+    </div>
+    <div class="card-body">
+        <?php if (empty($conciliacionesCerradas)): ?>
+            <div class="alert alert-info mb-0">Aún no hay conciliaciones cerradas registradas.</div>
+        <?php else: ?>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mes</th>
+                            <th>Año</th>
+                            <th>Medio de pago</th>
+                            <th class="text-end">Valor sistema</th>
+                            <th class="text-end">Valor conciliado</th>
+                            <th class="text-end">Diferencia</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($conciliacionesCerradas as $cerrada): ?>
+                            <tr>
+                                <td><?php echo strftime('%B', mktime(0, 0, 0, $cerrada['mes'], 1)); ?></td>
+                                <td><?php echo $cerrada['anio']; ?></td>
+                                <td><?php echo clean($cerrada['medio_nombre']); ?></td>
+                                <td class="text-end">$<?php echo number_format($cerrada['saldo_sistema'], 2, ',', '.'); ?></td>
+                                <td class="text-end">$<?php echo number_format($cerrada['valor_conciliado'], 2, ',', '.'); ?></td>
+                                <td class="text-end fw-semibold">$<?php echo number_format($cerrada['diferencia'], 2, ',', '.'); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="3" class="text-end">Totales</th>
+                            <th class="text-end">$<?php echo number_format($totalesCerradas['sistema'], 2, ',', '.'); ?></th>
+                            <th class="text-end">$<?php echo number_format($totalesCerradas['conciliado'], 2, ',', '.'); ?></th>
+                            <th class="text-end">$<?php echo number_format($totalesCerradas['diferencia'], 2, ',', '.'); ?></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
 
 <script>
     const formatoCOP = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' });
