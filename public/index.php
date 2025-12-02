@@ -78,17 +78,7 @@ $movimientosStmt = $pdo->prepare("
     SELECT mf.id_movimiento, mf.fecha, mf.valor, mf.id_socio, mf.id_actividad,
            mf.nombre_completo, mf.nombre_actividad, mf.afecta_saldo_socio, mf.afecta_saldo_natillera,
            mf.es_prestamo, mf.es_pago_prestamo, mf.es_polla, mf.es_gasto_general, mf.medio_nombre,
-           CASE WHEN mf.es_polla = 1 THEN 0 ELSE
-                CASE mf.afecta_saldo_socio
-                    WHEN 'suma' THEN mf.valor
-                    WHEN 'resta' THEN -mf.valor
-                    ELSE 0
-                END
-           END AS valor_socio,
-           CASE mf.afecta_saldo_natillera
-                WHEN 'suma' THEN mf.valor
-                WHEN 'resta' THEN -mf.valor
-                ELSE 0 END AS valor_natillera
+           mf.valor_socio, mf.valor_natillera
     FROM (
         SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad,
                s.nombre_completo, a.nombre_actividad,
@@ -103,6 +93,17 @@ $movimientosStmt = $pdo->prepare("
                    WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'resta' THEN 'resta'
                    ELSE 'neutral'
                END AS afecta_saldo_natillera,
+               CASE
+                   WHEN a.es_polla = 1 THEN 0
+                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'suma' THEN m.valor
+                   WHEN LOWER(TRIM(a.afecta_saldo_socio)) = 'resta' THEN -m.valor
+                   ELSE 0
+               END AS valor_socio,
+               CASE
+                   WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'suma' THEN m.valor
+                   WHEN LOWER(TRIM(a.afecta_saldo_natillera)) = 'resta' THEN -m.valor
+                   ELSE 0
+               END AS valor_natillera,
                a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general,
                COALESCE(mp.nombre, m.medio_consignacion) AS medio_nombre
         FROM movimientos m
@@ -114,7 +115,7 @@ $movimientosStmt = $pdo->prepare("
     ORDER BY mf.fecha DESC, mf.id_movimiento DESC
 ");
 $movimientosStmt->execute($paramsBase);
-$movimientos = $movimientosStmt->fetchAll();
+$movimientos = $movimientosStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Calcula saldos acumulados en PHP usando las reglas aportadas.
 $mostrarSaldoSocio = $filtroSocio > 0;
@@ -124,20 +125,14 @@ $movimientosAsc = array_reverse($movimientos);
 $movimientosCalculados = [];
 
 foreach ($movimientosAsc as $mov) {
-    $valor = (float) $mov['valor'];
+    $valorSocio = (float) $mov['valor_socio'];
+    $valorNatillera = (float) $mov['valor_natillera'];
 
-    if ($mov['afecta_saldo_natillera'] === 'suma') {
-        $saldoGeneral += $valor;
-    } elseif ($mov['afecta_saldo_natillera'] === 'resta') {
-        $saldoGeneral -= $valor;
-    }
+    // Siempre calculamos el saldo general usando el valor ya signado.
+    $saldoGeneral += $valorNatillera;
 
     if ($mostrarSaldoSocio) {
-        if ($mov['afecta_saldo_socio'] === 'suma') {
-            $saldoSocio += $valor;
-        } elseif ($mov['afecta_saldo_socio'] === 'resta') {
-            $saldoSocio -= $valor;
-        }
+        $saldoSocio += $valorSocio;
         $mov['saldo_socio'] = $saldoSocio;
     } else {
         $mov['saldo_socio'] = null;
