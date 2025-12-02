@@ -114,6 +114,7 @@ if (!$medio) {
 
 $actividad = getActividad($pdo, $idActividad);
 $reglaNatillera = $actividad['afecta_saldo_natillera'] ?? 'neutral';
+$reglaSocio = !empty($actividad['es_polla']) ? 'neutral' : ($actividad['afecta_saldo_socio'] ?? 'neutral');
 $esIngreso = $reglaNatillera === 'suma' ? 1 : 0;
 $esEgreso = $reglaNatillera === 'resta' ? 1 : 0;
 
@@ -146,7 +147,7 @@ $stmt->execute([
     ':modulo' => 'movimientos',
 ]);
 
-actualizarSaldoSocio($pdo, $idSocio, $valor, $actividad['afecta_saldo_socio']);
+actualizarSaldoSocio($pdo, $idSocio, $valor, $reglaSocio);
 actualizarSaldoNatillera($pdo, $valor, $actividad['afecta_saldo_natillera']);
 
 header('Location: ../public/movimientos.php');
