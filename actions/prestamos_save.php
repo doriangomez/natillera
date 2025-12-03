@@ -4,6 +4,7 @@ require_once __DIR__ . '/../includes/auth.php';
 checkAuth();
 
 try {
+    asegurarTablaPeriodosPrestamo($pdo);
     $existeModulo = $pdo->query("SHOW COLUMNS FROM movimientos LIKE 'modulo'");
     if ($existeModulo && $existeModulo->rowCount() === 0) {
         $pdo->exec("ALTER TABLE movimientos ADD COLUMN modulo VARCHAR(100) DEFAULT NULL");
@@ -65,6 +66,9 @@ if ($accion === 'eliminar') {
 
         $stmtDelCuotas = $pdo->prepare('DELETE FROM cuotas_prestamo WHERE id_prestamo = :id');
         $stmtDelCuotas->execute([':id' => $idPrestamo]);
+
+        $stmtDelPeriodos = $pdo->prepare('DELETE FROM periodos_prestamo WHERE id_prestamo = :id');
+        $stmtDelPeriodos->execute([':id' => $idPrestamo]);
 
         $actividadPrestamo = $pdo->query("SELECT id_actividad FROM actividades_maestro WHERE es_prestamo=1 LIMIT 1")->fetch();
         if ($actividadPrestamo) {
@@ -206,9 +210,25 @@ $stmt->execute([
     ':interes_mensual' => $interesMensual,
     ':saldo_capital_actual' => $saldoCapital,
     ':saldo_intereses_actual' => $saldoInteres,
-    ':estado' => 'Vigente'
+    ':estado' => 'Activo'
 ]);
 $idPrestamo = $pdo->lastInsertId();
+
+// Crear el primer periodo de control mensual
+$periodoInicial = DateTime::createFromFormat('Y-m-d', $fecha);
+if ($periodoInicial) {
+    $anioPeriodo = (int) $periodoInicial->format('Y');
+    $mesPeriodo = (int) $periodoInicial->format('n');
+    $stmtPeriodo = $pdo->prepare('INSERT INTO periodos_prestamo (id_prestamo, anio, mes, capital_inicio, interes_causado, interes_pagado, abono_capital, capital_final, estado) VALUES (:id_prestamo, :anio, :mes, :capital_inicio, 0, 0, 0, :capital_final, :estado) ON DUPLICATE KEY UPDATE capital_inicio = VALUES(capital_inicio), capital_final = VALUES(capital_final), estado = VALUES(estado)');
+    $stmtPeriodo->execute([
+        ':id_prestamo' => $idPrestamo,
+        ':anio' => $anioPeriodo,
+        ':mes' => $mesPeriodo,
+        ':capital_inicio' => $monto,
+        ':capital_final' => $monto,
+        ':estado' => 'Pendiente',
+    ]);
+}
 
 // No se generan cuotas programadas: solo se registra el resumen del préstamo
 
