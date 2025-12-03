@@ -142,11 +142,11 @@ $prestamos = $pdo->query(
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Capital pagado</label>
-                    <input type="number" step="0.01" name="valor_capital_pagado" class="form-control" required>
+                    <input type="number" step="0.01" min="0" name="valor_capital_pagado" class="form-control" value="0" required>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Interés pagado</label>
-                    <input type="number" step="0.01" name="valor_interes_pagado" class="form-control" required>
+                    <input type="number" step="0.01" min="0" name="valor_interes_pagado" class="form-control" value="0" required>
                 </div>
                 <div class="col-12">
                     <div class="alert alert-info d-flex flex-column gap-1" id="resumenPago">
@@ -362,8 +362,9 @@ document.addEventListener('DOMContentLoaded', () => {
         detalleInteresPendiente.textContent = formatter.format(interesPendiente);
         saldoCapitalPendiente.textContent = formatter.format(prestamo.saldoCapital);
 
-        if (interesInput && !interesInput.value) {
+        if (interesInput && (interesInput.dataset.touched !== '1' || !interesInput.value || interesInput.value === '0')) {
             interesInput.value = interesPendiente.toFixed(2);
+            interesInput.dataset.touched = '0';
         }
         if (capitalInput) {
             capitalInput.max = prestamo.saldoCapital.toFixed(2);
@@ -434,10 +435,25 @@ document.addEventListener('DOMContentLoaded', () => {
     montoPrestamo.addEventListener('input', actualizarResumen);
 
     if (prestamoSelect) {
-        prestamoSelect.addEventListener('change', actualizarSugerenciaPago);
+        prestamoSelect.addEventListener('change', () => {
+            if (interesInput) {
+                interesInput.dataset.touched = '0';
+                interesInput.value = '';
+            }
+            if (capitalInput) {
+                capitalInput.value = '0';
+            }
+            actualizarSugerenciaPago();
+        });
     }
     if (fechaPagoInput) {
         fechaPagoInput.addEventListener('change', actualizarSugerenciaPago);
+    }
+
+    if (interesInput) {
+        interesInput.addEventListener('input', () => {
+            interesInput.dataset.touched = '1';
+        });
     }
 
     sincronizarCamposDeudor();
