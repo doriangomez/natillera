@@ -38,7 +38,7 @@ if ($accion === 'eliminar') {
         $cuotas = $stmtCuotas->fetchAll();
 
         $interesAnticipado = (float) ($prestamo['interes_mensual'] ?? 0);
-        $montoDesembolso = max(0, ((float) $prestamo['monto_prestamo']) - $interesAnticipado);
+        $montoMovimientoPrestamo = abs((float) ($prestamo['monto_prestamo'] ?? 0));
 
         foreach ($cuotas as $cuota) {
             $valorTotal = (float) $cuota['valor_capital_pagado'] + (float) $cuota['valor_interes_pagado'];
@@ -69,7 +69,7 @@ if ($accion === 'eliminar') {
             $paramsDel = [
                 ':id_act' => $actividadPrestamo['id_actividad'],
                 ':fecha' => $prestamo['fecha_prestamo'],
-                ':valor' => abs($montoDesembolso),
+                ':valor' => $montoMovimientoPrestamo,
             ];
             $sqlDelDesembolso = 'DELETE FROM movimientos WHERE id_actividad = :id_act AND motivo = :motivo AND fecha = :fecha AND valor = :valor';
             $socioMovimiento = $prestamo['es_particular'] ? null : $prestamo['id_socio'];
@@ -175,7 +175,21 @@ if (!$esParticular) {
 $interesMensual = round($monto * ($tasa / 100), 2);
 $saldoCapital = $monto;
 $saldoInteres = 0;
-$montoDesembolso = max(0, $monto - $interesMensual);
+$valorPrestamoMovimiento = abs($monto);
+
+$actividadPrestamo = obtenerConceptoPorBandera($pdo, 'es_prestamo');
+if (!$actividadPrestamo) {
+    $_SESSION['error'] = 'No se encontró un concepto de desembolso configurado para préstamos.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+
+$actividadInteres = obtenerConceptoPorBandera($pdo, 'es_pago_interes');
+if (!$actividadInteres) {
+    $_SESSION['error'] = 'No se encontró un concepto de pago de intereses configurado para préstamos.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
 
 $stmt = $pdo->prepare('INSERT INTO prestamos (id_socio, es_particular, id_socio_aval, nombre_deudor, fecha_prestamo, monto_prestamo, tasa_interes, interes_mensual, saldo_capital_actual, saldo_intereses_actual, estado) VALUES (:id_socio, :es_particular, :id_aval, :nombre_deudor, :fecha, :monto, :tasa, :interes_mensual, :saldo_capital_actual, :saldo_intereses_actual, :estado)');
 $stmt->execute([
@@ -196,13 +210,6 @@ $idPrestamo = $pdo->lastInsertId();
 // No se generan cuotas programadas: solo se registra el resumen del préstamo
 
 // Registrar movimiento de desembolso si existe actividad marcada como préstamo
-$actividadPrestamo = obtenerConceptoPorBandera($pdo, 'es_prestamo');
-if (!$actividadPrestamo) {
-    $_SESSION['error'] = 'No se encontró un concepto de desembolso configurado para préstamos.';
-    header('Location: ../public/prestamos.php');
-    exit;
-}
-
 $reglaSocio = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_socio']);
 $reglaNatillera = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_natillera']);
 $socioMovimiento = $esParticular ? null : $idSocio;
@@ -236,7 +243,7 @@ $stmtMov->execute([
     ':id_socio' => $socioMovimiento,
     ':id_actividad' => $actividadPrestamo['id_actividad'],
     ':motivo' => 'Registro préstamo',
-    ':valor' => abs($montoDesembolso),
+    ':valor' => $valorPrestamoMovimiento,
     ':medio' => 'Efectivo',
     ':obs' => $observacionMovimiento,
     ':usuario' => $_SESSION['usuario'] ?? null,
@@ -244,11 +251,10 @@ $stmtMov->execute([
     ':es_ingreso' => $esIngreso,
     ':es_egreso' => $esEgreso,
 ]);
-actualizarSaldoSocio($pdo, $socioMovimiento, abs($montoDesembolso), $reglaSocio);
-actualizarSaldoNatillera($pdo, abs($montoDesembolso), $reglaNatillera);
+actualizarSaldoSocio($pdo, $socioMovimiento, $valorPrestamoMovimiento, $reglaSocio);
+actualizarSaldoNatillera($pdo, $valorPrestamoMovimiento, $reglaNatillera);
 
-$actividadInteres = obtenerConceptoPorBandera($pdo, 'es_pago_interes');
-if ($actividadInteres) {
+if ($interesMensual > 0) {
     $reglaSocioInteres = normalizarReglaAfectacion($actividadInteres['afecta_saldo_socio']);
     $reglaNatilleraInteres = normalizarReglaAfectacion($actividadInteres['afecta_saldo_natillera']);
     $esIngresoInteres = (int) ($actividadInteres['es_ingreso'] ?? 0);
