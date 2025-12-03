@@ -80,18 +80,18 @@ if ($valor <= 0) {
 }
 
 // Validar periodo permitido (dic 2025 a nov 2026) y consistencia de fecha
-$inicioPeriodo = new DateTime('2025-12-01');
-$finPeriodo = new DateTime('2026-11-30 23:59:59');
 $anioFecha = (int) $fechaObj->format('Y');
 $mesFecha = (int) $fechaObj->format('n');
-$periodoValido = $fechaObj >= $inicioPeriodo && $fechaObj <= $finPeriodo;
-if (!$periodoValido) {
-    $_SESSION['error'] = 'La fecha del movimiento debe estar entre diciembre 2025 y noviembre 2026.';
+if ($anioFecha !== $anio || $mesFecha !== $mes) {
+    $_SESSION['error'] = 'El año y el mes seleccionados deben coincidir con la fecha del movimiento.';
     header('Location: ../public/movimientos.php');
     exit;
 }
-if ($anioFecha !== $anio || $mesFecha !== $mes) {
-    $_SESSION['error'] = 'El año y el mes seleccionados deben coincidir con la fecha del movimiento.';
+// Validar que el periodo exista y esté activo en la configuración
+$stmtPeriodo = $pdo->prepare('SELECT COUNT(*) FROM periodos_configuracion WHERE anio = :anio AND mes = :mes AND activo = 1');
+$stmtPeriodo->execute([':anio' => $anio, ':mes' => $mes]);
+if ((int) $stmtPeriodo->fetchColumn() === 0) {
+    $_SESSION['error'] = 'El periodo seleccionado no está habilitado en la configuración.';
     header('Location: ../public/movimientos.php');
     exit;
 }

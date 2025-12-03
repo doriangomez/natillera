@@ -135,6 +135,40 @@ function getConfiguracionGeneral($pdo) {
     return $config;
 }
 
+function getNombresMeses(): array {
+    return [
+        1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+        5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+        9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre',
+    ];
+}
+
+function getPeriodosConfiguracion(PDO $pdo): array {
+    $stmt = $pdo->query('SELECT id, anio, mes, activo FROM periodos_configuracion ORDER BY anio DESC, mes DESC');
+    return $stmt->fetchAll();
+}
+
+function guardarPeriodoConfiguracion(PDO $pdo, int $anio, int $mes, bool $activo = true): void {
+    $stmt = $pdo->prepare(
+        'INSERT INTO periodos_configuracion (anio, mes, activo)
+         VALUES (:anio, :mes, :activo)
+         ON DUPLICATE KEY UPDATE activo = VALUES(activo)'
+    );
+    $stmt->execute([
+        ':anio' => $anio,
+        ':mes' => $mes,
+        ':activo' => $activo ? 1 : 0,
+    ]);
+}
+
+function actualizarEstadoPeriodoConfiguracion(PDO $pdo, int $id, bool $activo): void {
+    $stmt = $pdo->prepare('UPDATE periodos_configuracion SET activo = :activo WHERE id = :id');
+    $stmt->execute([
+        ':id' => $id,
+        ':activo' => $activo ? 1 : 0,
+    ]);
+}
+
 function generarCSV($header, $rows) {
     $fh = fopen('php://output', 'w');
     fputcsv($fh, $header, ';');
