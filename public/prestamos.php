@@ -60,6 +60,39 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
                     <input type="number" name="numero_cuotas" class="form-control" value="6" required>
                 </div>
             </div>
+            <div class="alert alert-info mt-3 mb-2">
+                <div class="fw-semibold text-uppercase small text-muted">Resumen financiero proyectado</div>
+                <div class="row g-3 mt-1" id="resumenFinanciero">
+                    <div class="col-md-4">
+                        <div class="p-3 bg-body-tertiary rounded border h-100">
+                            <div class="text-muted small">Saldo actual en cuotas</div>
+                            <div class="fs-5 fw-semibold" id="saldoCuotas">$0</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-body-tertiary rounded border h-100">
+                            <div class="text-muted small">Saldo actual de préstamos</div>
+                            <div class="fs-5 fw-semibold" id="saldoPrestamos">$0</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-body-tertiary rounded border h-100">
+                            <div class="text-muted small">Ingresos proyectados próximos meses</div>
+                            <div class="fs-5 fw-semibold" id="ingresosProyectados">$0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3" id="alertaRiesgo">
+                    <div class="p-3 rounded border d-flex flex-column flex-md-row gap-2 justify-content-between align-items-start align-items-md-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge rounded-pill px-3 py-2" id="badgeRiesgo">🟢 Riesgo bajo</span>
+                            <div class="fw-semibold" id="mensajeRiesgo">Riesgo bajo: capacidad de pago adecuada.</div>
+                        </div>
+                        <div class="text-muted small">Relación deuda / ingresos proyectados: <span class="fw-semibold" id="ratioRiesgo">0%</span></div>
+                    </div>
+                    <div class="text-muted small mt-2">Este análisis es informativo y no bloquea la creación del préstamo.</div>
+                </div>
+            </div>
             <button class="btn btn-success mt-3 btn-icon"><span><i class="bi bi-check2-circle"></i> Crear préstamo</span></button>
         </form>
     </div>
@@ -141,3 +174,131 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
 </table>
 </div>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const socioSelect = document.querySelector('select[name="id_socio"]');
+    const tipoDeudor = document.querySelector('select[name="es_particular"]');
+    const montoPrestamo = document.querySelector('input[name="monto_prestamo"]');
+    const numeroCuotas = document.querySelector('input[name="numero_cuotas"]');
+
+    const saldoCuotas = document.getElementById('saldoCuotas');
+    const saldoPrestamos = document.getElementById('saldoPrestamos');
+    const ingresosProyectados = document.getElementById('ingresosProyectados');
+    const badgeRiesgo = document.getElementById('badgeRiesgo');
+    const mensajeRiesgo = document.getElementById('mensajeRiesgo');
+    const ratioRiesgo = document.getElementById('ratioRiesgo');
+    const alertaRiesgo = document.getElementById('alertaRiesgo');
+
+    let resumenBase = {
+        monthly: 0,
+        debt: 0,
+        projection: 0,
+    };
+
+    const formatter = new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    });
+
+    async function obtenerResumenSocio() {
+        const socioId = socioSelect.value;
+        const esParticular = tipoDeudor.value === '1';
+
+        if (!socioId || esParticular) {
+            resumenBase = { monthly: 0, debt: 0, projection: 0 };
+            actualizarResumen();
+            return;
+        }
+
+        try {
+            const response = await fetch(`../actions/prestamos_finanzas.php?id_socio=${encodeURIComponent(socioId)}`);
+            if (!response.ok) {
+                throw new Error('No se pudo obtener el resumen financiero.');
+            }
+            const data = await response.json();
+            resumenBase = {
+                monthly: Number(data.monthly_active ?? 0),
+                debt: Number(data.total_debt ?? 0),
+                projection: Number(data.projected_income ?? 0),
+            };
+        } catch (error) {
+            console.error(error);
+            resumenBase = { monthly: 0, debt: 0, projection: 0 };
+        }
+        actualizarResumen();
+    }
+
+    function calcularConNuevoPrestamo() {
+        const monto = parseFloat(montoPrestamo.value) || 0;
+        const cuotas = parseInt(numeroCuotas.value, 10) || 0;
+
+        const nuevaCuotaMensual = cuotas > 0 && monto > 0 ? monto / cuotas : 0;
+        const mesesConsiderados = cuotas > 0 ? Math.min(12, cuotas) : 0;
+
+        return {
+            monthly: resumenBase.monthly + nuevaCuotaMensual,
+            debt: resumenBase.debt + monto,
+            projection: resumenBase.projection + (nuevaCuotaMensual * mesesConsiderados),
+        };
+    }
+
+    function definirRiesgo(ratio, deuda) {
+        if (ratio <= 30) {
+            return {
+                nivel: 'bajo',
+                badge: '🟢 Riesgo bajo',
+                mensaje: 'Riesgo bajo: capacidad de pago adecuada.',
+                clase: 'bg-success-subtle text-success border-success',
+            };
+        }
+        if (ratio <= 60) {
+            return {
+                nivel: 'medio',
+                badge: '🟡 Riesgo medio',
+                mensaje: 'Riesgo medio: revisar condiciones del préstamo.',
+                clase: 'bg-warning-subtle text-warning border-warning',
+            };
+        }
+        if (deuda > 0) {
+            return {
+                nivel: 'alto',
+                badge: '🔴 Riesgo alto',
+                mensaje: 'Riesgo alto: el nivel de endeudamiento proyectado es elevado.',
+                clase: 'bg-danger-subtle text-danger border-danger',
+            };
+        }
+        return {
+            nivel: 'alto',
+            badge: '🔴 Riesgo alto',
+            mensaje: 'Riesgo alto: el nivel de endeudamiento proyectado es elevado.',
+            clase: 'bg-danger-subtle text-danger border-danger',
+        };
+    }
+
+    function actualizarResumen() {
+        const totales = calcularConNuevoPrestamo();
+
+        saldoCuotas.textContent = formatter.format(Math.max(totales.monthly, 0));
+        saldoPrestamos.textContent = formatter.format(Math.max(totales.debt, 0));
+        ingresosProyectados.textContent = formatter.format(Math.max(totales.projection, 0));
+
+        const ratio = totales.projection > 0 ? (totales.debt / totales.projection) * 100 : (totales.debt > 0 ? 100 : 0);
+        const riesgo = definirRiesgo(ratio, totales.debt);
+
+        badgeRiesgo.textContent = riesgo.badge;
+        mensajeRiesgo.textContent = riesgo.mensaje;
+        ratioRiesgo.textContent = `${ratio.toFixed(1)}%`;
+
+        alertaRiesgo.querySelector('.p-3').className = `p-3 rounded border d-flex flex-column flex-md-row gap-2 justify-content-between align-items-start align-items-md-center ${riesgo.clase}`;
+    }
+
+    socioSelect.addEventListener('change', obtenerResumenSocio);
+    tipoDeudor.addEventListener('change', obtenerResumenSocio);
+    montoPrestamo.addEventListener('input', actualizarResumen);
+    numeroCuotas.addEventListener('input', actualizarResumen);
+
+    actualizarResumen();
+});
+</script>
