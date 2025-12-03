@@ -24,14 +24,15 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Tipo de deudor</label>
-                    <select name="es_particular" class="form-select">
+                    <select name="es_particular" class="form-select" required>
+                        <option value="">Seleccione tipo</option>
                         <option value="0">Socio</option>
                         <option value="1">Particular</option>
                     </select>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Socio beneficiario</label>
-                    <select name="id_socio" class="form-select">
+                    <select name="id_socio" class="form-select" required>
                         <option value="">Seleccione socio</option>
                         <?php foreach($socios as $s): ?>
                             <option value="<?php echo $s['id_socio']; ?>"><?php echo clean($s['nombre_completo']); ?></option>
@@ -40,12 +41,12 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Deudor particular (si aplica)</label>
-                    <input type="text" name="nombre_deudor" class="form-control" placeholder="Nombre de particular">
+                    <input type="text" name="nombre_deudor" class="form-control" placeholder="Nombre de particular" disabled>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Socio avalador (para particulares)</label>
-                    <select name="id_socio_aval" class="form-select">
-                        <option value="">Sin aval</option>
+                    <select name="id_socio_aval" class="form-select" disabled>
+                        <option value="">Seleccione socio avalador</option>
                         <?php foreach($socios as $s): ?>
                             <option value="<?php echo $s['id_socio']; ?>"><?php echo clean($s['nombre_completo']); ?></option>
                         <?php endforeach; ?>
@@ -57,11 +58,40 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Tasa interés (%)</label>
-                    <input type="number" step="0.01" name="tasa_interes" class="form-control" value="<?php echo $tasaSocioConfig; ?>" data-tasa-socio="<?php echo $tasaSocioConfig; ?>" data-tasa-particular="<?php echo $tasaParticularConfig; ?>">
+                    <input type="number" step="0.01" name="tasa_interes" class="form-control" value="<?php echo $tasaSocioConfig; ?>" data-tasa-socio="<?php echo $tasaSocioConfig; ?>" data-tasa-particular="<?php echo $tasaParticularConfig; ?>" required>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">Número de cuotas</label>
-                    <input type="number" name="numero_cuotas" class="form-control" value="6" required>
+            </div>
+            <div class="alert alert-info mt-3 mb-2">
+                <div class="fw-semibold text-uppercase small text-muted">Resumen financiero proyectado</div>
+                <div class="row g-3 mt-1" id="resumenFinanciero">
+                    <div class="col-md-4">
+                        <div class="p-3 bg-body-tertiary rounded border h-100">
+                            <div class="text-muted small">Saldo actual acumulado</div>
+                            <div class="fs-5 fw-semibold" id="saldoAcumulado">$0</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-body-tertiary rounded border h-100">
+                            <div class="text-muted small">Saldo actual de préstamos</div>
+                            <div class="fs-5 fw-semibold" id="saldoPrestamos">$0</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-body-tertiary rounded border h-100">
+                            <div class="text-muted small">Ingresos proyectados próximos meses</div>
+                            <div class="fs-5 fw-semibold" id="ingresosProyectados">$0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3" id="alertaRiesgo">
+                    <div class="p-3 rounded border d-flex flex-column flex-md-row gap-2 justify-content-between align-items-start align-items-md-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge rounded-pill px-3 py-2" id="badgeRiesgo">🟢 Riesgo bajo</span>
+                            <div class="fw-semibold" id="mensajeRiesgo">Riesgo bajo: capacidad de pago adecuada.</div>
+                        </div>
+                        <div class="text-muted small">Relación deuda / ingresos proyectados: <span class="fw-semibold" id="ratioRiesgo">0%</span></div>
+                    </div>
+                    <div class="text-muted small mt-2">Este análisis es informativo y no bloquea la creación del préstamo.</div>
                 </div>
             </div>
             <div class="alert alert-info mt-3 mb-2">
@@ -110,7 +140,8 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
                     <label class="form-label">Préstamo</label>
                     <select name="id_prestamo" class="form-select" required>
                         <?php foreach($prestamos as $p): ?>
-                            <option value="<?php echo $p['id_prestamo']; ?>"><?php echo '#'.$p['id_prestamo'].' - '.($p['nombre_completo'] ?? $p['nombre_deudor']); ?></option>
+                            <?php $labelDeudor = $p['es_particular'] ? ($p['nombre_deudor'] . ($p['nombre_aval'] ? ' (Aval: '.$p['nombre_aval'].')' : '')) : $p['nombre_completo']; ?>
+                            <option value="<?php echo $p['id_prestamo']; ?>"><?php echo '#'.$p['id_prestamo'].' - '.clean($labelDeudor); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -153,20 +184,28 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
 <h4 class="d-flex align-items-center gap-2"><i class="bi bi-activity text-primary"></i><span>Préstamos vigentes</span></h4>
 <div class="table-responsive">
 <table class="table table-sm table-bordered">
-    <thead><tr><th>ID</th><th>Deudor</th><th>Aval</th><th>Tipo</th><th>Monto</th><th>Saldo capital</th><th>Saldo interés</th><th>Estado</th><th></th></tr></thead>
+    <thead><tr><th>ID</th><th>Deudor</th><th>Aval</th><th>Tipo</th><th>Monto</th><th>Tasa mensual (%)</th><th>Interés mensual</th><th>Saldo capital</th><th>Saldo interés</th><th>Estado</th><th></th></tr></thead>
     <tbody>
         <?php foreach($prestamos as $p): ?>
+            <?php $estadoPrestamo = ((float)$p['saldo_capital_actual'] > 0) ? 'Vigente' : 'Cancelado'; ?>
             <tr>
                 <td><?php echo $p['id_prestamo']; ?></td>
-                <td><?php echo clean($p['nombre_completo'] ?? $p['nombre_deudor']); ?></td>
+                <td>
+                    <div><?php echo clean($p['es_particular'] ? $p['nombre_deudor'] : $p['nombre_completo']); ?></div>
+                    <?php if($p['es_particular'] && $p['nombre_aval']): ?>
+                        <div class="text-muted small">Aval: <?php echo clean($p['nombre_aval']); ?></div>
+                    <?php endif; ?>
+                </td>
                 <td><?php echo clean($p['nombre_aval']); ?></td>
                 <td><?php echo $p['es_particular'] ? 'Particular' : 'Socio'; ?></td>
                 <td>$<?php echo number_format($p['monto_prestamo'],0,',','.'); ?></td>
+                <td><?php echo number_format($p['tasa_interes'],2,',','.'); ?>%</td>
+                <td>$<?php echo number_format($p['interes_mensual'],0,',','.'); ?></td>
                 <td>$<?php echo number_format($p['saldo_capital_actual'],0,',','.'); ?></td>
                 <td>$<?php echo number_format($p['saldo_intereses_actual'],0,',','.'); ?></td>
-                <td><?php echo $p['estado']; ?></td>
+                <td><?php echo $estadoPrestamo; ?></td>
                 <td class="text-end">
-                    <form method="POST" action="../actions/prestamos_save.php" class="d-inline" onsubmit="return confirm('Esta acción eliminará el préstamo, sus cuotas y movimientos asociados. ¿Deseas continuar?');">
+                    <form method="POST" action="../actions/prestamos_save.php" class="d-inline" onsubmit="return confirm('Esta acción eliminará el préstamo y sus movimientos asociados. ¿Deseas continuar?');">
                         <input type="hidden" name="accion" value="eliminar">
                         <input type="hidden" name="id_prestamo" value="<?php echo $p['id_prestamo']; ?>">
                         <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
@@ -183,8 +222,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const socioSelect = document.querySelector('select[name="id_socio"]');
     const tipoDeudor = document.querySelector('select[name="es_particular"]');
     const montoPrestamo = document.querySelector('input[name="monto_prestamo"]');
-    const numeroCuotas = document.querySelector('input[name="numero_cuotas"]');
     const tasaInteres = document.querySelector('input[name="tasa_interes"]');
+    const avalSelect = document.querySelector('select[name="id_socio_aval"]');
+    const deudorParticular = document.querySelector('input[name="nombre_deudor"]');
 
     const saldoAcumulado = document.getElementById('saldoAcumulado');
     const saldoPrestamos = document.getElementById('saldoPrestamos');
@@ -233,6 +273,29 @@ document.addEventListener('DOMContentLoaded', () => {
             resumenBase = { accumulated: 0, debt: 0, projection: 0 };
         }
         actualizarResumen();
+    }
+
+    function sincronizarCamposDeudor() {
+        const esParticular = tipoDeudor.value === '1';
+
+        if (esParticular) {
+            socioSelect.value = '';
+            socioSelect.disabled = true;
+            socioSelect.required = false;
+            avalSelect.disabled = false;
+            avalSelect.required = true;
+            deudorParticular.disabled = false;
+            deudorParticular.required = true;
+        } else {
+            socioSelect.disabled = false;
+            socioSelect.required = true;
+            avalSelect.value = '';
+            avalSelect.disabled = true;
+            avalSelect.required = false;
+            deudorParticular.value = '';
+            deudorParticular.disabled = true;
+            deudorParticular.required = false;
+        }
     }
 
     function calcularConNuevoPrestamo() {
@@ -297,15 +360,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     socioSelect.addEventListener('change', obtenerResumenSocio);
-    tipoDeudor.addEventListener('change', obtenerResumenSocio);
     tipoDeudor.addEventListener('change', () => {
+        sincronizarCamposDeudor();
+        obtenerResumenSocio();
         const tasaSocio = parseFloat(tasaInteres.dataset.tasaSocio || '0');
         const tasaParticular = parseFloat(tasaInteres.dataset.tasaParticular || '0');
         tasaInteres.value = tipoDeudor.value === '1' ? tasaParticular : tasaSocio;
     });
     montoPrestamo.addEventListener('input', actualizarResumen);
-    numeroCuotas.addEventListener('input', actualizarResumen);
 
+    sincronizarCamposDeudor();
     actualizarResumen();
 });
 </script>

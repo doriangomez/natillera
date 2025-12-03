@@ -80,7 +80,7 @@ CREATE TABLE prestamos (
     fecha_prestamo DATE,
     monto_prestamo DECIMAL(12,2),
     tasa_interes DECIMAL(6,2) DEFAULT 0,
-    numero_cuotas INT DEFAULT 1,
+    interes_mensual DECIMAL(12,2) DEFAULT 0,
     saldo_capital_actual DECIMAL(12,2) DEFAULT 0,
     saldo_intereses_actual DECIMAL(12,2) DEFAULT 0,
     estado VARCHAR(20) DEFAULT 'vigente',
