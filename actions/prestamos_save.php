@@ -37,6 +37,9 @@ if ($accion === 'eliminar') {
         $stmtCuotas->execute([':id' => $idPrestamo]);
         $cuotas = $stmtCuotas->fetchAll();
 
+        $interesAnticipado = (float) ($prestamo['interes_mensual'] ?? 0);
+        $montoDesembolso = max(0, ((float) $prestamo['monto_prestamo']) - $interesAnticipado);
+
         foreach ($cuotas as $cuota) {
             $valorTotal = (float) $cuota['valor_capital_pagado'] + (float) $cuota['valor_interes_pagado'];
             if (!empty($cuota['fecha_pago'])) {
@@ -66,7 +69,7 @@ if ($accion === 'eliminar') {
             $paramsDel = [
                 ':id_act' => $actividadPrestamo['id_actividad'],
                 ':fecha' => $prestamo['fecha_prestamo'],
-                ':valor' => abs((float) $prestamo['monto_prestamo']),
+                ':valor' => abs($montoDesembolso),
             ];
             $sqlDelDesembolso = 'DELETE FROM movimientos WHERE id_actividad = :id_act AND motivo = :motivo AND fecha = :fecha AND valor = :valor';
             $socioMovimiento = $prestamo['es_particular'] ? null : $prestamo['id_socio'];
@@ -77,6 +80,26 @@ if ($accion === 'eliminar') {
             }
             $sqlDelDesembolso .= ' LIMIT 1';
             $pdo->prepare($sqlDelDesembolso)->execute($paramsDel);
+
+        }
+
+        $actividadInteres = obtenerConceptoPorBandera($pdo, 'es_pago_interes');
+        if ($actividadInteres && $interesAnticipado > 0) {
+            $paramsInteres = [
+                ':id_act' => $actividadInteres['id_actividad'],
+                ':fecha' => $prestamo['fecha_prestamo'],
+                ':valor' => abs($interesAnticipado),
+                ':motivo' => 'Interés anticipado préstamo',
+            ];
+
+            $sqlDelInteres = 'DELETE FROM movimientos WHERE id_actividad = :id_act AND motivo = :motivo AND fecha = :fecha AND valor = :valor';
+            $socioMovimientoInteres = $prestamo['es_particular'] ? null : $prestamo['id_socio'];
+            $sqlDelInteres .= $socioMovimientoInteres ? ' AND id_socio = :id_socio' : ' AND id_socio IS NULL';
+            if ($socioMovimientoInteres) {
+                $paramsInteres[':id_socio'] = $socioMovimientoInteres;
+            }
+            $sqlDelInteres .= ' LIMIT 1';
+            $pdo->prepare($sqlDelInteres)->execute($paramsInteres);
         }
 
         $stmtDelPrestamo = $pdo->prepare('DELETE FROM prestamos WHERE id_prestamo = :id');
@@ -151,7 +174,8 @@ if (!$esParticular) {
 
 $interesMensual = round($monto * ($tasa / 100), 2);
 $saldoCapital = $monto;
-$saldoInteres = $interesMensual;
+$saldoInteres = 0;
+$montoDesembolso = max(0, $monto - $interesMensual);
 
 $stmt = $pdo->prepare('INSERT INTO prestamos (id_socio, es_particular, id_socio_aval, nombre_deudor, fecha_prestamo, monto_prestamo, tasa_interes, interes_mensual, saldo_capital_actual, saldo_intereses_actual, estado) VALUES (:id_socio, :es_particular, :id_aval, :nombre_deudor, :fecha, :monto, :tasa, :interes_mensual, :saldo_capital_actual, :saldo_intereses_actual, :estado)');
 $stmt->execute([
@@ -212,7 +236,7 @@ $stmtMov->execute([
     ':id_socio' => $socioMovimiento,
     ':id_actividad' => $actividadPrestamo['id_actividad'],
     ':motivo' => 'Registro préstamo',
-    ':valor' => abs($monto),
+    ':valor' => abs($montoDesembolso),
     ':medio' => 'Efectivo',
     ':obs' => $observacionMovimiento,
     ':usuario' => $_SESSION['usuario'] ?? null,
@@ -220,8 +244,36 @@ $stmtMov->execute([
     ':es_ingreso' => $esIngreso,
     ':es_egreso' => $esEgreso,
 ]);
-actualizarSaldoSocio($pdo, $socioMovimiento, abs($monto), $reglaSocio);
-actualizarSaldoNatillera($pdo, abs($monto), $reglaNatillera);
+actualizarSaldoSocio($pdo, $socioMovimiento, abs($montoDesembolso), $reglaSocio);
+actualizarSaldoNatillera($pdo, abs($montoDesembolso), $reglaNatillera);
+
+$actividadInteres = obtenerConceptoPorBandera($pdo, 'es_pago_interes');
+if ($actividadInteres) {
+    $reglaSocioInteres = normalizarReglaAfectacion($actividadInteres['afecta_saldo_socio']);
+    $reglaNatilleraInteres = normalizarReglaAfectacion($actividadInteres['afecta_saldo_natillera']);
+    $esIngresoInteres = (int) ($actividadInteres['es_ingreso'] ?? 0);
+    $esEgresoInteres = $esIngresoInteres ? 0 : ($reglaNatilleraInteres === 'resta' ? 1 : 0);
+
+    $stmtInteres = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
+    $stmtInteres->execute([
+        ':fecha' => $fecha,
+        ':anio' => $anioFecha,
+        ':mes' => $mesFecha,
+        ':quincena' => $quincena,
+        ':id_socio' => $socioMovimiento,
+        ':id_actividad' => $actividadInteres['id_actividad'],
+        ':motivo' => 'Interés anticipado préstamo',
+        ':valor' => abs($interesMensual),
+        ':medio' => 'Efectivo',
+        ':obs' => $observacionMovimiento,
+        ':usuario' => $_SESSION['usuario'] ?? null,
+        ':modulo' => 'prestamos',
+        ':es_ingreso' => $esIngresoInteres,
+        ':es_egreso' => $esEgresoInteres,
+    ]);
+    actualizarSaldoSocio($pdo, $socioMovimiento, abs($interesMensual), $reglaSocioInteres);
+    actualizarSaldoNatillera($pdo, abs($interesMensual), $reglaNatilleraInteres);
+}
 
 header('Location: ../public/prestamos.php');
 ?>

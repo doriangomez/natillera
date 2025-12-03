@@ -18,7 +18,7 @@ $totalesMovimientos = $pdo->query("
                     WHEN 'suma' THEN m.valor
                     WHEN 'resta' THEN -m.valor
                     ELSE 0 END AS valor_natillera,
-               a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general
+               a.es_prestamo, a.es_pago_prestamo, a.es_pago_interes, a.es_polla, a.es_gasto_general
         FROM movimientos m
         JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
     )
@@ -27,7 +27,8 @@ $totalesMovimientos = $pdo->query("
         COALESCE(SUM(CASE WHEN es_polla = 1 THEN valor_natillera END),0) AS total_pollas,
         COALESCE(SUM(CASE WHEN es_prestamo = 1 THEN valor_natillera END),0) AS total_prestado,
         COALESCE(SUM(CASE WHEN es_pago_prestamo = 1 AND valor_socio <> 0 THEN valor_natillera END),0) AS total_prestamo_recuperado,
-        COALESCE(SUM(CASE WHEN es_pago_prestamo = 1 AND valor_socio = 0 THEN valor_natillera END),0) AS total_intereses,
+        COALESCE(SUM(CASE WHEN es_pago_prestamo = 1 AND valor_socio = 0 THEN valor_natillera END),0) +
+        COALESCE(SUM(CASE WHEN es_pago_interes = 1 THEN valor_natillera END),0) AS total_intereses,
         COALESCE(SUM(CASE WHEN es_gasto_general = 1 THEN valor_natillera END),0) AS total_gastos,
         COALESCE(SUM(CASE WHEN valor_natillera > 0 THEN valor_natillera END),0) AS total_ingresos,
         COALESCE(SUM(CASE WHEN valor_natillera < 0 THEN -valor_natillera END),0) AS total_egresos,
