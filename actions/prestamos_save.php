@@ -8,6 +8,10 @@ try {
     if ($existeModulo && $existeModulo->rowCount() === 0) {
         $pdo->exec("ALTER TABLE movimientos ADD COLUMN modulo VARCHAR(100) DEFAULT NULL");
     }
+    $existeInteresMensual = $pdo->query("SHOW COLUMNS FROM prestamos LIKE 'interes_mensual'");
+    if ($existeInteresMensual && $existeInteresMensual->rowCount() === 0) {
+        $pdo->exec("ALTER TABLE prestamos ADD COLUMN interes_mensual DECIMAL(12,2) DEFAULT 0 AFTER tasa_interes");
+    }
 } catch (Exception $e) {
     // continuar
 }
@@ -60,13 +64,14 @@ if ($accion === 'eliminar') {
             $paramsDel = [
                 ':id_act' => $actividadPrestamo['id_actividad'],
                 ':fecha' => $prestamo['fecha_prestamo'],
-                ':valor' => -abs((float) $prestamo['monto_prestamo']),
+                ':valor' => abs((float) $prestamo['monto_prestamo']),
             ];
             $sqlDelDesembolso = 'DELETE FROM movimientos WHERE id_actividad = :id_act AND motivo = :motivo AND fecha = :fecha AND valor = :valor';
-            $sqlDelDesembolso .= !empty($prestamo['id_socio']) ? ' AND id_socio = :id_socio' : ' AND id_socio IS NULL';
-            $paramsDel[':motivo'] = 'Desembolso préstamo';
-            if (!empty($prestamo['id_socio'])) {
-                $paramsDel[':id_socio'] = $prestamo['id_socio'];
+            $socioMovimiento = $prestamo['es_particular'] ? $prestamo['id_socio_aval'] : $prestamo['id_socio'];
+            $sqlDelDesembolso .= $socioMovimiento ? ' AND id_socio = :id_socio' : ' AND id_socio IS NULL';
+            $paramsDel[':motivo'] = 'Registro préstamo';
+            if ($socioMovimiento) {
+                $paramsDel[':id_socio'] = $socioMovimiento;
             }
             $sqlDelDesembolso .= ' LIMIT 1';
             $pdo->prepare($sqlDelDesembolso)->execute($paramsDel);
@@ -89,14 +94,45 @@ if ($accion === 'eliminar') {
 
 $fecha = $_POST['fecha_prestamo'];
 $idSocio = $_POST['id_socio'] ?: null;
-$esParticular = isset($_POST['es_particular']) ? (int) $_POST['es_particular'] : 0;
+$esParticular = isset($_POST['es_particular']) ? (int) $_POST['es_particular'] : null;
 $idAval = $_POST['id_socio_aval'] ?: null;
-$nombreDeudor = $_POST['nombre_deudor'] ?: null;
+$nombreDeudor = trim($_POST['nombre_deudor'] ?? '');
 $monto = (float) $_POST['monto_prestamo'];
 $tasa = (float) $_POST['tasa_interes'];
-$cuotas = (int) $_POST['numero_cuotas'];
 
-$stmt = $pdo->prepare('INSERT INTO prestamos (id_socio, es_particular, id_socio_aval, nombre_deudor, fecha_prestamo, monto_prestamo, tasa_interes, numero_cuotas, saldo_capital_actual, saldo_intereses_actual, estado) VALUES (:id_socio, :es_particular, :id_aval, :nombre_deudor, :fecha, :monto, :tasa, :cuotas, :saldo_capital_actual, :saldo_intereses_actual, :estado)');
+if ($esParticular === null) {
+    $_SESSION['error'] = 'Debes seleccionar si el deudor es socio o particular.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+
+if (!$esParticular) {
+    if (!$idSocio) {
+        $_SESSION['error'] = 'Selecciona el socio beneficiario para el préstamo.';
+        header('Location: ../public/prestamos.php');
+        exit;
+    }
+    $idAval = $_POST['id_socio_aval'] ?: null;
+    $nombreDeudor = null;
+} else {
+    if ($nombreDeudor === '') {
+        $_SESSION['error'] = 'Ingresa el nombre del deudor particular.';
+        header('Location: ../public/prestamos.php');
+        exit;
+    }
+    if (!$idAval) {
+        $_SESSION['error'] = 'Selecciona el socio avalador para el préstamo de un particular.';
+        header('Location: ../public/prestamos.php');
+        exit;
+    }
+    $idSocio = null;
+}
+
+$interesMensual = round($monto * ($tasa / 100), 2);
+$saldoCapital = $monto;
+$saldoInteres = $interesMensual;
+
+$stmt = $pdo->prepare('INSERT INTO prestamos (id_socio, es_particular, id_socio_aval, nombre_deudor, fecha_prestamo, monto_prestamo, tasa_interes, interes_mensual, saldo_capital_actual, saldo_intereses_actual, estado) VALUES (:id_socio, :es_particular, :id_aval, :nombre_deudor, :fecha, :monto, :tasa, :interes_mensual, :saldo_capital_actual, :saldo_intereses_actual, :estado)');
 $stmt->execute([
     ':id_socio' => $idSocio,
     ':es_particular' => $esParticular,
@@ -105,45 +141,39 @@ $stmt->execute([
     ':fecha' => $fecha,
     ':monto' => $monto,
     ':tasa' => $tasa,
-    ':cuotas' => $cuotas,
-    ':saldo_capital_actual' => $monto,
-    ':saldo_intereses_actual' => 0,
-    ':estado' => 'vigente'
+    ':interes_mensual' => $interesMensual,
+    ':saldo_capital_actual' => $saldoCapital,
+    ':saldo_intereses_actual' => $saldoInteres,
+    ':estado' => 'Vigente'
 ]);
 $idPrestamo = $pdo->lastInsertId();
 
-$valorCuota = $cuotas > 0 ? $monto / $cuotas : $monto;
-for ($i=1; $i<=$cuotas; $i++) {
-    $fechaProg = date('Y-m-d', strtotime("+$i month", strtotime($fecha)));
-    $stmtCuota = $pdo->prepare('INSERT INTO cuotas_prestamo (id_prestamo, numero_cuota, fecha_programada, valor_cuota, valor_capital_pagado, valor_interes_pagado, saldo_capital_despues, saldo_intereses_despues) VALUES (:id_prestamo, :num, :fecha_prog, :valor_cuota, 0, 0, :saldo_capital, 0)');
-    $stmtCuota->execute([
-        ':id_prestamo' => $idPrestamo,
-        ':num' => $i,
-        ':fecha_prog' => $fechaProg,
-        ':valor_cuota' => $valorCuota,
-        ':saldo_capital' => $monto - ($valorCuota*$i)
-    ]);
-}
+// No se generan cuotas programadas: solo se registra el resumen del préstamo
 
 // Registrar movimiento de desembolso si existe actividad marcada como préstamo
 $actividadPrestamo = $pdo->query("SELECT id_actividad, afecta_saldo_socio, afecta_saldo_natillera FROM actividades_maestro WHERE es_prestamo=1 LIMIT 1")->fetch();
 if ($actividadPrestamo) {
     $reglaSocio = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_socio']);
     $reglaNatillera = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_natillera']);
-    $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, 0, 1, :obs, :usuario, NOW(), :modulo)');
+    $socioMovimiento = $esParticular ? $idAval : $idSocio;
+    $esIngreso = $reglaNatillera === 'suma' ? 1 : 0;
+    $esEgreso = $reglaNatillera === 'resta' ? 1 : 0;
+    $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
     $stmtMov->execute([
         ':fecha' => $fecha,
-        ':id_socio' => $idSocio,
+        ':id_socio' => $socioMovimiento,
         ':id_actividad' => $actividadPrestamo['id_actividad'],
-        ':motivo' => 'Desembolso préstamo',
-        ':valor' => -abs($monto),
+        ':motivo' => 'Registro préstamo',
+        ':valor' => abs($monto),
         ':medio' => 'Efectivo',
         ':obs' => 'Desembolso inicial',
         ':usuario' => $_SESSION['usuario'] ?? null,
         ':modulo' => 'prestamos',
+        ':es_ingreso' => $esIngreso,
+        ':es_egreso' => $esEgreso,
     ]);
-    actualizarSaldoSocio($pdo, $idSocio, -abs($monto), $reglaSocio);
-    actualizarSaldoNatillera($pdo, -abs($monto), $reglaNatillera);
+    actualizarSaldoSocio($pdo, $socioMovimiento, abs($monto), $reglaSocio);
+    actualizarSaldoNatillera($pdo, abs($monto), $reglaNatillera);
 }
 
 header('Location: ../public/prestamos.php');

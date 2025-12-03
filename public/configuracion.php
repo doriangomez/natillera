@@ -60,6 +60,16 @@ $medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
                         <label class="form-label">Datos globales</label>
                         <textarea name="datos_globales" rows="4" class="form-control"><?php echo clean($config['datos_globales'] ?? ''); ?></textarea>
                     </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Tasa interés socio (%)</label>
+                            <input type="number" step="0.01" min="0" name="tasa_interes_socio" class="form-control" value="<?php echo clean($config['tasa_interes_socio'] ?? 0); ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Tasa interés deudor particular (%)</label>
+                            <input type="number" step="0.01" min="0" name="tasa_interes_particular" class="form-control" value="<?php echo clean($config['tasa_interes_particular'] ?? 0); ?>">
+                        </div>
+                    </div>
                     <div class="d-flex gap-2">
                         <button class="btn btn-primary" type="submit">Guardar parámetros</button>
                         <a class="btn btn-outline-secondary" href="index.php">Volver al panel</a>

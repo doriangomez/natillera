@@ -80,7 +80,7 @@ CREATE TABLE prestamos (
     fecha_prestamo DATE,
     monto_prestamo DECIMAL(12,2),
     tasa_interes DECIMAL(6,2) DEFAULT 0,
-    numero_cuotas INT DEFAULT 1,
+    interes_mensual DECIMAL(12,2) DEFAULT 0,
     saldo_capital_actual DECIMAL(12,2) DEFAULT 0,
     saldo_intereses_actual DECIMAL(12,2) DEFAULT 0,
     estado VARCHAR(20) DEFAULT 'vigente',
@@ -117,7 +117,9 @@ CREATE TABLE configuracion_general (
     nombre_sistema VARCHAR(200) DEFAULT 'Aplicativo de Natillera creado por Dorian Gómez',
     logo_archivo VARCHAR(255) DEFAULT NULL,
     datos_globales TEXT,
-    reglamento_archivo VARCHAR(255) DEFAULT NULL
+    reglamento_archivo VARCHAR(255) DEFAULT NULL,
+    tasa_interes_socio DECIMAL(6,2) DEFAULT 0,
+    tasa_interes_particular DECIMAL(6,2) DEFAULT 0
 );
 INSERT INTO configuracion_general (id_config, nombre_sistema, logo_archivo, datos_globales) VALUES
 (1, 'Aplicativo de Natillera creado por Dorian Gómez', NULL, 'Datos generales de la natillera');
