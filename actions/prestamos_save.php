@@ -41,24 +41,26 @@ if ($accion === 'eliminar') {
         $montoMovimientoPrestamo = abs((float) ($prestamo['monto_prestamo'] ?? 0));
 
         foreach ($cuotas as $cuota) {
-            $valorTotal = (float) $cuota['valor_capital_pagado'] + (float) $cuota['valor_interes_pagado'];
-            if (!empty($cuota['fecha_pago'])) {
-                $motivo = 'Pago cuota préstamo #' . $idPrestamo;
-                $sqlDelMov = 'DELETE FROM movimientos WHERE motivo = :motivo AND fecha = :fecha AND ABS(valor - :valor) < 0.01';
-                $paramsMov = [
-                    ':motivo' => $motivo,
-                    ':fecha' => $cuota['fecha_pago'],
-                    ':valor' => $valorTotal,
-                ];
-                if (!empty($prestamo['id_socio'])) {
-                    $sqlDelMov .= ' AND id_socio = :id_socio';
-                    $paramsMov[':id_socio'] = $prestamo['id_socio'];
-                } else {
-                    $sqlDelMov .= ' AND id_socio IS NULL';
-                }
-                $sqlDelMov .= ' LIMIT 1';
-                $pdo->prepare($sqlDelMov)->execute($paramsMov);
+            if (empty($cuota['fecha_pago'])) {
+                continue;
             }
+
+            $motivo = 'Pago cuota préstamo #' . $idPrestamo;
+            $sqlDelMov = 'DELETE FROM movimientos WHERE modulo = :modulo AND motivo = :motivo AND fecha = :fecha';
+            $paramsMov = [
+                ':modulo' => 'cuotas',
+                ':motivo' => $motivo,
+                ':fecha' => $cuota['fecha_pago'],
+            ];
+
+            if (!empty($prestamo['id_socio'])) {
+                $sqlDelMov .= ' AND id_socio = :id_socio';
+                $paramsMov[':id_socio'] = $prestamo['id_socio'];
+            } else {
+                $sqlDelMov .= ' AND id_socio IS NULL';
+            }
+
+            $pdo->prepare($sqlDelMov)->execute($paramsMov);
         }
 
         $stmtDelCuotas = $pdo->prepare('DELETE FROM cuotas_prestamo WHERE id_prestamo = :id');
@@ -71,14 +73,14 @@ if ($accion === 'eliminar') {
                 ':fecha' => $prestamo['fecha_prestamo'],
                 ':valor' => $montoMovimientoPrestamo,
             ];
-            $sqlDelDesembolso = 'DELETE FROM movimientos WHERE id_actividad = :id_act AND motivo = :motivo AND fecha = :fecha AND valor = :valor';
+            $sqlDelDesembolso = 'DELETE FROM movimientos WHERE modulo = :modulo AND id_actividad = :id_act AND motivo = :motivo AND fecha = :fecha AND valor = :valor';
             $socioMovimiento = $prestamo['es_particular'] ? null : $prestamo['id_socio'];
+            $paramsDel[':modulo'] = 'prestamos';
             $sqlDelDesembolso .= $socioMovimiento ? ' AND id_socio = :id_socio' : ' AND id_socio IS NULL';
             $paramsDel[':motivo'] = 'Registro préstamo';
             if ($socioMovimiento) {
                 $paramsDel[':id_socio'] = $socioMovimiento;
             }
-            $sqlDelDesembolso .= ' LIMIT 1';
             $pdo->prepare($sqlDelDesembolso)->execute($paramsDel);
 
         }
@@ -92,13 +94,13 @@ if ($accion === 'eliminar') {
                 ':motivo' => 'Interés anticipado préstamo',
             ];
 
-            $sqlDelInteres = 'DELETE FROM movimientos WHERE id_actividad = :id_act AND motivo = :motivo AND fecha = :fecha AND valor = :valor';
+            $sqlDelInteres = 'DELETE FROM movimientos WHERE modulo = :modulo AND id_actividad = :id_act AND motivo = :motivo AND fecha = :fecha AND valor = :valor';
             $socioMovimientoInteres = $prestamo['es_particular'] ? null : $prestamo['id_socio'];
+            $paramsInteres[':modulo'] = 'prestamos';
             $sqlDelInteres .= $socioMovimientoInteres ? ' AND id_socio = :id_socio' : ' AND id_socio IS NULL';
             if ($socioMovimientoInteres) {
                 $paramsInteres[':id_socio'] = $socioMovimientoInteres;
             }
-            $sqlDelInteres .= ' LIMIT 1';
             $pdo->prepare($sqlDelInteres)->execute($paramsInteres);
         }
 
