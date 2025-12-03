@@ -26,6 +26,131 @@ function normalizarReglaAfectacion($regla) {
     return $regla;
 }
 
+function asegurarEsquemaActividades(PDO $pdo): void {
+    $columnas = [
+        'es_ingreso TINYINT(1) DEFAULT 0',
+        'es_pago_interes TINYINT(1) DEFAULT 0',
+        'es_interes_causado TINYINT(1) DEFAULT 0',
+    ];
+
+    foreach ($columnas as $definicion) {
+        $nombre = explode(' ', $definicion)[0];
+        try {
+            $existe = $pdo->query("SHOW COLUMNS FROM actividades_maestro LIKE '$nombre'");
+            if ($existe && $existe->rowCount() === 0) {
+                $pdo->exec("ALTER TABLE actividades_maestro ADD COLUMN $definicion");
+            }
+        } catch (Exception $e) {
+            // Continuar sin interrumpir la operación
+        }
+    }
+}
+
+function sincronizarConceptosPrestamo(PDO $pdo): array {
+    asegurarEsquemaActividades($pdo);
+
+    $conceptos = [
+        'es_prestamo' => [
+            'nombre_actividad' => 'Préstamo a socio',
+            'descripcion' => 'Desembolso de préstamo al socio o aval para un particular',
+            'afecta_saldo_socio' => 'resta',
+            'afecta_saldo_natillera' => 'resta',
+            'es_ingreso' => 0,
+        ],
+        'es_pago_prestamo' => [
+            'nombre_actividad' => 'Pago a préstamo',
+            'descripcion' => 'Abonos a capital de préstamos vigentes',
+            'afecta_saldo_socio' => 'suma',
+            'afecta_saldo_natillera' => 'suma',
+            'es_ingreso' => 1,
+        ],
+        'es_pago_interes' => [
+            'nombre_actividad' => 'Pago de intereses',
+            'descripcion' => 'Pagos de intereses de préstamos',
+            'afecta_saldo_socio' => 'suma',
+            'afecta_saldo_natillera' => 'suma',
+            'es_ingreso' => 1,
+        ],
+        'es_interes_causado' => [
+            'nombre_actividad' => 'Causación de intereses',
+            'descripcion' => 'Causación automática de intereses mensuales',
+            'afecta_saldo_socio' => 'resta',
+            'afecta_saldo_natillera' => 'neutral',
+            'es_ingreso' => 0,
+        ],
+    ];
+
+    $resultado = [];
+
+    foreach ($conceptos as $flag => $data) {
+        $columnasActualizar = array_merge($data, array_fill_keys(array_keys($conceptos), 0), [
+            'es_polla' => 0,
+            'es_gasto_general' => 0,
+        ]);
+        $columnasActualizar[$flag] = 1;
+
+        $stmtBandera = $pdo->prepare("SELECT * FROM actividades_maestro WHERE $flag = 1 ORDER BY id_actividad ASC");
+        $stmtBandera->execute();
+        $existentes = $stmtBandera->fetchAll();
+
+        if (count($existentes) > 1) {
+            foreach (array_slice($existentes, 1) as $duplicado) {
+                $pdo->prepare("UPDATE actividades_maestro SET $flag = 0 WHERE id_actividad = :id")
+                    ->execute([':id' => $duplicado['id_actividad']]);
+            }
+        }
+
+        $principal = $existentes[0] ?? null;
+
+        if (!$principal) {
+            $stmtNombre = $pdo->prepare('SELECT * FROM actividades_maestro WHERE nombre_actividad = :nombre LIMIT 1');
+            $stmtNombre->execute([':nombre' => $data['nombre_actividad']]);
+            $principal = $stmtNombre->fetch();
+        }
+
+        if ($principal) {
+            $sets = [];
+            $params = [];
+            foreach ($columnasActualizar as $col => $valor) {
+                $sets[] = "$col = :$col";
+                $params[":$col"] = $valor;
+            }
+            $params[':id'] = $principal['id_actividad'];
+            $sqlUpdate = 'UPDATE actividades_maestro SET ' . implode(', ', $sets) . ' WHERE id_actividad = :id';
+            $pdo->prepare($sqlUpdate)->execute($params);
+            $resultado[$flag] = (int) $principal['id_actividad'];
+            continue;
+        }
+
+        $columnasInsert = array_merge($columnasActualizar, ['activo' => 1]);
+        $campos = array_keys($columnasInsert);
+        $placeholders = array_map(fn($c) => ':' . $c, $campos);
+        $sql = 'INSERT INTO actividades_maestro (' . implode(',', $campos) . ') VALUES (' . implode(',', $placeholders) . ')';
+        $stmtInsert = $pdo->prepare($sql);
+        $paramsInsert = [];
+        foreach ($columnasInsert as $col => $valor) {
+            $paramsInsert[":$col"] = $valor;
+        }
+        $stmtInsert->execute($paramsInsert);
+        $resultado[$flag] = (int) $pdo->lastInsertId();
+    }
+
+    return $resultado;
+}
+
+function obtenerConceptoPorBandera(PDO $pdo, string $flag): ?array {
+    $permitidos = ['es_prestamo', 'es_pago_prestamo', 'es_pago_interes', 'es_interes_causado'];
+    if (!in_array($flag, $permitidos, true)) {
+        return null;
+    }
+
+    sincronizarConceptosPrestamo($pdo);
+
+    $stmt = $pdo->prepare("SELECT * FROM actividades_maestro WHERE $flag = 1 LIMIT 1");
+    $stmt->execute();
+    return $stmt->fetch() ?: null;
+}
+
 function obtenerSiguienteIdSocioDisponible(PDO $pdo): int {
     $ids = $pdo->query('SELECT id_socio FROM socios ORDER BY id_socio')->fetchAll(PDO::FETCH_COLUMN);
 
@@ -50,6 +175,7 @@ function recalcularAutoIncrementSocios(PDO $pdo): void {
 }
 
 function getActividades($pdo, $soloPolla = false, $incluirInactivas = false) {
+    asegurarEsquemaActividades($pdo);
     $sql = "SELECT * FROM actividades_maestro";
     $condiciones = [];
     if ($soloPolla) {
@@ -107,6 +233,7 @@ function actualizarSaldoSocio($pdo, $idSocio, $monto, $regla) {
 }
 
 function getActividad($pdo, $id) {
+    asegurarEsquemaActividades($pdo);
     $stmt = $pdo->prepare("SELECT * FROM actividades_maestro WHERE id_actividad = :id");
     $stmt->execute([':id' => $id]);
     return $stmt->fetch();

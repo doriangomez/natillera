@@ -3,6 +3,7 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 $configGeneral = getConfiguracionGeneral($pdo);
+$conceptosPrestamo = sincronizarConceptosPrestamo($pdo);
 $socios = getSocios($pdo);
 $actividades = getActividades($pdo);
 $mediosPago = getMediosPago($pdo);
@@ -64,22 +65,28 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
             <div class="alert alert-info mt-3 mb-2">
                 <div class="fw-semibold text-uppercase small text-muted">Resumen financiero proyectado</div>
                 <div class="row g-3 mt-1" id="resumenFinanciero">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="p-3 bg-body-tertiary rounded border h-100">
                             <div class="text-muted small">Saldo actual acumulado</div>
                             <div class="fs-5 fw-semibold" id="saldoAcumulado">$0</div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="p-3 bg-body-tertiary rounded border h-100">
                             <div class="text-muted small">Saldo actual de préstamos</div>
                             <div class="fs-5 fw-semibold" id="saldoPrestamos">$0</div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="p-3 bg-body-tertiary rounded border h-100">
                             <div class="text-muted small">Ingresos proyectados próximos meses</div>
                             <div class="fs-5 fw-semibold" id="ingresosProyectados">$0</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 bg-body-tertiary rounded border h-100">
+                            <div class="text-muted small">Saldo estimado total</div>
+                            <div class="fs-5 fw-semibold" id="saldoEstimadoTotal">$0</div>
                         </div>
                     </div>
                 </div>
@@ -196,6 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saldoAcumulado = document.getElementById('saldoAcumulado');
     const saldoPrestamos = document.getElementById('saldoPrestamos');
     const ingresosProyectados = document.getElementById('ingresosProyectados');
+    const saldoEstimadoTotal = document.getElementById('saldoEstimadoTotal');
     const badgeRiesgo = document.getElementById('badgeRiesgo');
     const mensajeRiesgo = document.getElementById('mensajeRiesgo');
     const ratioRiesgo = document.getElementById('ratioRiesgo');
@@ -312,9 +320,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const totales = calcularConNuevoPrestamo();
 
         const proyeccion = Math.max(totales.projection, 0);
+        const saldoEstimado = totales.accumulated - totales.debt + proyeccion;
         saldoAcumulado.textContent = formatter.format(Math.max(totales.accumulated, 0));
         saldoPrestamos.textContent = formatter.format(Math.max(totales.debt, 0));
         ingresosProyectados.textContent = formatter.format(proyeccion);
+        saldoEstimadoTotal.textContent = formatter.format(saldoEstimado);
 
         const ratio = proyeccion > 0 ? (totales.debt / proyeccion) * 100 : (totales.debt > 0 ? 100 : 0);
         const riesgo = definirRiesgo(ratio, totales.debt);

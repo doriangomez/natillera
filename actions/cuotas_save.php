@@ -12,6 +12,8 @@ try {
     // continuar
 }
 
+sincronizarConceptosPrestamo($pdo);
+
 $accion = $_POST['accion'] ?? 'crear';
 $idCuota = isset($_POST['id_cuota']) ? (int) $_POST['id_cuota'] : 0;
 
@@ -67,7 +69,6 @@ $idPrestamo = (int) $_POST['id_prestamo'];
 $fechaPago = $_POST['fecha_pago'];
 $capPagado = (float) $_POST['valor_capital_pagado'];
 $intPagado = (float) $_POST['valor_interes_pagado'];
-$idActividad = (int) $_POST['id_actividad'];
 $medio = $_POST['medio_consignacion'];
 
 $stmtNext = $pdo->prepare('SELECT COALESCE(MAX(numero_cuota),0)+1 AS prox FROM cuotas_prestamo WHERE id_prestamo=:id AND fecha_pago IS NOT NULL');
@@ -110,26 +111,50 @@ $pdo->prepare('UPDATE prestamos SET saldo_capital_actual=:cap, saldo_intereses_a
     ':id' => $idPrestamo
 ]);
 
-$actividad = getActividad($pdo, $idActividad);
+$actividadCapital = obtenerConceptoPorBandera($pdo, 'es_pago_prestamo');
+$actividadInteres = obtenerConceptoPorBandera($pdo, 'es_pago_interes');
+
+if (!$actividadCapital || !$actividadInteres) {
+    $_SESSION['error'] = 'No se encontraron conceptos de pago configurados para préstamos.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+
 $valorTotal = $capPagado + $intPagado;
-$reglaSocio = normalizarReglaAfectacion($actividad['afecta_saldo_socio'] ?? 'neutral');
-$reglaNatillera = normalizarReglaAfectacion($actividad['afecta_saldo_natillera'] ?? 'neutral');
+$socioMovimiento = $prestamo['es_particular'] ? $prestamo['id_socio_aval'] : $prestamo['id_socio'];
 
-$stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, 1, 0, :obs, :usuario, NOW(), :modulo)');
-$stmtMov->execute([
-    ':fecha' => $fechaPago,
-    ':id_socio' => $prestamo['es_particular'] ? $prestamo['id_socio_aval'] : $prestamo['id_socio'],
-    ':id_actividad' => $idActividad,
-    ':motivo' => 'Pago cuota préstamo #'.$idPrestamo,
-    ':valor' => $valorTotal,
-    ':medio' => $medio,
-    ':obs' => 'Pago cuota',
-    ':usuario' => $_SESSION['usuario'] ?? null,
-    ':modulo' => 'cuotas',
-]);
+$registrarMovimiento = function(array $actividad, float $valor, string $motivo) use ($pdo, $fechaPago, $medio, $socioMovimiento) {
+    if ($valor <= 0) {
+        return;
+    }
 
-actualizarSaldoSocio($pdo, $prestamo['es_particular'] ? $prestamo['id_socio_aval'] : $prestamo['id_socio'], $valorTotal, $reglaSocio);
-actualizarSaldoNatillera($pdo, $valorTotal, $reglaNatillera);
+    $reglaSocio = normalizarReglaAfectacion($actividad['afecta_saldo_socio'] ?? 'neutral');
+    $reglaNatillera = normalizarReglaAfectacion($actividad['afecta_saldo_natillera'] ?? 'neutral');
+    $esIngreso = (int) ($actividad['es_ingreso'] ?? 0);
+    $esEgreso = $esIngreso ? 0 : ($reglaNatillera === 'resta' ? 1 : 0);
+
+    $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
+    $stmtMov->execute([
+        ':fecha' => $fechaPago,
+        ':id_socio' => $socioMovimiento,
+        ':id_actividad' => $actividad['id_actividad'],
+        ':motivo' => $motivo,
+        ':valor' => abs($valor),
+        ':medio' => $medio,
+        ':obs' => 'Pago cuota',
+        ':usuario' => $_SESSION['usuario'] ?? null,
+        ':modulo' => 'cuotas',
+        ':es_ingreso' => $esIngreso,
+        ':es_egreso' => $esEgreso,
+    ]);
+
+    $socioId = $socioMovimiento ?: null;
+    actualizarSaldoSocio($pdo, $socioId, abs($valor), $reglaSocio);
+    actualizarSaldoNatillera($pdo, abs($valor), $reglaNatillera);
+};
+
+$registrarMovimiento($actividadCapital, $capPagado, 'Pago capital préstamo #'.$idPrestamo);
+$registrarMovimiento($actividadInteres, $intPagado, 'Pago intereses préstamo #'.$idPrestamo);
 
 $nuevoEstado = $saldoCapital > 0 ? 'Vigente' : 'Cancelado';
 $pdo->prepare('UPDATE prestamos SET estado = :estado WHERE id_prestamo = :id')->execute([
