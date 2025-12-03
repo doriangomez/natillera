@@ -112,6 +112,43 @@ foreach ($conciliacionesCerradas as $cc) {
     $totalesCerradas['diferencia'] += (float) $cc['diferencia'];
 }
 
+$totalSistemaGlobal = 0;
+$totalConciliadoGlobal = 0;
+
+foreach ($medios as $medio) {
+    $totalSistema = $totalesSistema[$medio['id']] ?? 0;
+    $valorConciliado = isset($conciliaciones[$medio['id']]['valor_conciliado'])
+        ? (float) $conciliaciones[$medio['id']]['valor_conciliado']
+        : 0.0;
+
+    $totalSistemaGlobal += $totalSistema;
+    $totalConciliadoGlobal += $valorConciliado;
+}
+
+$diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
+
+$conciliacionesCerradas = $pdo
+    ->query(
+        'SELECT cm.anio, cm.mes, mp.nombre AS medio_nombre, cm.saldo_sistema, cm.valor_conciliado, cm.diferencia
+         FROM conciliaciones_medios_pago cm
+         JOIN medios_pago mp ON mp.id = cm.id_medio
+         WHERE cm.cerrado = 1
+         ORDER BY cm.anio DESC, cm.mes DESC, mp.nombre'
+    )
+    ->fetchAll();
+
+$totalesCerradas = [
+    'sistema' => 0,
+    'conciliado' => 0,
+    'diferencia' => 0,
+];
+
+foreach ($conciliacionesCerradas as $cc) {
+    $totalesCerradas['sistema'] += (float) $cc['saldo_sistema'];
+    $totalesCerradas['conciliado'] += (float) $cc['valor_conciliado'];
+    $totalesCerradas['diferencia'] += (float) $cc['diferencia'];
+}
+
 $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
 ?>
 

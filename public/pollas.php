@@ -5,6 +5,30 @@ require_once __DIR__ . '/../includes/functions.php';
 $socios = getSocios($pdo);
 $actividadesPolla = getActividades($pdo, true);
 
+$nombresMeses = getNombresMeses();
+$periodosActivos = $pdo
+    ->query('SELECT anio, mes FROM periodos_configuracion WHERE activo = 1 ORDER BY anio ASC, mes ASC')
+    ->fetchAll();
+$periodosColumnas = array_map(function ($p) use ($nombresMeses) {
+    return [
+        'anio' => (int) $p['anio'],
+        'mes' => (int) $p['mes'],
+        'label' => $nombresMeses[(int) $p['mes']] . ' ' . (int) $p['anio'],
+    ];
+}, $periodosActivos);
+
+$pagosPolla = $pdo->query(
+    "SELECT m.id_socio, m.anio, m.mes, SUM(m.valor) AS valor_pagado
+     FROM movimientos m
+     JOIN actividades_maestro a ON m.id_actividad=a.id_actividad
+     WHERE a.es_polla=1 AND m.es_ingreso=1 AND m.anio IS NOT NULL AND m.mes IS NOT NULL
+     GROUP BY m.id_socio, m.anio, m.mes"
+)->fetchAll();
+$pagosIndex = [];
+foreach ($pagosPolla as $pago) {
+    $pagosIndex[(int) $pago['id_socio']][(int) $pago['anio']][(int) $pago['mes']] = (float) $pago['valor_pagado'];
+}
+
 asegurarTablaResultadosPolla($pdo);
 $resultadosPolla = obtenerResultadosPolla($pdo);
 $resultadosIndex = indexResultadosPollaPorMes($pdo);
@@ -76,6 +100,40 @@ unset($detalleMes);
         </div>
     </div>
 </div>
+<h4 class="mt-4 d-flex align-items-center gap-2"><i class="bi bi-calendar3"></i><span>Resumen de pago por periodo</span></h4>
+<?php if (empty($periodosColumnas)): ?>
+    <div class="alert alert-warning">Configure los periodos activos en el módulo de configuración para visualizar los pagos por mes y año.</div>
+<?php else: ?>
+    <div class="table-responsive">
+        <table class="table table-bordered table-sm align-middle">
+            <thead>
+                <tr>
+                    <th>Socio</th>
+                    <?php foreach ($periodosColumnas as $col): ?>
+                        <th class="text-center"><?php echo clean($col['label']); ?></th>
+                    <?php endforeach; ?>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($socios as $socio): ?>
+                    <tr>
+                        <td><?php echo clean($socio['nombre_completo']); ?></td>
+                        <?php foreach ($periodosColumnas as $col): ?>
+                            <?php $valorPagado = $pagosIndex[$socio['id_socio']][$col['anio']][$col['mes']] ?? 0; ?>
+                            <td class="text-center">
+                                <?php if ($valorPagado > 0): ?>
+                                    $<?php echo number_format($valorPagado, 0, ',', '.'); ?>
+                                <?php else: ?>
+                                    <span class="text-danger fw-semibold">No ha pagado</span>
+                                <?php endif; ?>
+                            </td>
+                        <?php endforeach; ?>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+<?php endif; ?>
 <h4 class="mt-4">Resumen por socio</h4>
 <div class="table-responsive">
 <table class="table table-striped table-sm">
