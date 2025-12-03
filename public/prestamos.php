@@ -4,6 +4,7 @@ require_once __DIR__ . '/../includes/functions.php';
 
 $configGeneral = getConfiguracionGeneral($pdo);
 asegurarTablaPeriodosPrestamo($pdo);
+extenderPeriodosPrestamoHastaMesActual($pdo);
 $conceptosPrestamo = sincronizarConceptosPrestamo($pdo);
 $socios = getSocios($pdo);
 $actividades = getActividades($pdo);
