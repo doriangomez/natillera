@@ -85,9 +85,7 @@ $totalSistemaGlobal = 0;
 $totalConciliadoGlobal = 0;
 
 foreach ($medios as $medio) {
-    $totalSistema = isset($conciliaciones[$medio['id']]['saldo_sistema'])
-        ? (float) $conciliaciones[$medio['id']]['saldo_sistema']
-        : ($totalesSistema[$medio['id']] ?? 0);
+    $totalSistema = $totalesSistema[$medio['id']] ?? 0;
     $valorConciliado = isset($conciliaciones[$medio['id']]['valor_conciliado'])
         ? (float) $conciliaciones[$medio['id']]['valor_conciliado']
         : 0.0;
@@ -206,9 +204,7 @@ $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
                         </thead>
                         <tbody>
                             <?php foreach ($medios as $medio):
-                                $totalSistema = isset($conciliaciones[$medio['id']]['saldo_sistema'])
-                                    ? (float) $conciliaciones[$medio['id']]['saldo_sistema']
-                                    : ($totalesSistema[$medio['id']] ?? 0);
+                                $totalSistema = $totalesSistema[$medio['id']] ?? 0;
                                 $valorConciliado = isset($conciliaciones[$medio['id']]['valor_conciliado'])
                                     ? (float) $conciliaciones[$medio['id']]['valor_conciliado']
                                     : 0.0;
