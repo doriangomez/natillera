@@ -24,7 +24,14 @@ $stmtPrestamos = $pdo->prepare(
 $stmtPrestamos->execute([':id' => $idSocio]);
 $prestamos = $stmtPrestamos->fetchAll();
 
-$monthlyTotal = 0.0;
+$stmtIngresos = $pdo->prepare(
+    'SELECT SUM(cp.valor_capital_pagado + cp.valor_interes_pagado) AS ingresos
+     FROM cuotas_prestamo cp
+     INNER JOIN prestamos p ON p.id_prestamo = cp.id_prestamo
+     WHERE p.id_socio = :id AND cp.fecha_pago IS NOT NULL'
+);
+$stmtIngresos->execute([':id' => $idSocio]);
+$monthlyTotal = (float) ($stmtIngresos->fetchColumn() ?: 0);
 $totalDebt = 0.0;
 $projectedIncome = 0.0;
 
