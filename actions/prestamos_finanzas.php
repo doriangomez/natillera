@@ -26,12 +26,22 @@ $stmtPrestamos = $pdo->prepare(
 $stmtPrestamos->execute([':id' => $idSocio]);
 $prestamos = $stmtPrestamos->fetchAll();
 
-// Valor mensual de la cuota presupuestada del socio
+// Valor mensual de la cuota presupuestada del socio y proyección anual
 $stmtSocio = $pdo->prepare('SELECT valor_presupuestado, periodicidad_pago FROM socios WHERE id_socio = :id');
 $stmtSocio->execute([':id' => $idSocio]);
 $socio = $stmtSocio->fetch();
 $factorPeriodicidad = ($socio && strtolower((string) $socio['periodicidad_pago']) === 'quincenal') ? 2 : 1;
 $pagoCuotaMensual = (float) (($socio['valor_presupuestado'] ?? 0) * $factorPeriodicidad);
+$ahorroAnual = $pagoCuotaMensual * 12;
+
+// Total recaudado real solo por Pago Cuota Socio (actividad 7) que sea ingreso
+$stmtTotalRecaudado = $pdo->prepare(
+    'SELECT COALESCE(SUM(valor), 0) AS total_recaudado
+     FROM movimientos
+     WHERE id_socio = :id AND id_actividad = 7 AND es_ingreso = 1'
+);
+$stmtTotalRecaudado->execute([':id' => $idSocio]);
+$totalRecaudado = (float) ($stmtTotalRecaudado->fetchColumn() ?: 0);
 
 // Saldo acumulado: base de pago de cuotas menos todos los conceptos que restan
 $stmtSaldoAcumulado = $pdo->prepare(
@@ -49,13 +59,8 @@ $pagoCuotaSocio = (float) ($saldoMovimientos['pago_cuota'] ?? 0);
 $deducciones = (float) ($saldoMovimientos['deducciones'] ?? 0);
 $saldoActual = $pagoCuotaSocio - $deducciones;
 
-// Meses restantes del ciclo de 12 meses tomando como transcurridos los meses cerrados del año en curso
-$mesActual = (int) date('n');
-$mesesTranscurridos = max(0, $mesActual - 1);
-$mesesRestantes = max(0, 12 - $mesesTranscurridos);
-
-// Proyección: meses restantes por la cuota mensual presupuestada
-$projectedIncome = $mesesRestantes * $pagoCuotaMensual;
+// Proyección final: ahorro anual menos lo ya recaudado, sin meses faltantes
+$projectedIncome = max(0, $ahorroAnual - $totalRecaudado);
 
 $totalDebt = 0.0;
 
@@ -71,5 +76,4 @@ echo json_encode([
     'monthly_net' => round($pagoCuotaMensual, 2),
     'total_debt' => round($totalDebt, 2),
     'projected_income' => round($projectedIncome, 2),
-    'months_remaining' => $mesesRestantes,
 ]);

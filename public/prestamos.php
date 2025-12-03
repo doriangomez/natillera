@@ -193,7 +193,6 @@ document.addEventListener('DOMContentLoaded', () => {
         accumulated: 0,
         debt: 0,
         projection: 0,
-        monthsRemaining: 12,
     };
 
     const formatter = new Intl.NumberFormat('es-CO', {
@@ -208,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const esParticular = tipoDeudor.value === '1';
 
         if (!socioId || esParticular) {
-            resumenBase = { accumulated: 0, debt: 0, projection: 0, monthsRemaining: 12 };
+            resumenBase = { accumulated: 0, debt: 0, projection: 0 };
             actualizarResumen();
             return;
         }
@@ -223,26 +222,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 accumulated: Number(data.accumulated_balance ?? 0),
                 debt: Number(data.total_debt ?? 0),
                 projection: Number(data.projected_income ?? 0),
-                monthsRemaining: Number(data.months_remaining ?? 12),
             };
         } catch (error) {
             console.error(error);
-            resumenBase = { accumulated: 0, debt: 0, projection: 0, monthsRemaining: 12 };
+            resumenBase = { accumulated: 0, debt: 0, projection: 0 };
         }
         actualizarResumen();
     }
 
     function calcularConNuevoPrestamo() {
         const monto = parseFloat(montoPrestamo.value) || 0;
-        const cuotas = parseInt(numeroCuotas.value, 10) || 0;
-
-        const nuevaCuotaMensual = cuotas > 0 && monto > 0 ? monto / cuotas : 0;
-        const mesesConsiderados = cuotas > 0 ? Math.min(resumenBase.monthsRemaining, cuotas) : 0;
 
         return {
             accumulated: resumenBase.accumulated,
             debt: resumenBase.debt + monto,
-            projection: resumenBase.projection + (nuevaCuotaMensual * mesesConsiderados),
+            projection: resumenBase.projection,
         };
     }
 
