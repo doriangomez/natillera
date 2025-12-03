@@ -47,7 +47,28 @@ $pyg = $pdo->query("SELECT a.nombre_actividad, SUM(CASE WHEN m.es_ingreso=1 THEN
 
 $gastos = $pdo->query("SELECT a.nombre_actividad, SUM(m.valor) total FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_gasto_general=1 GROUP BY a.id_actividad")->fetchAll();
 
-$prestamos = $pdo->query("SELECT id_prestamo, nombre_deudor, saldo_capital_actual, saldo_intereses_actual FROM prestamos ORDER BY id_prestamo DESC")->fetchAll();
+$prestamos = $pdo->query(
+    "SELECT p.id_prestamo,
+            COALESCE(s.nombre_completo, p.nombre_deudor) AS nombre_deudor,
+            p.saldo_capital_actual,
+            p.saldo_intereses_actual,
+            p.tasa_interes,
+            p.fecha_prestamo,
+            (SELECT MAX(fecha_pago) FROM cuotas_prestamo cp WHERE cp.id_prestamo = p.id_prestamo) AS ultima_fecha_pago
+     FROM prestamos p
+     LEFT JOIN socios s ON p.id_socio = s.id_socio
+     ORDER BY p.id_prestamo DESC"
+)->fetchAll();
+$hoy = new DateTime();
+foreach ($prestamos as &$prestamo) {
+    $fechaBase = $prestamo['ultima_fecha_pago'] ?: $prestamo['fecha_prestamo'];
+    $fechaBaseObj = DateTime::createFromFormat('Y-m-d', $fechaBase);
+    $dias = $fechaBaseObj ? max(0, $fechaBaseObj->diff($hoy)->days) : 0;
+    $meses = $dias / 30;
+    $prestamo['interes_causado_estimado'] = round($prestamo['saldo_capital_actual'] * ($prestamo['tasa_interes'] / 100) * $meses, 2);
+    $prestamo['interes_sugerido'] = max(0, $prestamo['saldo_intereses_actual'] + $prestamo['interes_causado_estimado']);
+}
+unset($prestamo);
 $prestamosTerceros = $pdo
     ->query("SELECT p.id_prestamo, p.nombre_deudor, p.monto_prestamo, p.saldo_capital_actual, p.saldo_intereses_actual, p.estado, aval.nombre_completo AS nombre_aval FROM prestamos p LEFT JOIN socios aval ON p.id_socio_aval = aval.id_socio WHERE p.es_particular = 1 ORDER BY p.id_prestamo DESC")
     ->fetchAll();
@@ -171,7 +192,7 @@ $prestamosTerceros = $pdo
         <a class="btn btn-outline-secondary mb-2" href="../actions/export_csv.php?tipo=prestamos">Exportar CSV</a>
         <div class="table-responsive">
             <table class="table table-sm table-bordered">
-                <thead><tr><th>ID</th><th>Deudor</th><th>Saldo capital</th><th>Saldo intereses</th></tr></thead>
+                <thead><tr><th>ID</th><th>Deudor</th><th>Saldo capital</th><th>Saldo intereses</th><th>Interés sugerido</th></tr></thead>
                 <tbody>
                     <?php foreach($prestamos as $p): ?>
                         <tr>
@@ -179,6 +200,7 @@ $prestamosTerceros = $pdo
                             <td><?php echo clean($p['nombre_deudor']); ?></td>
                             <td>$<?php echo number_format($p['saldo_capital_actual'],0,',','.'); ?></td>
                             <td>$<?php echo number_format($p['saldo_intereses_actual'],0,',','.'); ?></td>
+                            <td>$<?php echo number_format($p['interes_sugerido'],0,',','.'); ?></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
