@@ -70,15 +70,23 @@ function obtenerPrestamos(PDO $pdo, int $idSocio): array
     return [$prestamos, $totalCapital, $totalIntereses];
 }
 
-function obtenerPagosIntereses(PDO $pdo, int $idSocio): array
+function obtenerPagosIntereses(PDO $pdo, int $idSocio, array $filtros): array
 {
-    $sql = "SELECT cp.fecha_pago, cp.numero_cuota, cp.valor_interes_pagado, p.id_prestamo
-            FROM cuotas_prestamo cp
-            JOIN prestamos p ON cp.id_prestamo = p.id_prestamo
-            WHERE p.id_socio = :id AND cp.valor_interes_pagado > 0
-            ORDER BY cp.fecha_pago ASC, cp.numero_cuota ASC";
+    $where = ['m.id_socio = :id', 'a.es_pago_interes = 1'];
+    $params = [':id' => $idSocio];
+
+    if (!empty($filtros['desde'])) { $where[] = 'm.fecha >= :d'; $params[':d'] = $filtros['desde']; }
+    if (!empty($filtros['hasta'])) { $where[] = 'm.fecha <= :h'; $params[':h'] = $filtros['hasta']; }
+    if (!empty($filtros['actividad'])) { $where[] = 'm.id_actividad = :a'; $params[':a'] = $filtros['actividad']; }
+
+    $sql = "SELECT m.fecha AS fecha_pago, m.motivo, m.valor AS valor_interes_pagado, m.id_actividad, a.nombre_actividad, NULL AS numero_cuota, NULL AS id_prestamo
+            FROM movimientos m
+            JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+            WHERE " . implode(' AND ', $where) . '
+            ORDER BY m.fecha ASC, m.id_movimiento ASC';
+
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([':id' => $idSocio]);
+    $stmt->execute($params);
     $pagos = $stmt->fetchAll();
 
     if (!is_array($pagos)) {
@@ -181,7 +189,7 @@ function renderHtmlSocioIndividual(
 
     $movimientos = obtenerMovimientos($pdo, $filtrosSocio);
     [$prestamos, $totalCapital, $totalIntereses] = obtenerPrestamos($pdo, $idSocio);
-    $pagosIntereses = obtenerPagosIntereses($pdo, $idSocio);
+    $pagosIntereses = obtenerPagosIntereses($pdo, $idSocio, $filtrosSocio);
     [$cuotasPorMes, $pollasPorMes] = agruparMovimientos($movimientos);
     $detallesCuotas = construirDetalleCuotas($movimientos);
 
@@ -433,7 +441,15 @@ function construirHtmlPdf(array $data): string
 
     $filasIntereses = [];
     foreach ($data['pagosIntereses'] as $pago) {
-        $concepto = 'Interés cuota #' . (int)$pago['numero_cuota'] . ' - Préstamo #' . (int)$pago['id_prestamo'];
+        $concepto = 'Pago de intereses';
+        if (!empty($pago['numero_cuota']) && isset($pago['id_prestamo'])) {
+            $concepto = 'Interés cuota #' . (int)$pago['numero_cuota'] . ' - Préstamo #' . (int)$pago['id_prestamo'];
+        } elseif (!empty($pago['motivo'])) {
+            $concepto = $pago['motivo'];
+        } elseif (!empty($pago['nombre_actividad'])) {
+            $concepto = $pago['nombre_actividad'];
+        }
+
         $filasIntereses[] = [
             $pago['fecha_pago'] ?: 'Sin fecha',
             $concepto,
