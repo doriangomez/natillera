@@ -35,6 +35,7 @@ if ($accion === 'eliminar' && $id) {
         $pdo->prepare('DELETE FROM socios WHERE id_socio = :id')->execute([':id' => $id]);
 
         $pdo->commit();
+        recalcularSaldosDesdeMovimientos($pdo);
         recalcularAutoIncrementSocios($pdo);
         $_SESSION['success'] = 'Socio eliminado correctamente.';
         header('Location: ../public/socios.php');

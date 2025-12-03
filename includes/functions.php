@@ -232,6 +232,52 @@ function actualizarSaldoSocio($pdo, $idSocio, $monto, $regla) {
     $stmt->execute([':monto' => abs($monto), ':id' => $idSocio]);
 }
 
+function recalcularSaldosDesdeMovimientos(PDO $pdo): void {
+    try {
+        $pdo->beginTransaction();
+
+        $pdo->exec('UPDATE socios SET saldo_socio = 0');
+
+        $stmtSocios = $pdo->query(
+            "SELECT m.id_socio, SUM(CASE" .
+            " WHEN a.es_polla = 1 THEN 0" .
+            " WHEN a.afecta_saldo_socio = 'suma' THEN ABS(m.valor)" .
+            " WHEN a.afecta_saldo_socio = 'resta' THEN -ABS(m.valor)" .
+            " ELSE 0 END) AS saldo" .
+            " FROM movimientos m" .
+            " JOIN actividades_maestro a ON m.id_actividad = a.id_actividad" .
+            " WHERE m.id_socio IS NOT NULL" .
+            " GROUP BY m.id_socio"
+        );
+
+        foreach ($stmtSocios->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+            $pdo->prepare('UPDATE socios SET saldo_socio = :saldo WHERE id_socio = :id')
+                ->execute([
+                    ':saldo' => (float) ($fila['saldo'] ?? 0),
+                    ':id' => (int) $fila['id_socio'],
+                ]);
+        }
+
+        $saldoNatillera = $pdo->query(
+            "SELECT COALESCE(SUM(CASE" .
+            " WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor)" .
+            " WHEN a.afecta_saldo_natillera = 'resta' THEN -ABS(m.valor)" .
+            " ELSE 0 END), 0)" .
+            " FROM movimientos m" .
+            " JOIN actividades_maestro a ON m.id_actividad = a.id_actividad"
+        )->fetchColumn();
+
+        $pdo->prepare('UPDATE natillera_estado SET saldo_actual = :saldo WHERE id_estado = 1')
+            ->execute([':saldo' => (float) $saldoNatillera]);
+
+        $pdo->commit();
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+    }
+}
+
 function getActividad($pdo, $id) {
     asegurarEsquemaActividades($pdo);
     $stmt = $pdo->prepare("SELECT * FROM actividades_maestro WHERE id_actividad = :id");
