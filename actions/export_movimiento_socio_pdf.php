@@ -385,7 +385,6 @@ function construirHtmlPdf(array $data): string
         ['Campo' => 'Teléfono', 'Valor' => $socio['telefono'] ?: 'Sin teléfono'],
         ['Campo' => 'Tipo de pago', 'Valor' => $socio['periodicidad_pago']],
         ['Campo' => 'Valor cuota', 'Valor' => formatearMoneda((float)$socio['valor_presupuestado'])],
-        ['Campo' => 'Saldo socio', 'Valor' => formatearMoneda((float)$socio['saldo_socio'])],
     ];
     if (!empty($socio['numero_polla'])) {
         $datosSocio[] = ['Campo' => 'Número de polla', 'Valor' => $socio['numero_polla']];
