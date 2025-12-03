@@ -142,11 +142,17 @@ $prestamos = $pdo->query(
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Capital pagado</label>
-                    <input type="number" step="0.01" min="0" name="valor_capital_pagado" class="form-control" value="0" required>
+                    <div class="input-group">
+                        <input type="number" step="0.01" min="0" name="valor_capital_pagado" class="form-control" value="0" required>
+                        <button class="btn btn-outline-secondary" type="button" id="btnPagarCapitalCompleto">Total</button>
+                    </div>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Interés pagado</label>
-                    <input type="number" step="0.01" min="0" name="valor_interes_pagado" class="form-control" value="0" required>
+                    <div class="input-group">
+                        <input type="number" step="0.01" min="0" name="valor_interes_pagado" class="form-control" value="0" required>
+                        <button class="btn btn-outline-secondary" type="button" id="btnLiquidarInteres">Liquidar</button>
+                    </div>
                 </div>
                 <div class="col-12">
                     <div class="alert alert-info d-flex flex-column gap-1" id="resumenPago">
@@ -331,16 +337,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    function calcularMesesTranscurridos(fechaBase, fechaObjetivo) {
-        if (!fechaBase || !fechaObjetivo) {
-            return 0;
-        }
-        const inicio = new Date(`${fechaBase}T00:00:00`);
-        const fin = new Date(`${fechaObjetivo}T00:00:00`);
-        const dias = Math.max(0, (fin - inicio) / (1000 * 60 * 60 * 24));
-        return dias / 30;
-    }
-
     function actualizarSugerenciaPago() {
         if (!interesSugeridoSpan || !detalleInteresPendiente || !saldoCapitalPendiente) {
             return;
@@ -353,9 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const fechaSeleccionada = (fechaPagoInput && fechaPagoInput.value) ? fechaPagoInput.value : new Date().toISOString().slice(0, 10);
-        const meses = calcularMesesTranscurridos(prestamo.ultimaFecha || prestamo.fechaPrestamo, fechaSeleccionada);
-        const interesGenerado = prestamo.saldoCapital * (prestamo.tasa / 100) * meses;
+        const interesGenerado = prestamo.saldoCapital * (prestamo.tasa / 100);
         const interesPendiente = Math.max(0, prestamo.saldoInteres + interesGenerado);
 
         interesSugeridoSpan.textContent = formatter.format(interesPendiente);
@@ -452,6 +446,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (interesInput) {
         interesInput.addEventListener('input', () => {
+            interesInput.dataset.touched = '1';
+        });
+    }
+
+    const btnPagarCapitalCompleto = document.getElementById('btnPagarCapitalCompleto');
+    const btnLiquidarInteres = document.getElementById('btnLiquidarInteres');
+
+    if (btnPagarCapitalCompleto) {
+        btnPagarCapitalCompleto.addEventListener('click', () => {
+            const prestamo = obtenerPrestamoSeleccionado();
+            if (!prestamo || !capitalInput) {
+                return;
+            }
+            capitalInput.value = prestamo.saldoCapital.toFixed(2);
+            capitalInput.dispatchEvent(new Event('input'));
+        });
+    }
+
+    if (btnLiquidarInteres) {
+        btnLiquidarInteres.addEventListener('click', () => {
+            const prestamo = obtenerPrestamoSeleccionado();
+            if (!prestamo || !interesInput) {
+                return;
+            }
+            const interesGenerado = prestamo.saldoCapital * (prestamo.tasa / 100);
+            const interesPendiente = Math.max(0, prestamo.saldoInteres + interesGenerado);
+            interesInput.value = interesPendiente.toFixed(2);
             interesInput.dataset.touched = '1';
         });
     }
