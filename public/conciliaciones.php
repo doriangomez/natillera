@@ -53,21 +53,28 @@ if (empty($periodosDisponibles)) {
     $mes = in_array($mes, $mesesDisponibles, true) ? $mes : (int) reset($mesesDisponibles);
 }
 
-$medios = getMediosPago($pdo);
+$medios = getMediosPago($pdo, true);
 
 $totalesSistema = [];
-foreach ($medios as $medio) {
-    $stmt = $pdo->prepare(
-        'SELECT COALESCE(SUM(CASE'
-        . " WHEN a.afecta_saldo_natillera = 'suma' THEN m.valor"
-        . " WHEN a.afecta_saldo_natillera = 'resta' THEN -m.valor"
-        . ' ELSE 0 END), 0) AS total'
-        . ' FROM movimientos m'
-        . ' JOIN actividades_maestro a ON m.id_actividad = a.id_actividad'
-        . ' WHERE m.id_medio_pago = :id AND YEAR(m.fecha) = :y AND MONTH(m.fecha) = :m'
-    );
-    $stmt->execute([':id' => $medio['id'], ':y' => $anio, ':m' => $mes]);
-    $totalesSistema[$medio['id']] = (float) $stmt->fetchColumn();
+
+$stmtTotales = $pdo->prepare(
+    'SELECT COALESCE(m.id_medio_pago, mp_lookup.id) AS medio_id, '
+    . 'COALESCE(SUM(CASE'
+    . " WHEN a.afecta_saldo_natillera = 'suma' THEN m.valor"
+    . " WHEN a.afecta_saldo_natillera = 'resta' THEN -m.valor"
+    . ' ELSE 0 END), 0) AS total '
+    . 'FROM movimientos m '
+    . 'JOIN actividades_maestro a ON m.id_actividad = a.id_actividad '
+    . 'LEFT JOIN medios_pago mp_lookup ON mp_lookup.nombre = m.medio_consignacion '
+    . 'WHERE m.anio = :y AND m.mes = :m '
+    . 'GROUP BY medio_id'
+);
+$stmtTotales->execute([':y' => $anio, ':m' => $mes]);
+foreach ($stmtTotales->fetchAll(PDO::FETCH_ASSOC) as $filaTotal) {
+    if ($filaTotal['medio_id'] === null) {
+        continue;
+    }
+    $totalesSistema[(int) $filaTotal['medio_id']] = (float) $filaTotal['total'];
 }
 
 $stmtConc = $pdo->prepare('SELECT * FROM conciliaciones_medios_pago WHERE anio = :y AND mes = :m');
