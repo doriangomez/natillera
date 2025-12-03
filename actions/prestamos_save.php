@@ -102,6 +102,25 @@ $nombreDeudor = trim($_POST['nombre_deudor'] ?? '');
 $monto = (float) $_POST['monto_prestamo'];
 $tasa = (float) $_POST['tasa_interes'];
 
+$fechaObj = DateTime::createFromFormat('Y-m-d', $fecha);
+if (!$fechaObj) {
+    $_SESSION['error'] = 'La fecha del préstamo no es válida.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+
+$anioFecha = (int) $fechaObj->format('Y');
+$mesFecha = (int) $fechaObj->format('n');
+$quincena = (int) $fechaObj->format('j') <= 15 ? 1 : 2;
+
+$stmtPeriodo = $pdo->prepare('SELECT COUNT(*) FROM periodos_configuracion WHERE anio = :anio AND mes = :mes AND activo = 1');
+$stmtPeriodo->execute([':anio' => $anioFecha, ':mes' => $mesFecha]);
+if ((int) $stmtPeriodo->fetchColumn() === 0) {
+    $_SESSION['error'] = 'El periodo correspondiente a la fecha del préstamo no está activo. Configúralo en el módulo de configuración para continuar.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+
 if ($esParticular === null) {
     $_SESSION['error'] = 'Debes seleccionar si el deudor es socio o particular.';
     header('Location: ../public/prestamos.php');
@@ -184,9 +203,12 @@ $observacionMovimiento = $esParticular
     ? sprintf('Préstamo a particular %s (aval: %s)', $nombreDeudor, $nombreAval ?: 'sin aval registrado')
     : sprintf('Préstamo a socio %s', $nombreSocioMovimiento ?: $idSocio);
 
-$stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
+$stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
 $stmtMov->execute([
     ':fecha' => $fecha,
+    ':anio' => $anioFecha,
+    ':mes' => $mesFecha,
+    ':quincena' => $quincena,
     ':id_socio' => $socioMovimiento,
     ':id_actividad' => $actividadPrestamo['id_actividad'],
     ':motivo' => 'Registro préstamo',
