@@ -127,10 +127,18 @@ function getConfiguracionGeneral($pdo) {
             'logo_archivo' => null,
             'datos_globales' => '',
             'reglamento_archivo' => null,
+            'tasa_interes_socio' => 0,
+            'tasa_interes_particular' => 0,
         ];
     }
     if (!isset($config['reglamento_archivo'])) {
         $config['reglamento_archivo'] = null;
+    }
+    if (!isset($config['tasa_interes_socio'])) {
+        $config['tasa_interes_socio'] = 0;
+    }
+    if (!isset($config['tasa_interes_particular'])) {
+        $config['tasa_interes_particular'] = 0;
     }
     return $config;
 }
