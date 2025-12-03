@@ -262,6 +262,7 @@ try {
     ]);
 
     $pdo->commit();
+    recalcularSaldosDesdeMovimientos($pdo);
 } catch (Exception $e) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();

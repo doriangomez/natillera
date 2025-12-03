@@ -12,6 +12,7 @@ if ($accion === 'eliminar') {
         $stmt = $pdo->prepare('DELETE FROM movimientos WHERE id_movimiento = :id LIMIT 1');
         $stmt->execute([':id' => $idMovimiento]);
     }
+    recalcularSaldosDesdeMovimientos($pdo);
     header('Location: ' . $redirect);
     exit;
 }
@@ -149,6 +150,7 @@ $stmt->execute([
 
 actualizarSaldoSocio($pdo, $idSocio, $valor, $reglaSocio);
 actualizarSaldoNatillera($pdo, $valor, $reglaNatillera);
+recalcularSaldosDesdeMovimientos($pdo);
 
 header('Location: ../public/movimientos.php');
 ?>

@@ -106,6 +106,7 @@ if ($accion === 'eliminar') {
         $stmtDelPrestamo->execute([':id' => $idPrestamo]);
 
         $pdo->commit();
+        recalcularSaldosDesdeMovimientos($pdo);
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
@@ -280,6 +281,8 @@ if ($interesMensual > 0) {
     actualizarSaldoSocio($pdo, $socioMovimiento, abs($interesMensual), $reglaSocioInteres);
     actualizarSaldoNatillera($pdo, abs($interesMensual), $reglaNatilleraInteres);
 }
+
+recalcularSaldosDesdeMovimientos($pdo);
 
 header('Location: ../public/prestamos.php');
 ?>
