@@ -65,8 +65,8 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
                 <div class="row g-3 mt-1" id="resumenFinanciero">
                     <div class="col-md-4">
                         <div class="p-3 bg-body-tertiary rounded border h-100">
-                            <div class="text-muted small">Saldo actual en cuotas</div>
-                            <div class="fs-5 fw-semibold" id="saldoCuotas">$0</div>
+                            <div class="text-muted small">Saldo actual acumulado</div>
+                            <div class="fs-5 fw-semibold" id="saldoAcumulado">$0</div>
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const montoPrestamo = document.querySelector('input[name="monto_prestamo"]');
     const numeroCuotas = document.querySelector('input[name="numero_cuotas"]');
 
-    const saldoCuotas = document.getElementById('saldoCuotas');
+    const saldoAcumulado = document.getElementById('saldoAcumulado');
     const saldoPrestamos = document.getElementById('saldoPrestamos');
     const ingresosProyectados = document.getElementById('ingresosProyectados');
     const badgeRiesgo = document.getElementById('badgeRiesgo');
@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const alertaRiesgo = document.getElementById('alertaRiesgo');
 
     let resumenBase = {
-        monthly: 0,
+        accumulated: 0,
         debt: 0,
         projection: 0,
     };
@@ -207,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const esParticular = tipoDeudor.value === '1';
 
         if (!socioId || esParticular) {
-            resumenBase = { monthly: 0, debt: 0, projection: 0 };
+            resumenBase = { accumulated: 0, debt: 0, projection: 0 };
             actualizarResumen();
             return;
         }
@@ -219,13 +219,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const data = await response.json();
             resumenBase = {
-                monthly: Number(data.monthly_active ?? 0),
+                accumulated: Number(data.accumulated_balance ?? 0),
                 debt: Number(data.total_debt ?? 0),
                 projection: Number(data.projected_income ?? 0),
             };
         } catch (error) {
             console.error(error);
-            resumenBase = { monthly: 0, debt: 0, projection: 0 };
+            resumenBase = { accumulated: 0, debt: 0, projection: 0 };
         }
         actualizarResumen();
     }
@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const mesesConsiderados = cuotas > 0 ? Math.min(12, cuotas) : 0;
 
         return {
-            monthly: resumenBase.monthly + nuevaCuotaMensual,
+            accumulated: resumenBase.accumulated,
             debt: resumenBase.debt + monto,
             projection: resumenBase.projection + (nuevaCuotaMensual * mesesConsiderados),
         };
@@ -280,11 +280,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function actualizarResumen() {
         const totales = calcularConNuevoPrestamo();
 
-        saldoCuotas.textContent = formatter.format(Math.max(totales.monthly, 0));
+        const proyeccion = Math.max(totales.projection, 0);
+        saldoAcumulado.textContent = formatter.format(Math.max(totales.accumulated, 0));
         saldoPrestamos.textContent = formatter.format(Math.max(totales.debt, 0));
-        ingresosProyectados.textContent = formatter.format(Math.max(totales.projection, 0));
+        ingresosProyectados.textContent = formatter.format(proyeccion);
 
-        const ratio = totales.projection > 0 ? (totales.debt / totales.projection) * 100 : (totales.debt > 0 ? 100 : 0);
+        const ratio = proyeccion > 0 ? (totales.debt / proyeccion) * 100 : (totales.debt > 0 ? 100 : 0);
         const riesgo = definirRiesgo(ratio, totales.debt);
 
         badgeRiesgo.textContent = riesgo.badge;
