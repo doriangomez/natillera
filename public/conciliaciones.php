@@ -179,6 +179,9 @@ $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
 <?php elseif (empty($medios)): ?>
     <div class="alert alert-info">No hay medios de pago activos configurados. Configure medios en "Configuración → Medios de pago".</div>
 <?php else: ?>
+    <?php if (!$mesCerrado && abs($diferenciaGlobal) > 0.009): ?>
+        <div class="alert alert-warning">El total conciliado no coincide con el total del sistema. Puedes guardar la conciliación igualmente; se registrará una advertencia.</div>
+    <?php endif; ?>
     <form method="POST" action="../actions/conciliacion_save.php">
         <input type="hidden" name="mes" value="<?php echo $mes; ?>">
         <input type="hidden" name="anio" value="<?php echo $anio; ?>">
