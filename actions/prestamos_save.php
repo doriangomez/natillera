@@ -122,11 +122,7 @@ if (!$esParticular) {
         header('Location: ../public/prestamos.php');
         exit;
     }
-    if (!$idAval) {
-        $_SESSION['error'] = 'Selecciona el socio avalador para el préstamo de un particular.';
-        header('Location: ../public/prestamos.php');
-        exit;
-    }
+    // El aval puede estar vacío para permitir préstamos a no socios
     $idSocio = null;
 }
 
@@ -157,7 +153,7 @@ $actividadPrestamo = obtenerConceptoPorBandera($pdo, 'es_prestamo');
 if ($actividadPrestamo) {
     $reglaSocio = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_socio']);
     $reglaNatillera = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_natillera']);
-    $socioMovimiento = $esParticular ? $idAval : $idSocio;
+    $socioMovimiento = $esParticular ? ($idAval ?: null) : $idSocio;
     $esIngreso = (int) ($actividadPrestamo['es_ingreso'] ?? 0);
     $esEgreso = $esIngreso ? 0 : ($reglaNatillera === 'resta' ? 1 : 0);
 

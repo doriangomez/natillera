@@ -258,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
             socioSelect.disabled = true;
             socioSelect.required = false;
             avalSelect.disabled = false;
-            avalSelect.required = true;
+            avalSelect.required = false;
             deudorParticular.disabled = false;
             deudorParticular.required = true;
         } else {
