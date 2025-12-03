@@ -103,26 +103,26 @@ foreach ($medios as $medio) {
 
 $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
 
-$conciliacionesCerradas = $pdo
+$registroConciliaciones = $pdo
     ->query(
-        'SELECT cm.anio, cm.mes, mp.nombre AS medio_nombre, cm.saldo_sistema, cm.valor_conciliado, cm.diferencia
+        'SELECT cm.anio, cm.mes, mp.nombre AS medio_nombre, cm.saldo_sistema, cm.valor_conciliado, cm.diferencia,
+                cm.nota, cm.fecha_registro, cm.cerrado
          FROM conciliaciones_medios_pago cm
          JOIN medios_pago mp ON mp.id = cm.id_medio
-         WHERE cm.cerrado = 1
          ORDER BY cm.anio DESC, cm.mes DESC, mp.nombre'
     )
     ->fetchAll();
 
-$totalesCerradas = [
+$totalesRegistro = [
     'sistema' => 0,
     'conciliado' => 0,
     'diferencia' => 0,
 ];
 
-foreach ($conciliacionesCerradas as $cc) {
-    $totalesCerradas['sistema'] += (float) $cc['saldo_sistema'];
-    $totalesCerradas['conciliado'] += (float) $cc['valor_conciliado'];
-    $totalesCerradas['diferencia'] += (float) $cc['diferencia'];
+foreach ($registroConciliaciones as $cc) {
+    $totalesRegistro['sistema'] += (float) $cc['saldo_sistema'];
+    $totalesRegistro['conciliado'] += (float) $cc['valor_conciliado'];
+    $totalesRegistro['diferencia'] += (float) $cc['diferencia'];
 }
 
 $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
@@ -318,13 +318,13 @@ if (selectAnio && selectMes) {
     <div class="card-header d-flex justify-content-between align-items-center">
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-calendar-check"></i>
-            <span>Meses conciliados</span>
+            <span>Registro de conciliaciones</span>
         </div>
-        <span class="text-muted small">Resumen de periodos cerrados</span>
+        <span class="text-muted small">Historial con estado de cierre</span>
     </div>
     <div class="card-body">
-        <?php if (empty($conciliacionesCerradas)): ?>
-            <div class="alert alert-info mb-0">Aún no hay conciliaciones cerradas registradas.</div>
+        <?php if (empty($registroConciliaciones)): ?>
+            <div class="alert alert-info mb-0">Aún no hay conciliaciones registradas.</div>
         <?php else: ?>
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
@@ -336,26 +336,39 @@ if (selectAnio && selectMes) {
                             <th class="text-end">Valor sistema</th>
                             <th class="text-end">Valor conciliado</th>
                             <th class="text-end">Diferencia</th>
+                            <th>Nota</th>
+                            <th>Fecha registro</th>
+                            <th>Estado</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($conciliacionesCerradas as $cerrada): ?>
+                        <?php foreach ($registroConciliaciones as $cerrada): ?>
                             <tr>
-                                <td><?php echo strftime('%B', mktime(0, 0, 0, $cerrada['mes'], 1)); ?></td>
+                                <td><?php echo $nombresMeses[(int) $cerrada['mes']] ?? $cerrada['mes']; ?></td>
                                 <td><?php echo $cerrada['anio']; ?></td>
                                 <td><?php echo clean($cerrada['medio_nombre']); ?></td>
                                 <td class="text-end">$<?php echo number_format($cerrada['saldo_sistema'], 2, ',', '.'); ?></td>
                                 <td class="text-end">$<?php echo number_format($cerrada['valor_conciliado'], 2, ',', '.'); ?></td>
                                 <td class="text-end fw-semibold">$<?php echo number_format($cerrada['diferencia'], 2, ',', '.'); ?></td>
+                                <td><?php echo $cerrada['nota'] !== null ? clean($cerrada['nota']) : '—'; ?></td>
+                                <td><?php echo $cerrada['fecha_registro'] ?: '—'; ?></td>
+                                <td>
+                                    <?php if (!empty($cerrada['cerrado'])): ?>
+                                        <span class="badge bg-success">Cerrada</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-warning text-dark">Abierta</span>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                     <tfoot class="table-light">
                         <tr>
                             <th colspan="3" class="text-end">Totales</th>
-                            <th class="text-end">$<?php echo number_format($totalesCerradas['sistema'], 2, ',', '.'); ?></th>
-                            <th class="text-end">$<?php echo number_format($totalesCerradas['conciliado'], 2, ',', '.'); ?></th>
-                            <th class="text-end">$<?php echo number_format($totalesCerradas['diferencia'], 2, ',', '.'); ?></th>
+                            <th class="text-end">$<?php echo number_format($totalesRegistro['sistema'], 2, ',', '.'); ?></th>
+                            <th class="text-end">$<?php echo number_format($totalesRegistro['conciliado'], 2, ',', '.'); ?></th>
+                            <th class="text-end">$<?php echo number_format($totalesRegistro['diferencia'], 2, ',', '.'); ?></th>
+                            <th colspan="3"></th>
                         </tr>
                     </tfoot>
                 </table>
