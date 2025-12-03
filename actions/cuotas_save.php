@@ -71,25 +71,45 @@ $capPagado = (float) $_POST['valor_capital_pagado'];
 $intPagado = (float) $_POST['valor_interes_pagado'];
 $medio = $_POST['medio_consignacion'];
 
-$stmtNext = $pdo->prepare('SELECT COALESCE(MAX(numero_cuota),0)+1 AS prox FROM cuotas_prestamo WHERE id_prestamo=:id AND fecha_pago IS NOT NULL');
-$stmtNext->execute([':id'=>$idPrestamo]);
-$numCuota = (int) $stmtNext->fetchColumn();
-
-$stmt = $pdo->prepare('INSERT INTO cuotas_prestamo (id_prestamo, numero_cuota, fecha_pago, valor_capital_pagado, valor_interes_pagado, saldo_capital_despues, saldo_intereses_despues, observaciones) VALUES (:id_prestamo, :num, :fecha_pago, :capital, :interes, 0, 0, :obs)');
-$stmt->execute([
-    ':id_prestamo' => $idPrestamo,
-    ':num' => $numCuota,
-    ':fecha_pago' => $fechaPago,
-    ':capital' => $capPagado,
-    ':interes' => $intPagado,
-    ':obs' => 'Pago cuota manual'
-]);
+$fechaPagoObj = DateTime::createFromFormat('Y-m-d', $fechaPago);
+if (!$fechaPagoObj) {
+    $_SESSION['error'] = 'La fecha de pago no es válida.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
 
 $stmtPrestamo = $pdo->prepare('SELECT * FROM prestamos WHERE id_prestamo = :id');
 $stmtPrestamo->execute([':id' => $idPrestamo]);
 $prestamo = $stmtPrestamo->fetch();
 
-$pendienteTotal = ($prestamo['saldo_capital_actual'] + $prestamo['saldo_intereses_actual']);
+if (!$prestamo) {
+    $_SESSION['error'] = 'No se encontró el préstamo seleccionado.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+
+$stmtBaseInteres = $pdo->prepare('SELECT MAX(fecha_pago) FROM cuotas_prestamo WHERE id_prestamo = :id AND fecha_pago IS NOT NULL');
+$stmtBaseInteres->execute([':id' => $idPrestamo]);
+$ultimaFechaPago = $stmtBaseInteres->fetchColumn();
+
+$fechaBase = $ultimaFechaPago ?: $prestamo['fecha_prestamo'];
+$fechaBaseObj = DateTime::createFromFormat('Y-m-d', $fechaBase);
+$diasTranscurridos = max(0, $fechaBaseObj->diff($fechaPagoObj)->days);
+$mesesTranscurridos = $diasTranscurridos / 30;
+$interesCausado = round($prestamo['saldo_capital_actual'] * ($prestamo['tasa_interes'] / 100) * $mesesTranscurridos, 2);
+
+$actividadInteresCausado = obtenerConceptoPorBandera($pdo, 'es_interes_causado');
+$actividadCapital = obtenerConceptoPorBandera($pdo, 'es_pago_prestamo');
+$actividadInteres = obtenerConceptoPorBandera($pdo, 'es_pago_interes');
+
+if (!$actividadCapital || !$actividadInteres || !$actividadInteresCausado) {
+    $_SESSION['error'] = 'No se encontraron conceptos de pago configurados para préstamos.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+
+$pendienteInteres = $prestamo['saldo_intereses_actual'] + $interesCausado;
+$pendienteTotal = $prestamo['saldo_capital_actual'] + $pendienteInteres;
 $pagoPropuesto = $capPagado + $intPagado;
 if ($pagoPropuesto <= 0) {
     $_SESSION['error'] = 'El pago de préstamo debe ser mayor a cero.';
@@ -101,28 +121,13 @@ if ($pagoPropuesto - $pendienteTotal > 0.01) {
     header('Location: ../public/prestamos.php');
     exit;
 }
-
-$saldoCapital = max(0, $prestamo['saldo_capital_actual'] - $capPagado);
-$saldoInteres = max(0, $prestamo['saldo_intereses_actual'] - $intPagado);
-
-$pdo->prepare('UPDATE prestamos SET saldo_capital_actual=:cap, saldo_intereses_actual=:int WHERE id_prestamo=:id')->execute([
-    ':cap' => $saldoCapital,
-    ':int' => $saldoInteres,
-    ':id' => $idPrestamo
-]);
-
-$actividadCapital = obtenerConceptoPorBandera($pdo, 'es_pago_prestamo');
-$actividadInteres = obtenerConceptoPorBandera($pdo, 'es_pago_interes');
-
-if (!$actividadCapital || !$actividadInteres) {
-    $_SESSION['error'] = 'No se encontraron conceptos de pago configurados para préstamos.';
+if ($capPagado - $prestamo['saldo_capital_actual'] > 0.01) {
+    $_SESSION['error'] = 'El abono a capital no puede superar el saldo pendiente de capital.';
     header('Location: ../public/prestamos.php');
     exit;
 }
 
-$valorTotal = $capPagado + $intPagado;
 $socioMovimiento = $prestamo['es_particular'] ? null : $prestamo['id_socio'];
-
 $nombreAval = null;
 if (!empty($prestamo['id_socio_aval'])) {
     $stmtAval = $pdo->prepare('SELECT nombre_completo FROM socios WHERE id_socio = :id');
@@ -134,7 +139,18 @@ $observacionBase = $prestamo['es_particular']
     ? sprintf('Pago préstamo a tercero %s (aval: %s)', $prestamo['nombre_deudor'], $nombreAval ?: 'sin aval registrado')
     : 'Pago cuota';
 
-$registrarMovimiento = function(array $actividad, float $valor, string $motivo, string $observacion) use ($pdo, $fechaPago, $medio, $socioMovimiento) {
+function extraerPeriodos(string $fecha): array {
+    $dt = DateTime::createFromFormat('Y-m-d', $fecha);
+    return [
+        (int) $dt->format('Y'),
+        (int) $dt->format('n'),
+        (int) ($dt->format('j') <= 15 ? 1 : 2),
+    ];
+}
+
+[$anioPago, $mesPago, $quincenaPago] = extraerPeriodos($fechaPago);
+
+$registrarMovimiento = function(array $actividad, float $valor, string $motivo, string $observacion, string $fecha, int $anio, int $mes, int $quincena) use ($pdo, $medio, $socioMovimiento) {
     if ($valor <= 0) {
         return;
     }
@@ -144,9 +160,12 @@ $registrarMovimiento = function(array $actividad, float $valor, string $motivo, 
     $esIngreso = (int) ($actividad['es_ingreso'] ?? 0);
     $esEgreso = $esIngreso ? 0 : ($reglaNatillera === 'resta' ? 1 : 0);
 
-    $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
+    $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
     $stmtMov->execute([
-        ':fecha' => $fechaPago,
+        ':fecha' => $fecha,
+        ':anio' => $anio,
+        ':mes' => $mes,
+        ':quincena' => $quincena,
         ':id_socio' => $socioMovimiento,
         ':id_actividad' => $actividad['id_actividad'],
         ':motivo' => $motivo,
@@ -164,14 +183,65 @@ $registrarMovimiento = function(array $actividad, float $valor, string $motivo, 
     actualizarSaldoNatillera($pdo, abs($valor), $reglaNatillera);
 };
 
-$registrarMovimiento($actividadCapital, $capPagado, 'Pago capital préstamo #'.$idPrestamo, $observacionBase);
-$registrarMovimiento($actividadInteres, $intPagado, 'Pago intereses préstamo #'.$idPrestamo, $observacionBase);
+try {
+    $pdo->beginTransaction();
 
-$nuevoEstado = $saldoCapital > 0 ? 'Vigente' : 'Cancelado';
-$pdo->prepare('UPDATE prestamos SET estado = :estado WHERE id_prestamo = :id')->execute([
-    ':estado' => $nuevoEstado,
-    ':id' => $idPrestamo,
-]);
+    if ($interesCausado > 0) {
+        $registrarMovimiento(
+            $actividadInteresCausado,
+            $interesCausado,
+            'Interés causado préstamo #'.$idPrestamo,
+            $observacionBase,
+            $fechaPagoObj->format('Y-m-d'),
+            $anioPago,
+            $mesPago,
+            $quincenaPago
+        );
+    }
+
+    $stmtNext = $pdo->prepare('SELECT COALESCE(MAX(numero_cuota),0)+1 AS prox FROM cuotas_prestamo WHERE id_prestamo=:id AND fecha_pago IS NOT NULL');
+    $stmtNext->execute([':id'=>$idPrestamo]);
+    $numCuota = (int) $stmtNext->fetchColumn();
+
+    $saldoCapital = max(0, $prestamo['saldo_capital_actual'] - $capPagado);
+    $saldoInteres = max(0, $pendienteInteres - $intPagado);
+
+    $stmtCuota = $pdo->prepare('INSERT INTO cuotas_prestamo (id_prestamo, numero_cuota, fecha_pago, valor_capital_pagado, valor_interes_pagado, saldo_capital_despues, saldo_intereses_despues, observaciones) VALUES (:id_prestamo, :num, :fecha_pago, :capital, :interes, :saldo_cap, :saldo_int, :obs)');
+    $stmtCuota->execute([
+        ':id_prestamo' => $idPrestamo,
+        ':num' => $numCuota,
+        ':fecha_pago' => $fechaPago,
+        ':capital' => $capPagado,
+        ':interes' => $intPagado,
+        ':saldo_cap' => $saldoCapital,
+        ':saldo_int' => $saldoInteres,
+        ':obs' => 'Pago cuota manual'
+    ]);
+
+    $pdo->prepare('UPDATE prestamos SET saldo_capital_actual=:cap, saldo_intereses_actual=:int WHERE id_prestamo=:id')->execute([
+        ':cap' => $saldoCapital,
+        ':int' => $saldoInteres,
+        ':id' => $idPrestamo
+    ]);
+
+    $registrarMovimiento($actividadCapital, $capPagado, 'Pago capital préstamo #'.$idPrestamo, $observacionBase, $fechaPago, $anioPago, $mesPago, $quincenaPago);
+    $registrarMovimiento($actividadInteres, $intPagado, 'Pago intereses préstamo #'.$idPrestamo, $observacionBase, $fechaPago, $anioPago, $mesPago, $quincenaPago);
+
+    $nuevoEstado = $saldoCapital > 0 ? 'Vigente' : 'Cancelado';
+    $pdo->prepare('UPDATE prestamos SET estado = :estado WHERE id_prestamo = :id')->execute([
+        ':estado' => $nuevoEstado,
+        ':id' => $idPrestamo,
+    ]);
+
+    $pdo->commit();
+} catch (Exception $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    $_SESSION['error'] = 'No se pudo registrar el pago: ' . $e->getMessage();
+    header('Location: ../public/prestamos.php');
+    exit;
+}
 
 header('Location: ../public/prestamos.php');
 ?>
