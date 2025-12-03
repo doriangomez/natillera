@@ -58,7 +58,8 @@ $medios = getMediosPago($pdo);
 $totalesSistema = [];
 foreach ($medios as $medio) {
     $stmt = $pdo->prepare(
-        'SELECT COALESCE(SUM(valor), 0) AS total FROM movimientos WHERE id_medio_pago = :id AND YEAR(fecha) = :y AND MONTH(fecha) = :m'
+        'SELECT COALESCE(SUM(CASE WHEN es_ingreso = 1 THEN valor WHEN es_egreso = 1 THEN -valor ELSE 0 END), 0) AS total'
+        . ' FROM movimientos WHERE id_medio_pago = :id AND YEAR(fecha) = :y AND MONTH(fecha) = :m'
     );
     $stmt->execute([':id' => $medio['id'], ':y' => $anio, ':m' => $mes]);
     $totalesSistema[$medio['id']] = (float) $stmt->fetchColumn();

@@ -52,7 +52,8 @@ try {
     foreach ($medioIds as $idMedio) {
         $idMedio = (int) $idMedio;
         $stmtTotal = $pdo->prepare(
-            'SELECT COALESCE(SUM(valor), 0) FROM movimientos WHERE id_medio_pago = :id AND YEAR(fecha) = :anio AND MONTH(fecha) = :mes'
+            'SELECT COALESCE(SUM(CASE WHEN es_ingreso = 1 THEN valor WHEN es_egreso = 1 THEN -valor ELSE 0 END), 0)'
+            . ' FROM movimientos WHERE id_medio_pago = :id AND YEAR(fecha) = :anio AND MONTH(fecha) = :mes'
         );
         $stmtTotal->execute([':id' => $idMedio, ':anio' => $anio, ':mes' => $mes]);
         $saldoSistema = (float) $stmtTotal->fetchColumn();
