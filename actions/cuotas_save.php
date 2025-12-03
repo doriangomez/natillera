@@ -16,6 +16,7 @@ sincronizarConceptosPrestamo($pdo);
 
 $accion = $_POST['accion'] ?? 'crear';
 $idCuota = isset($_POST['id_cuota']) ? (int) $_POST['id_cuota'] : 0;
+$tipoPago = ($_POST['tipo_pago'] ?? 'capital') === 'interes' ? 'interes' : 'capital';
 
 if ($accion === 'eliminar') {
     try {
@@ -88,7 +89,21 @@ if (!$prestamo) {
     exit;
 }
 
-$interesCausado = round($prestamo['saldo_capital_actual'] * ($prestamo['tasa_interes'] / 100), 2);
+$stmtUltimaCuota = $pdo->prepare('SELECT MAX(fecha_pago) FROM cuotas_prestamo WHERE id_prestamo = :id AND fecha_pago IS NOT NULL');
+$stmtUltimaCuota->execute([':id' => $idPrestamo]);
+$ultimaFechaPago = $stmtUltimaCuota->fetchColumn();
+
+$fechaReferencia = $ultimaFechaPago ?: $prestamo['fecha_prestamo'];
+$fechaRefObj = DateTime::createFromFormat('Y-m-d', $fechaReferencia) ?: clone $fechaPagoObj;
+$fechaInicioRef = clone $fechaRefObj;
+$fechaInicioRef->modify('first day of this month');
+
+$fechaInicioPago = clone $fechaPagoObj;
+$fechaInicioPago->modify('first day of this month');
+$diffMeses = ((int) $fechaInicioPago->format('Y') - (int) $fechaInicioRef->format('Y')) * 12
+    + ((int) $fechaInicioPago->format('n') - (int) $fechaInicioRef->format('n'));
+$mesesPendientes = $ultimaFechaPago ? max(0, $diffMeses) : max(1, $diffMeses + 1);
+$interesCausado = round($prestamo['saldo_capital_actual'] * ($prestamo['tasa_interes'] / 100) * $mesesPendientes, 2);
 
 $actividadInteresCausado = obtenerConceptoPorBandera($pdo, 'es_interes_causado');
 $actividadCapital = obtenerConceptoPorBandera($pdo, 'es_pago_prestamo');
@@ -102,6 +117,22 @@ if (!$actividadCapital || !$actividadInteres || !$actividadInteresCausado) {
 
 $pendienteInteres = $prestamo['saldo_intereses_actual'] + $interesCausado;
 $pendienteTotal = $prestamo['saldo_capital_actual'] + $pendienteInteres;
+$intPagado = max(0, $intPagado);
+if ($tipoPago === 'interes') {
+    $capPagado = 0.0;
+    if ($intPagado <= 0) {
+        $_SESSION['error'] = 'El pago de intereses debe ser mayor a cero.';
+        header('Location: ../public/prestamos.php');
+        exit;
+    }
+} else {
+    if ($capPagado <= 0) {
+        $_SESSION['error'] = 'El abono a capital debe ser mayor a cero.';
+        header('Location: ../public/prestamos.php');
+        exit;
+    }
+}
+
 $pagoPropuesto = $capPagado + $intPagado;
 if ($pagoPropuesto <= 0) {
     $_SESSION['error'] = 'El pago de préstamo debe ser mayor a cero.';
@@ -115,6 +146,11 @@ if ($pagoPropuesto - $pendienteTotal > 0.01) {
 }
 if ($capPagado - $prestamo['saldo_capital_actual'] > 0.01) {
     $_SESSION['error'] = 'El abono a capital no puede superar el saldo pendiente de capital.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+if ($intPagado - $pendienteInteres > 0.01) {
+    $_SESSION['error'] = 'El pago de intereses no puede ser mayor a lo causado y pendiente.';
     header('Location: ../public/prestamos.php');
     exit;
 }
@@ -183,7 +219,7 @@ try {
             $actividadInteresCausado,
             $interesCausado,
             'Interés causado préstamo #'.$idPrestamo,
-            $observacionBase,
+            $observacionBase . ($mesesPendientes > 0 ? ' | Causado por ' . $mesesPendientes . ' mes(es)' : ''),
             $fechaPagoObj->format('Y-m-d'),
             $anioPago,
             $mesPago,

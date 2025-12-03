@@ -130,10 +130,18 @@ $prestamos = $pdo->query(
                                 data-interes="<?php echo $p['saldo_intereses_actual']; ?>"
                                 data-fecha-prestamo="<?php echo $p['fecha_prestamo']; ?>"
                                 data-ultima-fecha="<?php echo $p['ultima_fecha_pago']; ?>"
+                                data-tiene-pagos="<?php echo $p['ultima_fecha_pago'] ? '1' : '0'; ?>"
                             >
                                 <?php echo '#'.$p['id_prestamo'].' - '.clean($labelDeudor); ?>
                             </option>
                         <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tipo de pago</label>
+                    <select name="tipo_pago" class="form-select" id="tipoPago" required>
+                        <option value="capital">Pago a préstamo (capital)</option>
+                        <option value="interes">Pago a intereses</option>
                     </select>
                 </div>
                 <div class="col-md-2">
@@ -156,17 +164,20 @@ $prestamos = $pdo->query(
                 </div>
                 <div class="col-12">
                     <div class="alert alert-info d-flex flex-column gap-1" id="resumenPago">
-                        <div><strong>Interés sugerido:</strong> <span id="interesSugerido">$0</span></div>
+                        <div><strong>Interés sugerido del periodo:</strong> <span id="interesSugerido">$0</span></div>
                         <div class="text-muted small">Intereses pendientes estimados: <span id="detalleInteresPendiente">$0</span></div>
                         <div class="text-muted small">Saldo capital actual: <span id="saldoCapitalPendiente">$0</span></div>
+                        <div class="text-muted small" id="detallePeriodos"></div>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Actividad pago (p.e. Pago Abono a Préstamo)</label>
-                    <select name="id_actividad" class="form-select" required>
+                    <label class="form-label">Concepto del pago</label>
+                    <select name="id_actividad" class="form-select" id="actividadPago" required>
                         <?php foreach($actividades as $a): ?>
-                            <?php if($a['es_pago_prestamo']) : ?>
-                                <option value="<?php echo $a['id_actividad']; ?>"><?php echo clean($a['nombre_actividad']); ?></option>
+                            <?php if($a['es_pago_prestamo'] || $a['es_pago_interes']) : ?>
+                                <option value="<?php echo $a['id_actividad']; ?>" data-tipo="<?php echo $a['es_pago_interes'] ? 'interes' : 'capital'; ?>">
+                                    <?php echo clean($a['nombre_actividad']); ?>
+                                </option>
                             <?php endif; ?>
                         <?php endforeach; ?>
                     </select>
@@ -235,6 +246,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const interesSugeridoSpan = document.getElementById('interesSugerido');
     const detalleInteresPendiente = document.getElementById('detalleInteresPendiente');
     const saldoCapitalPendiente = document.getElementById('saldoCapitalPendiente');
+    const detallePeriodos = document.getElementById('detallePeriodos');
+    const tipoPagoSelect = document.getElementById('tipoPago');
+    const actividadPago = document.getElementById('actividadPago');
     const deudorParticular = document.querySelector('input[name="nombre_deudor"]');
 
     const saldoAcumulado = document.getElementById('saldoAcumulado');
@@ -258,6 +272,38 @@ document.addEventListener('DOMContentLoaded', () => {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
     });
+
+    function inicioMes(fecha) {
+        const dt = new Date(fecha);
+        dt.setDate(1);
+        dt.setHours(0, 0, 0, 0);
+        return dt;
+    }
+
+    function calcularMesesPendientes(prestamo, fechaPagoStr) {
+        if (!prestamo) {
+            return { meses: 0, referencia: null, periodoTexto: '' };
+        }
+
+        const fechaPagoBase = fechaPagoStr || new Date().toISOString().slice(0, 10);
+        const fechaPago = inicioMes(fechaPagoBase);
+        const referencia = prestamo.ultimaFecha || prestamo.fechaPrestamo;
+        const fechaReferencia = inicioMes(referencia);
+        const diffMeses = (fechaPago.getFullYear() - fechaReferencia.getFullYear()) * 12 + (fechaPago.getMonth() - fechaReferencia.getMonth());
+
+        const mesesCalculados = prestamo.tienePagos ? Math.max(0, diffMeses) : Math.max(1, diffMeses + 1);
+        const nombreMeses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        const textoReferencia = `${nombreMeses[fechaReferencia.getMonth()]} ${fechaReferencia.getFullYear()}`;
+        const textoPago = `${nombreMeses[fechaPago.getMonth()]} ${fechaPago.getFullYear()}`;
+
+        return {
+            meses: mesesCalculados,
+            referencia: referencia,
+            periodoTexto: mesesCalculados > 0
+                ? `Intereses causados desde ${textoReferencia} hasta ${textoPago} (${mesesCalculados} mes(es)).`
+                : 'Intereses al día para el mes seleccionado.',
+        };
+    }
 
     async function obtenerResumenSocio() {
         const socioId = socioSelect.value;
@@ -334,6 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
             saldoInteres: parseFloat(opcion.dataset.interes || '0'),
             fechaPrestamo: opcion.dataset.fechaPrestamo,
             ultimaFecha: opcion.dataset.ultimaFecha,
+            tienePagos: opcion.dataset.tienePagos === '1',
         };
     }
 
@@ -346,15 +393,23 @@ document.addEventListener('DOMContentLoaded', () => {
             interesSugeridoSpan.textContent = formatter.format(0);
             detalleInteresPendiente.textContent = formatter.format(0);
             saldoCapitalPendiente.textContent = formatter.format(0);
+            if (detallePeriodos) {
+                detallePeriodos.textContent = '';
+            }
             return;
         }
 
-        const interesGenerado = prestamo.saldoCapital * (prestamo.tasa / 100);
+        const fechaPagoSeleccionada = fechaPagoInput?.value || new Date().toISOString().slice(0, 10);
+        const periodos = calcularMesesPendientes(prestamo, fechaPagoSeleccionada);
+        const interesGenerado = prestamo.saldoCapital * (prestamo.tasa / 100) * periodos.meses;
         const interesPendiente = Math.max(0, prestamo.saldoInteres + interesGenerado);
 
         interesSugeridoSpan.textContent = formatter.format(interesPendiente);
         detalleInteresPendiente.textContent = formatter.format(interesPendiente);
         saldoCapitalPendiente.textContent = formatter.format(prestamo.saldoCapital);
+        if (detallePeriodos) {
+            detallePeriodos.textContent = periodos.periodoTexto;
+        }
 
         if (interesInput && (interesInput.dataset.touched !== '1' || !interesInput.value || interesInput.value === '0')) {
             interesInput.value = interesPendiente.toFixed(2);
@@ -363,6 +418,55 @@ document.addEventListener('DOMContentLoaded', () => {
         if (capitalInput) {
             capitalInput.max = prestamo.saldoCapital.toFixed(2);
         }
+    }
+
+    function actualizarConceptoSegunTipo() {
+        if (!actividadPago || !tipoPagoSelect) {
+            return;
+        }
+        const tipo = tipoPagoSelect.value;
+        let primeraCoincidencia = null;
+
+        actividadPago.querySelectorAll('option').forEach(opt => {
+            const coincide = opt.dataset.tipo === tipo;
+            opt.hidden = !coincide;
+            opt.disabled = !coincide;
+            if (coincide && !primeraCoincidencia) {
+                primeraCoincidencia = opt.value;
+            }
+        });
+
+        if (primeraCoincidencia) {
+            actividadPago.value = primeraCoincidencia;
+        }
+    }
+
+    function actualizarUIporTipoPago() {
+        if (!tipoPagoSelect) {
+            return;
+        }
+        const tipo = tipoPagoSelect.value;
+        if (tipo === 'interes') {
+            if (capitalInput) {
+                capitalInput.value = '0';
+                capitalInput.disabled = true;
+                capitalInput.required = false;
+            }
+            if (interesInput) {
+                interesInput.disabled = false;
+                interesInput.required = true;
+            }
+        } else {
+            if (capitalInput) {
+                capitalInput.disabled = false;
+                capitalInput.required = true;
+            }
+            if (interesInput) {
+                interesInput.disabled = false;
+                interesInput.required = false;
+            }
+        }
+        actualizarConceptoSegunTipo();
     }
 
     function definirRiesgo(ratio, deuda) {
@@ -428,6 +532,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     montoPrestamo.addEventListener('input', actualizarResumen);
 
+    if (tipoPagoSelect) {
+        tipoPagoSelect.addEventListener('change', () => {
+            actualizarUIporTipoPago();
+            actualizarSugerenciaPago();
+        });
+    }
+
     if (prestamoSelect) {
         prestamoSelect.addEventListener('change', () => {
             if (interesInput) {
@@ -470,7 +581,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!prestamo || !interesInput) {
                 return;
             }
-            const interesGenerado = prestamo.saldoCapital * (prestamo.tasa / 100);
+            const fechaPagoSeleccionada = fechaPagoInput?.value || new Date().toISOString().slice(0, 10);
+            const periodos = calcularMesesPendientes(prestamo, fechaPagoSeleccionada);
+            const interesGenerado = prestamo.saldoCapital * (prestamo.tasa / 100) * periodos.meses;
             const interesPendiente = Math.max(0, prestamo.saldoInteres + interesGenerado);
             interesInput.value = interesPendiente.toFixed(2);
             interesInput.dataset.touched = '1';
@@ -478,6 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     sincronizarCamposDeudor();
+    actualizarUIporTipoPago();
     actualizarResumen();
     actualizarSugerenciaPago();
 });
