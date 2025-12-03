@@ -23,6 +23,7 @@ $prestamos = $pdo->query(
 )->fetchAll();
 
 $periodosPorPrestamo = obtenerPeriodosPrestamo($pdo, array_column($prestamos, 'id_prestamo'));
+$periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
 ?>
 <h2 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-cash-coin text-primary"></i><span>Préstamos</span></h2>
 <div class="card mb-3">
@@ -254,7 +255,17 @@ $periodosPorPrestamo = obtenerPeriodosPrestamo($pdo, array_column($prestamos, 'i
             <div class="mb-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div class="fw-semibold">Préstamo #<?php echo $p['id_prestamo']; ?> - <?php echo clean($p['es_particular'] ? $p['nombre_deudor'] : $p['nombre_completo']); ?></div>
-                    <span class="badge bg-body-secondary text-dark">Estado: <?php echo clean($p['estado']); ?></span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-body-secondary text-dark">Estado: <?php echo clean($p['estado']); ?></span>
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-primary verHistorialBtn"
+                            data-id="<?php echo $p['id_prestamo']; ?>"
+                            data-label="<?php echo clean($p['es_particular'] ? $p['nombre_deudor'] : $p['nombre_completo']); ?>"
+                        >
+                            Ver historial completo
+                        </button>
+                    </div>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-sm align-middle">
@@ -303,9 +314,39 @@ $periodosPorPrestamo = obtenerPeriodosPrestamo($pdo, array_column($prestamos, 'i
         <?php endif; ?>
     </div>
 </div>
+<div class="modal fade" id="historialPeriodosModal" tabindex="-1" aria-labelledby="historialPeriodosTitulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="historialPeriodosTitulo">Historial mensual</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Mes/Año</th>
+                                <th class="text-end">Capital inicio</th>
+                                <th class="text-end">Interés causado</th>
+                                <th class="text-end">Interés pagado</th>
+                                <th class="text-end">Abono capital</th>
+                                <th class="text-end">Capital final</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historialPeriodosBody"></tbody>
+                    </table>
+                </div>
+                <div class="alert alert-info d-none" id="historialVacio">No hay periodos registrados para este préstamo.</div>
+            </div>
+        </div>
+    </div>
+</div>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const periodosPrestamos = <?php echo $periodosJson ?: '{}'; ?>;
     const socioSelect = document.querySelector('select[name="id_socio"]');
     const tipoDeudor = document.querySelector('select[name="es_particular"]');
     const montoPrestamo = document.querySelector('input[name="monto_prestamo"]');
@@ -331,6 +372,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const mensajeRiesgo = document.getElementById('mensajeRiesgo');
     const ratioRiesgo = document.getElementById('ratioRiesgo');
     const alertaRiesgo = document.getElementById('alertaRiesgo');
+    const historialModalEl = document.getElementById('historialPeriodosModal');
+    const historialPeriodosBody = document.getElementById('historialPeriodosBody');
+    const historialTitulo = document.getElementById('historialPeriodosTitulo');
+    const historialVacio = document.getElementById('historialVacio');
+    const modalHistorial = historialModalEl ? new bootstrap.Modal(historialModalEl) : null;
 
     let resumenBase = {
         accumulated: 0,
@@ -352,6 +398,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return dt;
     }
 
+    function obtenerPeriodoRegistrado(idPrestamo, fechaBase) {
+        const periodos = periodosPrestamos?.[idPrestamo] || [];
+        const referencia = inicioMes(fechaBase);
+        return periodos.find(per => Number(per.anio) === referencia.getFullYear() && Number(per.mes) === (referencia.getMonth() + 1));
+    }
+
     function calcularMesesPendientes(prestamo, fechaPagoStr) {
         if (!prestamo) {
             return { meses: 0, referencia: null, periodoTexto: '' };
@@ -362,11 +414,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const referencia = prestamo.ultimaFecha || prestamo.fechaPrestamo;
         const fechaReferencia = inicioMes(referencia);
         const diffMeses = (fechaPago.getFullYear() - fechaReferencia.getFullYear()) * 12 + (fechaPago.getMonth() - fechaReferencia.getMonth());
-
         const mesesCalculados = prestamo.tienePagos ? Math.max(0, diffMeses) : Math.max(1, diffMeses + 1);
         const nombreMeses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
         const textoReferencia = `${nombreMeses[fechaReferencia.getMonth()]} ${fechaReferencia.getFullYear()}`;
         const textoPago = `${nombreMeses[fechaPago.getMonth()]} ${fechaPago.getFullYear()}`;
+
+        const periodoRegistrado = prestamo.id ? obtenerPeriodoRegistrado(prestamo.id, fechaPagoBase) : null;
+        const interesPagado = periodoRegistrado ? Number(periodoRegistrado.interes_pagado || 0) : 0;
+        const interesCausado = periodoRegistrado ? Number(periodoRegistrado.interes_causado || 0) : 0;
+        const mesAlDia = periodoRegistrado && interesPagado + 0.01 >= interesCausado;
+
+        if (mesAlDia) {
+            return {
+                meses: 0,
+                referencia: referencia,
+                periodoTexto: `El interés de ${textoPago} ya fue pagado.`,
+            };
+        }
 
         return {
             meses: mesesCalculados,
@@ -447,6 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return null;
         }
         return {
+            id: opcion.value,
             tasa: parseFloat(opcion.dataset.tasa || '0'),
             saldoCapital: parseFloat(opcion.dataset.capital || '0'),
             saldoInteres: parseFloat(opcion.dataset.interes || '0'),
@@ -594,6 +659,58 @@ document.addEventListener('DOMContentLoaded', () => {
         alertaRiesgo.querySelector('.p-3').className = `p-3 rounded border d-flex flex-column flex-md-row gap-2 justify-content-between align-items-start align-items-md-center ${riesgo.clase}`;
     }
 
+    function construirBadgeEstado(estado) {
+        const badgeClass = {
+            OK: 'bg-success-subtle text-success',
+            Mora: 'bg-danger-subtle text-danger',
+            Finalizado: 'bg-primary-subtle text-primary',
+        }[estado] || 'bg-secondary-subtle text-secondary';
+
+        return `<span class="badge ${badgeClass}">${estado}</span>`;
+    }
+
+    function abrirHistorialPeriodos(id, etiqueta) {
+        if (!modalHistorial || !historialPeriodosBody || !historialTitulo || !historialVacio) {
+            return;
+        }
+
+        historialTitulo.textContent = `Historial mensual - ${etiqueta}`;
+        historialPeriodosBody.innerHTML = '';
+
+        const periodos = [...(periodosPrestamos?.[id] || [])].sort((a, b) => {
+            if (a.anio === b.anio) {
+                return Number(a.mes) - Number(b.mes);
+            }
+            return Number(a.anio) - Number(b.anio);
+        });
+
+        if (periodos.length === 0) {
+            historialVacio.classList.remove('d-none');
+            modalHistorial.show();
+            return;
+        }
+
+        historialVacio.classList.add('d-none');
+        const nombreMeses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+        periodos.forEach((per) => {
+            const estado = per.estado || 'Pendiente';
+            const fila = document.createElement('tr');
+            fila.innerHTML = `
+                <td>${nombreMeses[Number(per.mes) - 1]} ${per.anio}</td>
+                <td class="text-end">${formatter.format(Number(per.capital_inicio || 0))}</td>
+                <td class="text-end">${formatter.format(Number(per.interes_causado || 0))}</td>
+                <td class="text-end">${formatter.format(Number(per.interes_pagado || 0))}</td>
+                <td class="text-end">${formatter.format(Number(per.abono_capital || 0))}</td>
+                <td class="text-end">${formatter.format(Number(per.capital_final || 0))}</td>
+                <td>${construirBadgeEstado(estado)}</td>
+            `;
+            historialPeriodosBody.appendChild(fila);
+        });
+
+        modalHistorial.show();
+    }
+
     socioSelect.addEventListener('change', obtenerResumenSocio);
     tipoDeudor.addEventListener('change', () => {
         sincronizarCamposDeudor();
@@ -661,6 +778,14 @@ document.addEventListener('DOMContentLoaded', () => {
             interesInput.dataset.touched = '1';
         });
     }
+
+    document.querySelectorAll('.verHistorialBtn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const prestamoId = btn.dataset.id;
+            const etiqueta = btn.dataset.label || `Préstamo #${prestamoId}`;
+            abrirHistorialPeriodos(prestamoId, etiqueta);
+        });
+    });
 
     sincronizarCamposDeudor();
     actualizarUIporTipoPago();
