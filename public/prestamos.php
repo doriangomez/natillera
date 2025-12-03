@@ -94,39 +94,6 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
                     <div class="text-muted small mt-2">Este análisis es informativo y no bloquea la creación del préstamo.</div>
                 </div>
             </div>
-            <div class="alert alert-info mt-3 mb-2">
-                <div class="fw-semibold text-uppercase small text-muted">Resumen financiero proyectado</div>
-                <div class="row g-3 mt-1" id="resumenFinanciero">
-                    <div class="col-md-4">
-                        <div class="p-3 bg-body-tertiary rounded border h-100">
-                            <div class="text-muted small">Saldo actual acumulado</div>
-                            <div class="fs-5 fw-semibold" id="saldoAcumulado">$0</div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="p-3 bg-body-tertiary rounded border h-100">
-                            <div class="text-muted small">Saldo actual de préstamos</div>
-                            <div class="fs-5 fw-semibold" id="saldoPrestamos">$0</div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="p-3 bg-body-tertiary rounded border h-100">
-                            <div class="text-muted small">Ingresos proyectados próximos meses</div>
-                            <div class="fs-5 fw-semibold" id="ingresosProyectados">$0</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="mt-3" id="alertaRiesgo">
-                    <div class="p-3 rounded border d-flex flex-column flex-md-row gap-2 justify-content-between align-items-start align-items-md-center">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge rounded-pill px-3 py-2" id="badgeRiesgo">🟢 Riesgo bajo</span>
-                            <div class="fw-semibold" id="mensajeRiesgo">Riesgo bajo: capacidad de pago adecuada.</div>
-                        </div>
-                        <div class="text-muted small">Relación deuda / ingresos proyectados: <span class="fw-semibold" id="ratioRiesgo">0%</span></div>
-                    </div>
-                    <div class="text-muted small mt-2">Este análisis es informativo y no bloquea la creación del préstamo.</div>
-                </div>
-            </div>
             <button class="btn btn-success mt-3 btn-icon"><span><i class="bi bi-check2-circle"></i> Crear préstamo</span></button>
         </form>
     </div>
