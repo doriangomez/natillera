@@ -105,7 +105,7 @@ $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
 
 $registroConciliaciones = $pdo
     ->query(
-        'SELECT cm.anio, cm.mes, mp.nombre AS medio_nombre, cm.saldo_sistema, cm.valor_conciliado, cm.diferencia,
+        'SELECT cm.id, cm.anio, cm.mes, mp.nombre AS medio_nombre, cm.saldo_sistema, cm.valor_conciliado, cm.diferencia,
                 cm.nota, cm.fecha_registro, cm.cerrado
          FROM conciliaciones_medios_pago cm
          JOIN medios_pago mp ON mp.id = cm.id_medio
@@ -339,6 +339,7 @@ if (selectAnio && selectMes) {
                             <th>Nota</th>
                             <th>Fecha registro</th>
                             <th>Estado</th>
+                            <th class="text-end">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -359,6 +360,28 @@ if (selectAnio && selectMes) {
                                         <span class="badge bg-warning text-dark">Abierta</span>
                                     <?php endif; ?>
                                 </td>
+                                <td class="text-end">
+                                    <div class="d-flex justify-content-end gap-1">
+                                        <form method="POST" action="../actions/conciliacion_manage.php" class="d-inline" onsubmit="return confirm('¿Deseas eliminar esta conciliación?');">
+                                            <input type="hidden" name="id" value="<?php echo $cerrada['id']; ?>">
+                                            <input type="hidden" name="action" value="delete">
+                                            <input type="hidden" name="redirect" value="../public/conciliaciones.php">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm" aria-label="Eliminar conciliación">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                        <?php if (!empty($cerrada['cerrado'])): ?>
+                                            <form method="POST" action="../actions/conciliacion_manage.php" class="d-inline" onsubmit="return confirm('¿Reabrir este mes para edición?');">
+                                                <input type="hidden" name="id" value="<?php echo $cerrada['id']; ?>">
+                                                <input type="hidden" name="action" value="reopen">
+                                                <input type="hidden" name="redirect" value="../public/conciliaciones.php">
+                                                <button type="submit" class="btn btn-outline-secondary btn-sm" aria-label="Reabrir mes">
+                                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -368,7 +391,7 @@ if (selectAnio && selectMes) {
                             <th class="text-end">$<?php echo number_format($totalesRegistro['sistema'], 2, ',', '.'); ?></th>
                             <th class="text-end">$<?php echo number_format($totalesRegistro['conciliado'], 2, ',', '.'); ?></th>
                             <th class="text-end">$<?php echo number_format($totalesRegistro['diferencia'], 2, ',', '.'); ?></th>
-                            <th colspan="3"></th>
+                            <th colspan="4"></th>
                         </tr>
                     </tfoot>
                 </table>
