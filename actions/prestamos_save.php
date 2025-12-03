@@ -16,6 +16,8 @@ try {
     // continuar
 }
 
+sincronizarConceptosPrestamo($pdo);
+
 $accion = $_POST['accion'] ?? 'crear';
 $idPrestamo = isset($_POST['id_prestamo']) ? (int) $_POST['id_prestamo'] : 0;
 
@@ -151,13 +153,14 @@ $idPrestamo = $pdo->lastInsertId();
 // No se generan cuotas programadas: solo se registra el resumen del préstamo
 
 // Registrar movimiento de desembolso si existe actividad marcada como préstamo
-$actividadPrestamo = $pdo->query("SELECT id_actividad, afecta_saldo_socio, afecta_saldo_natillera FROM actividades_maestro WHERE es_prestamo=1 LIMIT 1")->fetch();
+$actividadPrestamo = obtenerConceptoPorBandera($pdo, 'es_prestamo');
 if ($actividadPrestamo) {
     $reglaSocio = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_socio']);
     $reglaNatillera = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_natillera']);
     $socioMovimiento = $esParticular ? $idAval : $idSocio;
-    $esIngreso = $reglaNatillera === 'suma' ? 1 : 0;
-    $esEgreso = $reglaNatillera === 'resta' ? 1 : 0;
+    $esIngreso = (int) ($actividadPrestamo['es_ingreso'] ?? 0);
+    $esEgreso = $esIngreso ? 0 : ($reglaNatillera === 'resta' ? 1 : 0);
+
     $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
     $stmtMov->execute([
         ':fecha' => $fecha,
@@ -174,6 +177,8 @@ if ($actividadPrestamo) {
     ]);
     actualizarSaldoSocio($pdo, $socioMovimiento, abs($monto), $reglaSocio);
     actualizarSaldoNatillera($pdo, abs($monto), $reglaNatillera);
+} else {
+    $_SESSION['error'] = 'No se encontró un concepto de desembolso configurado para préstamos.';
 }
 
 header('Location: ../public/prestamos.php');

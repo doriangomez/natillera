@@ -27,8 +27,11 @@ CREATE TABLE actividades_maestro (
     descripcion TEXT,
     afecta_saldo_socio VARCHAR(10) DEFAULT 'neutral',
     afecta_saldo_natillera VARCHAR(10) DEFAULT 'neutral',
+    es_ingreso TINYINT(1) DEFAULT 0,
     es_prestamo TINYINT(1) DEFAULT 0,
     es_pago_prestamo TINYINT(1) DEFAULT 0,
+    es_pago_interes TINYINT(1) DEFAULT 0,
+    es_interes_causado TINYINT(1) DEFAULT 0,
     es_polla TINYINT(1) DEFAULT 0,
     es_gasto_general TINYINT(1) DEFAULT 0,
     activo TINYINT(1) DEFAULT 1
@@ -104,13 +107,14 @@ CREATE TABLE cuotas_prestamo (
 );
 
 -- Actividades de ejemplo
-INSERT INTO actividades_maestro (nombre_actividad, afecta_saldo_socio, afecta_saldo_natillera, es_prestamo, es_pago_prestamo, es_polla, es_gasto_general) VALUES
-('Pago Cuota', 'suma', 'suma', 0, 0, 0, 0),
-('Préstamo', 'resta', 'resta', 1, 0, 0, 0),
-('Polla', 'suma', 'suma', 0, 0, 1, 0),
-('Pago Premio Polla', 'resta', 'resta', 0, 0, 1, 0),
-('Pago Abono a Préstamo', 'suma', 'suma', 0, 1, 0, 0),
-('Gasto General', 'neutral', 'resta', 0, 0, 0, 1);
+INSERT INTO actividades_maestro (nombre_actividad, descripcion, afecta_saldo_socio, afecta_saldo_natillera, es_ingreso, es_prestamo, es_pago_prestamo, es_pago_interes, es_interes_causado, es_polla, es_gasto_general, activo) VALUES
+('Préstamo a socio', 'Desembolso de préstamo al socio o aval para un particular', 'resta', 'resta', 0, 1, 0, 0, 0, 0, 0, 1),
+('Pago a préstamo', 'Abonos a capital de préstamos vigentes', 'suma', 'suma', 1, 0, 1, 0, 0, 0, 0, 1),
+('Pago de intereses', 'Pagos de intereses de préstamos', 'suma', 'suma', 1, 0, 0, 1, 0, 0, 0, 1),
+('Causación de intereses', 'Causación automática de intereses mensuales', 'resta', 'neutral', 0, 0, 0, 0, 1, 0, 0, 1),
+('Polla', 'Aportes y pagos de polla', 'suma', 'suma', 1, 0, 0, 0, 0, 1, 0, 1),
+('Pago Premio Polla', 'Pago de premio de polla', 'resta', 'resta', 0, 0, 0, 0, 0, 1, 0, 1),
+('Gasto General', 'Gasto general de la natillera', 'neutral', 'resta', 0, 0, 0, 0, 0, 0, 1, 1);
 
 CREATE TABLE configuracion_general (
     id_config INT PRIMARY KEY,

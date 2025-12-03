@@ -58,6 +58,10 @@ if ($editId) {
                     </div>
                     <div class="row g-3 mt-1">
                         <div class="col-md-6 form-check">
+                            <input class="form-check-input" type="checkbox" id="flagIngreso" name="es_ingreso" value="1" <?php echo (!empty($editData['es_ingreso']))?'checked':''; ?>>
+                            <label class="form-check-label" for="flagIngreso">Es ingreso</label>
+                        </div>
+                        <div class="col-md-6 form-check">
                             <input class="form-check-input" type="checkbox" id="flagPrestamo" name="es_prestamo" value="1" <?php echo (!empty($editData['es_prestamo']))?'checked':''; ?>>
                             <label class="form-check-label" for="flagPrestamo">Es préstamo</label>
                         </div>
@@ -66,7 +70,15 @@ if ($editId) {
                             <label class="form-check-label" for="flagPagoPrestamo">Es pago préstamo</label>
                         </div>
                         <div class="col-md-6 form-check">
-                            <input class="form-check-input" type="checkbox" id="flagPolla" name="es_polla" value="1" <?php echo (!empty($editData['es_polla']))?'checked':''; ?>>
+                            <input class="form-check-input" type="checkbox" id="flagPagoInteres" name="es_pago_interes" value="1" <?php echo (!empty($editData['es_pago_interes']))?'checked':''; ?>>
+                            <label class="form-check-label" for="flagPagoInteres">Es pago interés</label>
+                        </div>
+                        <div class="col-md-6 form-check">
+                            <input class="form-check-input" type="checkbox" id="flagInteresCausado" name="es_interes_causado" value="1" <?php echo (!empty($editData['es_interes_causado']))?'checked':''; ?>>
+                            <label class="form-check-label" for="flagInteresCausado">Interés causado</label>
+                        </div>
+                        <div class="col-md-6 form-check">
+                            <input class="form-check-input" type="checkbox" id="flagPolla" name="es_polla" value="1" <?php echo(!empty($editData['es_polla']))?'checked':''; ?>>
                             <label class="form-check-label" for="flagPolla">Es polla</label>
                         </div>
                         <div class="col-md-6 form-check">
@@ -112,9 +124,12 @@ if ($editId) {
                                     <td><?php echo clean($a['nombre_actividad']); ?></td>
                                     <td><?php echo $a['afecta_saldo_socio']; ?></td>
                                     <td><?php echo $a['afecta_saldo_natillera']; ?></td>
-                                    <td class="small">
+                                <td class="small">
+                                        <?php echo $a['es_ingreso'] ? 'Ingreso ' : ''; ?>
                                         <?php echo $a['es_prestamo'] ? 'Préstamo ' : ''; ?>
                                         <?php echo $a['es_pago_prestamo'] ? 'Pago préstamo ' : ''; ?>
+                                        <?php echo $a['es_pago_interes'] ? 'Pago interés ' : ''; ?>
+                                        <?php echo $a['es_interes_causado'] ? 'Interés causado ' : ''; ?>
                                         <?php echo $a['es_polla'] ? 'Polla ' : ''; ?>
                                         <?php echo $a['es_gasto_general'] ? 'Gasto ' : ''; ?>
                                     </td>
