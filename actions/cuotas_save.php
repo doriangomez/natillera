@@ -88,15 +88,7 @@ if (!$prestamo) {
     exit;
 }
 
-$stmtBaseInteres = $pdo->prepare('SELECT MAX(fecha_pago) FROM cuotas_prestamo WHERE id_prestamo = :id AND fecha_pago IS NOT NULL');
-$stmtBaseInteres->execute([':id' => $idPrestamo]);
-$ultimaFechaPago = $stmtBaseInteres->fetchColumn();
-
-$fechaBase = $ultimaFechaPago ?: $prestamo['fecha_prestamo'];
-$fechaBaseObj = DateTime::createFromFormat('Y-m-d', $fechaBase);
-$diasTranscurridos = max(0, $fechaBaseObj->diff($fechaPagoObj)->days);
-$mesesTranscurridos = $diasTranscurridos / 30;
-$interesCausado = round($prestamo['saldo_capital_actual'] * ($prestamo['tasa_interes'] / 100) * $mesesTranscurridos, 2);
+$interesCausado = round($prestamo['saldo_capital_actual'] * ($prestamo['tasa_interes'] / 100), 2);
 
 $actividadInteresCausado = obtenerConceptoPorBandera($pdo, 'es_interes_causado');
 $actividadCapital = obtenerConceptoPorBandera($pdo, 'es_pago_prestamo');

@@ -59,13 +59,8 @@ $prestamos = $pdo->query(
      LEFT JOIN socios s ON p.id_socio = s.id_socio
      ORDER BY p.id_prestamo DESC"
 )->fetchAll();
-$hoy = new DateTime();
 foreach ($prestamos as &$prestamo) {
-    $fechaBase = $prestamo['ultima_fecha_pago'] ?: $prestamo['fecha_prestamo'];
-    $fechaBaseObj = DateTime::createFromFormat('Y-m-d', $fechaBase);
-    $dias = $fechaBaseObj ? max(0, $fechaBaseObj->diff($hoy)->days) : 0;
-    $meses = $dias / 30;
-    $prestamo['interes_causado_estimado'] = round($prestamo['saldo_capital_actual'] * ($prestamo['tasa_interes'] / 100) * $meses, 2);
+    $prestamo['interes_causado_estimado'] = round($prestamo['saldo_capital_actual'] * ($prestamo['tasa_interes'] / 100), 2);
     $prestamo['interes_sugerido'] = max(0, $prestamo['saldo_intereses_actual'] + $prestamo['interes_causado_estimado']);
 }
 unset($prestamo);
