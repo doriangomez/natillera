@@ -154,32 +154,45 @@ $idPrestamo = $pdo->lastInsertId();
 
 // Registrar movimiento de desembolso si existe actividad marcada como préstamo
 $actividadPrestamo = obtenerConceptoPorBandera($pdo, 'es_prestamo');
-if ($actividadPrestamo) {
-    $reglaSocio = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_socio']);
-    $reglaNatillera = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_natillera']);
-    $socioMovimiento = $esParticular ? $idAval : $idSocio;
-    $esIngreso = (int) ($actividadPrestamo['es_ingreso'] ?? 0);
-    $esEgreso = $esIngreso ? 0 : ($reglaNatillera === 'resta' ? 1 : 0);
-
-    $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
-    $stmtMov->execute([
-        ':fecha' => $fecha,
-        ':id_socio' => $socioMovimiento,
-        ':id_actividad' => $actividadPrestamo['id_actividad'],
-        ':motivo' => 'Registro préstamo',
-        ':valor' => abs($monto),
-        ':medio' => 'Efectivo',
-        ':obs' => 'Desembolso inicial',
-        ':usuario' => $_SESSION['usuario'] ?? null,
-        ':modulo' => 'prestamos',
-        ':es_ingreso' => $esIngreso,
-        ':es_egreso' => $esEgreso,
-    ]);
-    actualizarSaldoSocio($pdo, $socioMovimiento, abs($monto), $reglaSocio);
-    actualizarSaldoNatillera($pdo, abs($monto), $reglaNatillera);
-} else {
+if (!$actividadPrestamo) {
     $_SESSION['error'] = 'No se encontró un concepto de desembolso configurado para préstamos.';
+    header('Location: ../public/prestamos.php');
+    exit;
 }
+
+$reglaSocio = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_socio']);
+$reglaNatillera = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_natillera']);
+$socioMovimiento = $esParticular ? $idAval : $idSocio;
+$esIngreso = (int) ($actividadPrestamo['es_ingreso'] ?? 0);
+$esEgreso = $esIngreso ? 0 : ($reglaNatillera === 'resta' ? 1 : 0);
+
+$nombreSocioMovimiento = null;
+if ($socioMovimiento) {
+    $stmtSocio = $pdo->prepare('SELECT nombre_completo FROM socios WHERE id_socio = :id');
+    $stmtSocio->execute([':id' => $socioMovimiento]);
+    $nombreSocioMovimiento = $stmtSocio->fetchColumn();
+}
+
+$observacionMovimiento = $esParticular
+    ? sprintf('Préstamo a particular %s (aval: %s)', $nombreDeudor, $nombreSocioMovimiento ?: 'sin aval registrado')
+    : sprintf('Préstamo a socio %s', $nombreSocioMovimiento ?: $idSocio);
+
+$stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
+$stmtMov->execute([
+    ':fecha' => $fecha,
+    ':id_socio' => $socioMovimiento,
+    ':id_actividad' => $actividadPrestamo['id_actividad'],
+    ':motivo' => 'Registro préstamo',
+    ':valor' => abs($monto),
+    ':medio' => 'Efectivo',
+    ':obs' => $observacionMovimiento,
+    ':usuario' => $_SESSION['usuario'] ?? null,
+    ':modulo' => 'prestamos',
+    ':es_ingreso' => $esIngreso,
+    ':es_egreso' => $esEgreso,
+]);
+actualizarSaldoSocio($pdo, $socioMovimiento, abs($monto), $reglaSocio);
+actualizarSaldoNatillera($pdo, abs($monto), $reglaNatillera);
 
 header('Location: ../public/prestamos.php');
 ?>
