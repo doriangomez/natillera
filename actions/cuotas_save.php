@@ -121,9 +121,20 @@ if (!$actividadCapital || !$actividadInteres) {
 }
 
 $valorTotal = $capPagado + $intPagado;
-$socioMovimiento = $prestamo['es_particular'] ? $prestamo['id_socio_aval'] : $prestamo['id_socio'];
+$socioMovimiento = $prestamo['es_particular'] ? null : $prestamo['id_socio'];
 
-$registrarMovimiento = function(array $actividad, float $valor, string $motivo) use ($pdo, $fechaPago, $medio, $socioMovimiento) {
+$nombreAval = null;
+if (!empty($prestamo['id_socio_aval'])) {
+    $stmtAval = $pdo->prepare('SELECT nombre_completo FROM socios WHERE id_socio = :id');
+    $stmtAval->execute([':id' => $prestamo['id_socio_aval']]);
+    $nombreAval = $stmtAval->fetchColumn();
+}
+
+$observacionBase = $prestamo['es_particular']
+    ? sprintf('Pago préstamo a tercero %s (aval: %s)', $prestamo['nombre_deudor'], $nombreAval ?: 'sin aval registrado')
+    : 'Pago cuota';
+
+$registrarMovimiento = function(array $actividad, float $valor, string $motivo, string $observacion) use ($pdo, $fechaPago, $medio, $socioMovimiento) {
     if ($valor <= 0) {
         return;
     }
@@ -141,7 +152,7 @@ $registrarMovimiento = function(array $actividad, float $valor, string $motivo) 
         ':motivo' => $motivo,
         ':valor' => abs($valor),
         ':medio' => $medio,
-        ':obs' => 'Pago cuota',
+        ':obs' => $observacion,
         ':usuario' => $_SESSION['usuario'] ?? null,
         ':modulo' => 'cuotas',
         ':es_ingreso' => $esIngreso,
@@ -153,8 +164,8 @@ $registrarMovimiento = function(array $actividad, float $valor, string $motivo) 
     actualizarSaldoNatillera($pdo, abs($valor), $reglaNatillera);
 };
 
-$registrarMovimiento($actividadCapital, $capPagado, 'Pago capital préstamo #'.$idPrestamo);
-$registrarMovimiento($actividadInteres, $intPagado, 'Pago intereses préstamo #'.$idPrestamo);
+$registrarMovimiento($actividadCapital, $capPagado, 'Pago capital préstamo #'.$idPrestamo, $observacionBase);
+$registrarMovimiento($actividadInteres, $intPagado, 'Pago intereses préstamo #'.$idPrestamo, $observacionBase);
 
 $nuevoEstado = $saldoCapital > 0 ? 'Vigente' : 'Cancelado';
 $pdo->prepare('UPDATE prestamos SET estado = :estado WHERE id_prestamo = :id')->execute([

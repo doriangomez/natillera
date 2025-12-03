@@ -69,7 +69,7 @@ if ($accion === 'eliminar') {
                 ':valor' => abs((float) $prestamo['monto_prestamo']),
             ];
             $sqlDelDesembolso = 'DELETE FROM movimientos WHERE id_actividad = :id_act AND motivo = :motivo AND fecha = :fecha AND valor = :valor';
-            $socioMovimiento = $prestamo['es_particular'] ? $prestamo['id_socio_aval'] : $prestamo['id_socio'];
+            $socioMovimiento = $prestamo['es_particular'] ? null : $prestamo['id_socio'];
             $sqlDelDesembolso .= $socioMovimiento ? ' AND id_socio = :id_socio' : ' AND id_socio IS NULL';
             $paramsDel[':motivo'] = 'Registro préstamo';
             if ($socioMovimiento) {
@@ -162,7 +162,7 @@ if (!$actividadPrestamo) {
 
 $reglaSocio = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_socio']);
 $reglaNatillera = normalizarReglaAfectacion($actividadPrestamo['afecta_saldo_natillera']);
-$socioMovimiento = $esParticular ? $idAval : $idSocio;
+$socioMovimiento = $esParticular ? null : $idSocio;
 $esIngreso = (int) ($actividadPrestamo['es_ingreso'] ?? 0);
 $esEgreso = $esIngreso ? 0 : ($reglaNatillera === 'resta' ? 1 : 0);
 
@@ -173,8 +173,15 @@ if ($socioMovimiento) {
     $nombreSocioMovimiento = $stmtSocio->fetchColumn();
 }
 
+$nombreAval = null;
+if ($idAval) {
+    $stmtAval = $pdo->prepare('SELECT nombre_completo FROM socios WHERE id_socio = :id');
+    $stmtAval->execute([':id' => $idAval]);
+    $nombreAval = $stmtAval->fetchColumn();
+}
+
 $observacionMovimiento = $esParticular
-    ? sprintf('Préstamo a particular %s (aval: %s)', $nombreDeudor, $nombreSocioMovimiento ?: 'sin aval registrado')
+    ? sprintf('Préstamo a particular %s (aval: %s)', $nombreDeudor, $nombreAval ?: 'sin aval registrado')
     : sprintf('Préstamo a socio %s', $nombreSocioMovimiento ?: $idSocio);
 
 $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
