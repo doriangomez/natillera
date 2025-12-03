@@ -118,7 +118,7 @@ $reglaNatillera = normalizarReglaAfectacion($actividad['afecta_saldo_natillera']
 $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :id_socio, :id_actividad, :motivo, :valor, :medio, 1, 0, :obs, :usuario, NOW(), :modulo)');
 $stmtMov->execute([
     ':fecha' => $fechaPago,
-    ':id_socio' => $prestamo['id_socio'],
+    ':id_socio' => $prestamo['es_particular'] ? $prestamo['id_socio_aval'] : $prestamo['id_socio'],
     ':id_actividad' => $idActividad,
     ':motivo' => 'Pago cuota préstamo #'.$idPrestamo,
     ':valor' => $valorTotal,
@@ -128,8 +128,14 @@ $stmtMov->execute([
     ':modulo' => 'cuotas',
 ]);
 
-actualizarSaldoSocio($pdo, $prestamo['id_socio'], $valorTotal, $reglaSocio);
+actualizarSaldoSocio($pdo, $prestamo['es_particular'] ? $prestamo['id_socio_aval'] : $prestamo['id_socio'], $valorTotal, $reglaSocio);
 actualizarSaldoNatillera($pdo, $valorTotal, $reglaNatillera);
+
+$nuevoEstado = $saldoCapital > 0 ? 'Vigente' : 'Cancelado';
+$pdo->prepare('UPDATE prestamos SET estado = :estado WHERE id_prestamo = :id')->execute([
+    ':estado' => $nuevoEstado,
+    ':id' => $idPrestamo,
+]);
 
 header('Location: ../public/prestamos.php');
 ?>
