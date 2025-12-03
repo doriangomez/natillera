@@ -48,6 +48,9 @@ $pyg = $pdo->query("SELECT a.nombre_actividad, SUM(CASE WHEN m.es_ingreso=1 THEN
 $gastos = $pdo->query("SELECT a.nombre_actividad, SUM(m.valor) total FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_gasto_general=1 GROUP BY a.id_actividad")->fetchAll();
 
 $prestamos = $pdo->query("SELECT id_prestamo, nombre_deudor, saldo_capital_actual, saldo_intereses_actual FROM prestamos ORDER BY id_prestamo DESC")->fetchAll();
+$prestamosTerceros = $pdo
+    ->query("SELECT p.id_prestamo, p.nombre_deudor, p.monto_prestamo, p.saldo_capital_actual, p.saldo_intereses_actual, p.estado, aval.nombre_completo AS nombre_aval FROM prestamos p LEFT JOIN socios aval ON p.id_socio_aval = aval.id_socio WHERE p.es_particular = 1 ORDER BY p.id_prestamo DESC")
+    ->fetchAll();
 ?>
 <h2 class="mb-3">Reportes</h2>
 <div class="row g-3">
@@ -178,6 +181,33 @@ $prestamos = $pdo->query("SELECT id_prestamo, nombre_deudor, saldo_capital_actua
                             <td>$<?php echo number_format($p['saldo_intereses_actual'],0,',','.'); ?></td>
                         </tr>
                     <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<div class="card mt-3">
+    <div class="card-header">Préstamos a terceros</div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle">
+                <thead><tr><th>ID</th><th>Deudor</th><th>Aval</th><th>Monto desembolsado</th><th>Saldo capital</th><th>Saldo intereses</th><th>Estado</th></tr></thead>
+                <tbody>
+                    <?php if (empty($prestamosTerceros)): ?>
+                        <tr><td colspan="7" class="text-center text-muted">No hay préstamos a terceros registrados.</td></tr>
+                    <?php else: ?>
+                        <?php foreach ($prestamosTerceros as $p): ?>
+                            <tr>
+                                <td><?php echo $p['id_prestamo']; ?></td>
+                                <td><?php echo clean($p['nombre_deudor']); ?></td>
+                                <td><?php echo $p['nombre_aval'] ? clean($p['nombre_aval']) : 'Sin aval'; ?></td>
+                                <td>$<?php echo number_format($p['monto_prestamo'],0,',','.'); ?></td>
+                                <td>$<?php echo number_format($p['saldo_capital_actual'],0,',','.'); ?></td>
+                                <td>$<?php echo number_format($p['saldo_intereses_actual'],0,',','.'); ?></td>
+                                <td><?php echo clean($p['estado']); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
