@@ -23,7 +23,7 @@ $totalesMovimientos = $pdo->query("
         JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
     )
     SELECT
-        COALESCE(SUM(CASE WHEN es_prestamo = 0 AND es_pago_prestamo = 0 AND es_polla = 0 AND es_gasto_general = 0 THEN valor_natillera END),0) AS total_cuotas,
+        COALESCE(SUM(CASE WHEN es_prestamo = 0 AND es_pago_prestamo = 0 AND es_pago_interes = 0 AND es_polla = 0 AND es_gasto_general = 0 THEN valor_natillera END),0) AS total_cuotas,
         COALESCE(SUM(CASE WHEN es_polla = 1 THEN valor_natillera END),0) AS total_pollas,
         COALESCE(SUM(CASE WHEN es_prestamo = 1 THEN valor_natillera END),0) AS total_prestado,
         COALESCE(SUM(CASE WHEN es_pago_prestamo = 1 AND valor_socio <> 0 THEN valor_natillera END),0) AS total_prestamo_recuperado,
