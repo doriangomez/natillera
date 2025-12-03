@@ -4,6 +4,7 @@ require_once __DIR__ . '/../includes/auth.php';
 checkAuth();
 
 try {
+    asegurarTablaPeriodosPrestamo($pdo);
     $existeModulo = $pdo->query("SHOW COLUMNS FROM movimientos LIKE 'modulo'");
     if ($existeModulo && $existeModulo->rowCount() === 0) {
         $pdo->exec("ALTER TABLE movimientos ADD COLUMN modulo VARCHAR(100) DEFAULT NULL");
@@ -103,7 +104,59 @@ $fechaInicioPago->modify('first day of this month');
 $diffMeses = ((int) $fechaInicioPago->format('Y') - (int) $fechaInicioRef->format('Y')) * 12
     + ((int) $fechaInicioPago->format('n') - (int) $fechaInicioRef->format('n'));
 $mesesPendientes = $ultimaFechaPago ? max(0, $diffMeses) : max(1, $diffMeses + 1);
-$interesCausado = round($prestamo['saldo_capital_actual'] * ($prestamo['tasa_interes'] / 100) * $mesesPendientes, 2);
+
+// Generar matriz mensual hasta el mes del pago
+$periodoRecienteStmt = $pdo->prepare('SELECT * FROM periodos_prestamo WHERE id_prestamo = :id ORDER BY anio DESC, mes DESC LIMIT 1');
+$periodoRecienteStmt->execute([':id' => $idPrestamo]);
+$periodoReciente = $periodoRecienteStmt->fetch();
+
+$capitalReferencia = $periodoReciente ? (float) $periodoReciente['capital_final'] : (float) $prestamo['monto_prestamo'];
+$fechaReferenciaPeriodo = $periodoReciente
+    ? sprintf('%04d-%02d-01', $periodoReciente['anio'], $periodoReciente['mes'])
+    : $prestamo['fecha_prestamo'];
+$cursor = DateTime::createFromFormat('Y-m-d', $fechaReferenciaPeriodo) ?: clone $fechaInicioPago;
+$cursor->modify('first day of this month');
+if ($periodoReciente) {
+    $cursor->modify('+1 month');
+}
+
+$interesCausadoMeses = 0.0;
+$stmtPeriodoExiste = $pdo->prepare('SELECT id_periodo FROM periodos_prestamo WHERE id_prestamo = :id AND anio = :anio AND mes = :mes');
+$stmtInsertPeriodo = $pdo->prepare('INSERT INTO periodos_prestamo (id_prestamo, anio, mes, capital_inicio, interes_causado, interes_pagado, abono_capital, capital_final, estado) VALUES (:id_prestamo, :anio, :mes, :capital_inicio, :interes_causado, 0, 0, :capital_final, :estado)');
+
+while ($cursor <= $fechaInicioPago) {
+    $anioIteracion = (int) $cursor->format('Y');
+    $mesIteracion = (int) $cursor->format('n');
+    $stmtPeriodoExiste->execute([
+        ':id' => $idPrestamo,
+        ':anio' => $anioIteracion,
+        ':mes' => $mesIteracion,
+    ]);
+
+    if ($stmtPeriodoExiste->rowCount() === 0) {
+        $interesMes = round($capitalReferencia * ($prestamo['tasa_interes'] / 100), 2);
+        $interesCausadoMeses += $interesMes;
+        $stmtInsertPeriodo->execute([
+            ':id_prestamo' => $idPrestamo,
+            ':anio' => $anioIteracion,
+            ':mes' => $mesIteracion,
+            ':capital_inicio' => $capitalReferencia,
+            ':interes_causado' => $interesMes,
+            ':capital_final' => $capitalReferencia,
+            ':estado' => 'Mora',
+        ]);
+    }
+    $cursor->modify('+1 month');
+}
+
+$stmtPeriodos = $pdo->prepare('SELECT * FROM periodos_prestamo WHERE id_prestamo = :id ORDER BY anio, mes');
+$stmtPeriodos->execute([':id' => $idPrestamo]);
+$periodosPrestamo = $stmtPeriodos->fetchAll();
+
+$pendienteInteres = 0.0;
+foreach ($periodosPrestamo as $periodo) {
+    $pendienteInteres += max(0, (float) $periodo['interes_causado'] - (float) $periodo['interes_pagado']);
+}
 
 $actividadInteresCausado = obtenerConceptoPorBandera($pdo, 'es_interes_causado');
 $actividadCapital = obtenerConceptoPorBandera($pdo, 'es_pago_prestamo');
@@ -115,7 +168,6 @@ if (!$actividadCapital || !$actividadInteres || !$actividadInteresCausado) {
     exit;
 }
 
-$pendienteInteres = $prestamo['saldo_intereses_actual'] + $interesCausado;
 $pendienteTotal = $prestamo['saldo_capital_actual'] + $pendienteInteres;
 $intPagado = max(0, $intPagado);
 if ($tipoPago === 'interes') {
@@ -141,6 +193,11 @@ if ($pagoPropuesto <= 0) {
 }
 if ($pagoPropuesto - $pendienteTotal > 0.01) {
     $_SESSION['error'] = 'No es posible registrar un pago mayor al saldo pendiente del préstamo.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+if ($pendienteInteres <= 0 && $intPagado > 0.01) {
+    $_SESSION['error'] = 'No puedes pagar intereses porque no hay intereses causados pendientes.';
     header('Location: ../public/prestamos.php');
     exit;
 }
@@ -214,10 +271,10 @@ $registrarMovimiento = function(array $actividad, float $valor, string $motivo, 
 try {
     $pdo->beginTransaction();
 
-    if ($interesCausado > 0) {
+    if ($interesCausadoMeses > 0) {
         $registrarMovimiento(
             $actividadInteresCausado,
-            $interesCausado,
+            $interesCausadoMeses,
             'Interés causado préstamo #'.$idPrestamo,
             $observacionBase . ($mesesPendientes > 0 ? ' | Causado por ' . $mesesPendientes . ' mes(es)' : ''),
             $fechaPagoObj->format('Y-m-d'),
@@ -227,12 +284,55 @@ try {
         );
     }
 
+    $restanteInteres = $intPagado;
+    $periodosActualizados = [];
+    foreach ($periodosPrestamo as $periodo) {
+        $faltante = max(0, (float) $periodo['interes_causado'] - (float) $periodo['interes_pagado']);
+        $aplicar = min($faltante, $restanteInteres);
+        if ($aplicar > 0) {
+            $periodo['interes_pagado'] += $aplicar;
+            $restanteInteres -= $aplicar;
+        }
+
+        if ((int) $periodo['anio'] === $anioPago && (int) $periodo['mes'] === $mesPago) {
+            $periodo['abono_capital'] = (float) $periodo['abono_capital'] + $capPagado;
+            $periodo['capital_final'] = $saldoCapital;
+        }
+
+        $periodo['estado'] = ($periodo['interes_pagado'] + 0.01 >= $periodo['interes_causado']) ? 'OK' : 'Mora';
+        if ($periodo['capital_final'] <= 0 && $periodo['estado'] === 'OK') {
+            $periodo['estado'] = 'Finalizado';
+        }
+
+        $periodosActualizados[] = $periodo;
+    }
+
+    $stmtActualizarPeriodo = $pdo->prepare('UPDATE periodos_prestamo SET interes_pagado = :interes_pagado, abono_capital = :abono_capital, capital_final = :capital_final, estado = :estado WHERE id_periodo = :id');
+    foreach ($periodosActualizados as $periodo) {
+        $stmtActualizarPeriodo->execute([
+            ':interes_pagado' => $periodo['interes_pagado'],
+            ':abono_capital' => $periodo['abono_capital'],
+            ':capital_final' => $periodo['capital_final'],
+            ':estado' => $periodo['estado'],
+            ':id' => $periodo['id_periodo'],
+        ]);
+    }
+
+    $periodosEnMora = 0;
+    $saldoInteresPendiente = 0.0;
+    foreach ($periodosActualizados as $periodo) {
+        $saldoInteresPendiente += max(0, (float) $periodo['interes_causado'] - (float) $periodo['interes_pagado']);
+        if ($periodo['estado'] === 'Mora') {
+            $periodosEnMora++;
+        }
+    }
+
     $stmtNext = $pdo->prepare('SELECT COALESCE(MAX(numero_cuota),0)+1 AS prox FROM cuotas_prestamo WHERE id_prestamo=:id AND fecha_pago IS NOT NULL');
     $stmtNext->execute([':id'=>$idPrestamo]);
     $numCuota = (int) $stmtNext->fetchColumn();
 
     $saldoCapital = max(0, $prestamo['saldo_capital_actual'] - $capPagado);
-    $saldoInteres = max(0, $pendienteInteres - $intPagado);
+    $saldoInteres = max(0, $saldoInteresPendiente);
 
     $stmtCuota = $pdo->prepare('INSERT INTO cuotas_prestamo (id_prestamo, numero_cuota, fecha_pago, valor_capital_pagado, valor_interes_pagado, saldo_capital_despues, saldo_intereses_despues, observaciones) VALUES (:id_prestamo, :num, :fecha_pago, :capital, :interes, :saldo_cap, :saldo_int, :obs)');
     $stmtCuota->execute([
@@ -255,9 +355,16 @@ try {
     $registrarMovimiento($actividadCapital, $capPagado, 'Pago capital préstamo #'.$idPrestamo, $observacionBase, $fechaPago, $anioPago, $mesPago, $quincenaPago);
     $registrarMovimiento($actividadInteres, $intPagado, 'Pago intereses préstamo #'.$idPrestamo, $observacionBase, $fechaPago, $anioPago, $mesPago, $quincenaPago);
 
-    $nuevoEstado = $saldoCapital > 0 ? 'Vigente' : 'Cancelado';
-    $pdo->prepare('UPDATE prestamos SET estado = :estado WHERE id_prestamo = :id')->execute([
-        ':estado' => $nuevoEstado,
+    $estadoPrestamo = 'Activo';
+    if ($saldoCapital <= 0.01) {
+        $estadoPrestamo = 'Finalizado';
+    } elseif ($periodosEnMora > 0) {
+        $estadoPrestamo = 'En mora';
+    }
+
+    $pdo->prepare('UPDATE prestamos SET estado = :estado, saldo_intereses_actual = :saldo_int WHERE id_prestamo = :id')->execute([
+        ':estado' => $estadoPrestamo,
+        ':saldo_int' => $saldoInteresPendiente,
         ':id' => $idPrestamo,
     ]);
 

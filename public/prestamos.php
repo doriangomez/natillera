@@ -3,6 +3,7 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 $configGeneral = getConfiguracionGeneral($pdo);
+asegurarTablaPeriodosPrestamo($pdo);
 $conceptosPrestamo = sincronizarConceptosPrestamo($pdo);
 $socios = getSocios($pdo);
 $actividades = getActividades($pdo);
@@ -20,6 +21,8 @@ $prestamos = $pdo->query(
      ORDER BY p.fecha_prestamo DESC
      LIMIT 100"
 )->fetchAll();
+
+$periodosPorPrestamo = obtenerPeriodosPrestamo($pdo, array_column($prestamos, 'id_prestamo'));
 ?>
 <h2 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-cash-coin text-primary"></i><span>Préstamos</span></h2>
 <div class="card mb-3">
@@ -202,7 +205,17 @@ $prestamos = $pdo->query(
     <thead><tr><th>ID</th><th>Deudor</th><th>Aval</th><th>Tipo</th><th>Monto</th><th>Tasa mensual (%)</th><th>Interés mensual</th><th>Saldo capital</th><th>Saldo interés</th><th>Estado</th><th></th></tr></thead>
     <tbody>
         <?php foreach($prestamos as $p): ?>
-            <?php $estadoPrestamo = ((float)$p['saldo_capital_actual'] > 0) ? 'Vigente' : 'Cancelado'; ?>
+            <?php
+                $periodos = $periodosPorPrestamo[$p['id_prestamo']] ?? [];
+                $periodosMora = array_filter($periodos, fn($per) => ($per['estado'] ?? '') === 'Mora');
+                $estadoPrestamo = $p['estado'] ?: (((float)$p['saldo_capital_actual'] > 0) ? 'Activo' : 'Finalizado');
+                $semaforo = '🟢';
+                if (count($periodosMora) >= 2) {
+                    $semaforo = '🔴';
+                } elseif (count($periodosMora) === 1) {
+                    $semaforo = '🟡';
+                }
+            ?>
             <tr>
                 <td><?php echo $p['id_prestamo']; ?></td>
                 <td>
@@ -218,7 +231,7 @@ $prestamos = $pdo->query(
                 <td>$<?php echo number_format($p['interes_mensual'],0,',','.'); ?></td>
                 <td>$<?php echo number_format($p['saldo_capital_actual'],0,',','.'); ?></td>
                 <td>$<?php echo number_format($p['saldo_intereses_actual'],0,',','.'); ?></td>
-                <td><?php echo $estadoPrestamo; ?></td>
+                <td><?php echo $estadoPrestamo; ?> <span class="small"><?php echo $semaforo; ?></span></td>
                 <td class="text-end">
                     <form method="POST" action="../actions/prestamos_save.php" class="d-inline" onsubmit="return confirm('Esta acción eliminará el préstamo y sus movimientos asociados. ¿Deseas continuar?');">
                         <input type="hidden" name="accion" value="eliminar">
@@ -230,6 +243,65 @@ $prestamos = $pdo->query(
         <?php endforeach; ?>
     </tbody>
 </table>
+</div>
+<div class="card mt-3">
+    <div class="card-header category-prestamos"><i class="bi bi-calendar3"></i><span>Matriz mensual de cumplimiento</span></div>
+    <div class="card-body">
+        <?php foreach ($prestamos as $p): ?>
+            <?php $periodos = $periodosPorPrestamo[$p['id_prestamo']] ?? []; ?>
+            <?php if (empty($periodos)) { continue; } ?>
+            <?php $periodosVisibles = array_slice($periodos, -12); ?>
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="fw-semibold">Préstamo #<?php echo $p['id_prestamo']; ?> - <?php echo clean($p['es_particular'] ? $p['nombre_deudor'] : $p['nombre_completo']); ?></div>
+                    <span class="badge bg-body-secondary text-dark">Estado: <?php echo clean($p['estado']); ?></span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Mes/Año</th>
+                                <th class="text-end">Capital inicio</th>
+                                <th class="text-end">Interés causado</th>
+                                <th class="text-end">Interés pagado</th>
+                                <th class="text-end">Abono capital</th>
+                                <th class="text-end">Capital final</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($periodosVisibles as $per): ?>
+                                <?php
+                                    $mesNombre = DateTime::createFromFormat('!m', (int) $per['mes'])->format('M');
+                                    $estado = $per['estado'] ?: 'Pendiente';
+                                    $badgeClass = 'bg-secondary-subtle text-secondary';
+                                    if ($estado === 'OK') {
+                                        $badgeClass = 'bg-success-subtle text-success';
+                                    } elseif ($estado === 'Mora') {
+                                        $badgeClass = 'bg-danger-subtle text-danger';
+                                    } elseif ($estado === 'Finalizado') {
+                                        $badgeClass = 'bg-primary-subtle text-primary';
+                                    }
+                                ?>
+                                <tr>
+                                    <td><?php echo $mesNombre . ' ' . $per['anio']; ?></td>
+                                    <td class="text-end">$<?php echo number_format((float) $per['capital_inicio'], 0, ',', '.'); ?></td>
+                                    <td class="text-end">$<?php echo number_format((float) $per['interes_causado'], 0, ',', '.'); ?></td>
+                                    <td class="text-end">$<?php echo number_format((float) $per['interes_pagado'], 0, ',', '.'); ?></td>
+                                    <td class="text-end">$<?php echo number_format((float) $per['abono_capital'], 0, ',', '.'); ?></td>
+                                    <td class="text-end">$<?php echo number_format((float) $per['capital_final'], 0, ',', '.'); ?></td>
+                                    <td><span class="badge <?php echo $badgeClass; ?>"><?php echo $estado; ?></span></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php endforeach; ?>
+        <?php if (empty(array_filter($periodosPorPrestamo))): ?>
+            <div class="alert alert-info mb-0">No hay periodos calculados aún para los préstamos.</div>
+        <?php endif; ?>
+    </div>
 </div>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
 <script>

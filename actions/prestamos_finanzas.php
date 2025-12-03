@@ -21,7 +21,7 @@ if ($idSocio <= 0) {
 $stmtPrestamos = $pdo->prepare(
     'SELECT id_prestamo, saldo_capital_actual, saldo_intereses_actual
      FROM prestamos
-     WHERE id_socio = :id AND estado = "vigente"'
+     WHERE id_socio = :id AND estado IN ("vigente", "Activo", "En mora")'
 );
 $stmtPrestamos->execute([':id' => $idSocio]);
 $prestamos = $stmtPrestamos->fetchAll();
