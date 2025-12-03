@@ -2,9 +2,13 @@
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/functions.php';
 
+$configGeneral = getConfiguracionGeneral($pdo);
 $socios = getSocios($pdo);
 $actividades = getActividades($pdo);
 $mediosPago = getMediosPago($pdo);
+
+$tasaSocioConfig = isset($configGeneral['tasa_interes_socio']) ? (float) $configGeneral['tasa_interes_socio'] : 0;
+$tasaParticularConfig = isset($configGeneral['tasa_interes_particular']) ? (float) $configGeneral['tasa_interes_particular'] : 0;
 
 $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS nombre_aval FROM prestamos p LEFT JOIN socios s ON p.id_socio=s.id_socio LEFT JOIN socios aval ON p.id_socio_aval = aval.id_socio ORDER BY p.fecha_prestamo DESC LIMIT 100")->fetchAll();
 ?>
@@ -53,7 +57,7 @@ $prestamos = $pdo->query("SELECT p.*, s.nombre_completo, aval.nombre_completo AS
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Tasa interés (%)</label>
-                    <input type="number" step="0.01" name="tasa_interes" class="form-control" value="2">
+                    <input type="number" step="0.01" name="tasa_interes" class="form-control" value="<?php echo $tasaSocioConfig; ?>" data-tasa-socio="<?php echo $tasaSocioConfig; ?>" data-tasa-particular="<?php echo $tasaParticularConfig; ?>">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Número de cuotas</label>
@@ -180,6 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tipoDeudor = document.querySelector('select[name="es_particular"]');
     const montoPrestamo = document.querySelector('input[name="monto_prestamo"]');
     const numeroCuotas = document.querySelector('input[name="numero_cuotas"]');
+    const tasaInteres = document.querySelector('input[name="tasa_interes"]');
 
     const saldoAcumulado = document.getElementById('saldoAcumulado');
     const saldoPrestamos = document.getElementById('saldoPrestamos');
@@ -293,6 +298,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socioSelect.addEventListener('change', obtenerResumenSocio);
     tipoDeudor.addEventListener('change', obtenerResumenSocio);
+    tipoDeudor.addEventListener('change', () => {
+        const tasaSocio = parseFloat(tasaInteres.dataset.tasaSocio || '0');
+        const tasaParticular = parseFloat(tasaInteres.dataset.tasaParticular || '0');
+        tasaInteres.value = tipoDeudor.value === '1' ? tasaParticular : tasaSocio;
+    });
     montoPrestamo.addEventListener('input', actualizarResumen);
     numeroCuotas.addEventListener('input', actualizarResumen);
 
