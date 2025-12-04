@@ -252,7 +252,7 @@ $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS |
         <?php foreach ($prestamos as $p): ?>
             <?php $periodos = $periodosPorPrestamo[$p['id_prestamo']] ?? []; ?>
             <?php if (empty($periodos)) { continue; } ?>
-            <?php $periodosVisibles = array_slice($periodos, -12); ?>
+            <?php $periodosVisibles = $periodos; ?>
             <div class="mb-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div class="fw-semibold">Préstamo #<?php echo $p['id_prestamo']; ?> - <?php echo clean($p['es_particular'] ? $p['nombre_deudor'] : $p['nombre_completo']); ?></div>
