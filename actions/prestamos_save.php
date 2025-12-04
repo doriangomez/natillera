@@ -221,14 +221,23 @@ $periodoInicial = DateTime::createFromFormat('Y-m-d', $fecha);
 if ($periodoInicial) {
     $anioPeriodo = (int) $periodoInicial->format('Y');
     $mesPeriodo = (int) $periodoInicial->format('n');
-    $stmtPeriodo = $pdo->prepare('INSERT INTO periodos_prestamo (id_prestamo, anio, mes, capital_inicio, interes_causado, interes_pagado, abono_capital, capital_final, estado) VALUES (:id_prestamo, :anio, :mes, :capital_inicio, 0, 0, 0, :capital_final, :estado) ON DUPLICATE KEY UPDATE capital_inicio = VALUES(capital_inicio), capital_final = VALUES(capital_final), estado = VALUES(estado)');
+    $estadoPeriodo = $interesMensual > 0 ? 'OK' : 'Pendiente';
+
+    $stmtPeriodo = $pdo->prepare(
+        'INSERT INTO periodos_prestamo (id_prestamo, anio, mes, capital_inicio, interes_causado, interes_pagado, abono_capital, capital_final, estado)
+         VALUES (:id_prestamo, :anio, :mes, :capital_inicio, :interes_causado, :interes_pagado, 0, :capital_final, :estado)
+         ON DUPLICATE KEY UPDATE capital_inicio = VALUES(capital_inicio), interes_causado = VALUES(interes_causado), interes_pagado = VALUES(interes_pagado), capital_final = VALUES(capital_final), estado = VALUES(estado)'
+    );
+
     $stmtPeriodo->execute([
         ':id_prestamo' => $idPrestamo,
         ':anio' => $anioPeriodo,
         ':mes' => $mesPeriodo,
         ':capital_inicio' => $monto,
+        ':interes_causado' => $interesMensual,
+        ':interes_pagado' => $interesMensual,
         ':capital_final' => $monto,
-        ':estado' => 'Pendiente',
+        ':estado' => $estadoPeriodo,
     ]);
 }
 
