@@ -170,6 +170,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <a class="nav-link-sidebar<?php echo $currentPage === 'conciliaciones.php' ? ' active' : ''; ?>" href="conciliaciones.php"><i class="bi bi-credit-card-2-front"></i><span>Conciliación medios de pago</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'pollas.php' ? ' active' : ''; ?>" href="pollas.php"><i class="bi bi-trophy"></i><span>Pollas</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'prestamos.php' ? ' active' : ''; ?>" href="prestamos.php"><i class="bi bi-cash-coin"></i><span>Préstamos</span></a>
+            <a class="nav-link-sidebar<?php echo $currentPage === 'prestamos_matriz.php' ? ' active' : ''; ?>" href="prestamos_matriz.php"><i class="bi bi-table"></i><span>Matriz de préstamos</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'gastos.php' ? ' active' : ''; ?>" href="gastos.php"><i class="bi bi-receipt"></i><span>Gastos</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'reportes.php' ? ' active' : ''; ?>" href="reportes.php"><i class="bi bi-file-earmark-bar-graph"></i><span>Reportes</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'estadisticas.php' ? ' active' : ''; ?>" href="estadisticas.php"><i class="bi bi-pie-chart"></i><span>Estadísticas</span></a>

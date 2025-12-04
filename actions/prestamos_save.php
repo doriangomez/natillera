@@ -77,11 +77,12 @@ if ($accion === 'eliminar') {
                 ':fecha' => $prestamo['fecha_prestamo'],
                 ':valor' => $montoMovimientoPrestamo,
             ];
-            $sqlDelDesembolso = 'DELETE FROM movimientos WHERE modulo = :modulo AND id_actividad = :id_act AND motivo = :motivo AND fecha = :fecha AND valor = :valor';
+            $sqlDelDesembolso = 'DELETE FROM movimientos WHERE modulo = :modulo AND id_actividad = :id_act AND (motivo = :motivo OR motivo = :motivo_corto) AND fecha = :fecha AND valor = :valor';
             $socioMovimiento = $prestamo['es_particular'] ? null : $prestamo['id_socio'];
             $paramsDel[':modulo'] = 'prestamos';
             $sqlDelDesembolso .= $socioMovimiento ? ' AND id_socio = :id_socio' : ' AND id_socio IS NULL';
-            $paramsDel[':motivo'] = 'Registro préstamo';
+            $paramsDel[':motivo'] = 'Registro préstamo #' . $idPrestamo;
+            $paramsDel[':motivo_corto'] = 'Registro préstamo';
             if ($socioMovimiento) {
                 $paramsDel[':id_socio'] = $socioMovimiento;
             }
@@ -95,10 +96,11 @@ if ($accion === 'eliminar') {
                 ':id_act' => $actividadInteres['id_actividad'],
                 ':fecha' => $prestamo['fecha_prestamo'],
                 ':valor' => abs($interesAnticipado),
-                ':motivo' => 'Interés anticipado préstamo',
+                ':motivo' => 'Interés anticipado préstamo #' . $idPrestamo,
+                ':motivo_corto' => 'Interés anticipado préstamo',
             ];
 
-            $sqlDelInteres = 'DELETE FROM movimientos WHERE modulo = :modulo AND id_actividad = :id_act AND motivo = :motivo AND fecha = :fecha AND valor = :valor';
+            $sqlDelInteres = 'DELETE FROM movimientos WHERE modulo = :modulo AND id_actividad = :id_act AND (motivo = :motivo OR motivo = :motivo_corto) AND fecha = :fecha AND valor = :valor';
             $socioMovimientoInteres = $prestamo['es_particular'] ? null : $prestamo['id_socio'];
             $paramsInteres[':modulo'] = 'prestamos';
             $sqlDelInteres .= $socioMovimientoInteres ? ' AND id_socio = :id_socio' : ' AND id_socio IS NULL';
@@ -265,7 +267,7 @@ $stmtMov->execute([
     ':quincena' => $quincena,
     ':id_socio' => $socioMovimiento,
     ':id_actividad' => $actividadPrestamo['id_actividad'],
-    ':motivo' => 'Registro préstamo',
+    ':motivo' => 'Registro préstamo #' . $idPrestamo,
     ':valor' => $valorPrestamoMovimiento,
     ':medio' => 'Efectivo',
     ':obs' => $observacionMovimiento,
@@ -291,7 +293,7 @@ if ($interesMensual > 0) {
         ':quincena' => $quincena,
         ':id_socio' => $socioMovimiento,
         ':id_actividad' => $actividadInteres['id_actividad'],
-        ':motivo' => 'Interés anticipado préstamo',
+        ':motivo' => 'Interés anticipado préstamo #' . $idPrestamo,
         ':valor' => abs($interesMensual),
         ':medio' => 'Efectivo',
         ':obs' => $observacionMovimiento,
