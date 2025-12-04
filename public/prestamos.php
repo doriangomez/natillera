@@ -23,7 +23,76 @@ $prestamos = $pdo->query(
      LIMIT 100"
 )->fetchAll();
 
+function completarPeriodosPrestamo(array $periodos, string $fechaPrestamo): array {
+    usort($periodos, function ($a, $b) {
+        if ((int) $a['anio'] === (int) $b['anio']) {
+            return (int) $a['mes'] <=> (int) $b['mes'];
+        }
+
+        return (int) $a['anio'] <=> (int) $b['anio'];
+    });
+
+    $mapaPeriodos = [];
+    foreach ($periodos as $periodo) {
+        $clave = sprintf('%04d-%02d', (int) $periodo['anio'], (int) $periodo['mes']);
+        $mapaPeriodos[$clave] = $periodo;
+    }
+
+    $inicio = DateTime::createFromFormat('Y-m-d', $fechaPrestamo) ?: new DateTime('first day of this month');
+    $inicio->modify('first day of this month');
+
+    $finActual = new DateTime('first day of this month');
+    $fin = $finActual;
+
+    if (!empty($periodos)) {
+        $ultimo = $periodos[count($periodos) - 1];
+        $finPeriodo = DateTime::createFromFormat('Y-m-d', sprintf('%04d-%02d-01', (int) $ultimo['anio'], (int) $ultimo['mes']));
+        if ($finPeriodo && $finPeriodo > $fin) {
+            $fin = $finPeriodo;
+        }
+    }
+
+    $cursor = clone $inicio;
+    $resultado = [];
+    $capitalAcumulado = null;
+
+    while ($cursor <= $fin) {
+        $clave = $cursor->format('Y-m');
+
+        if (isset($mapaPeriodos[$clave])) {
+            $periodo = $mapaPeriodos[$clave];
+            $capitalAcumulado = isset($periodo['capital_final'])
+                ? (float) $periodo['capital_final']
+                : ($capitalAcumulado ?? 0.0);
+        } else {
+            $capitalReferencia = $capitalAcumulado ?? 0.0;
+            $periodo = [
+                'anio' => (int) $cursor->format('Y'),
+                'mes' => (int) $cursor->format('n'),
+                'capital_inicio' => $capitalReferencia,
+                'interes_causado' => 0,
+                'interes_pagado' => 0,
+                'abono_capital' => 0,
+                'capital_final' => $capitalReferencia,
+                'estado' => 'Pendiente',
+            ];
+        }
+
+        $resultado[] = $periodo;
+        $cursor->modify('+1 month');
+    }
+
+    return $resultado;
+}
+
 $periodosPorPrestamo = obtenerPeriodosPrestamo($pdo, array_column($prestamos, 'id_prestamo'));
+
+foreach ($prestamos as $prestamo) {
+    $id = (int) $prestamo['id_prestamo'];
+    $periodosOriginales = $periodosPorPrestamo[$id] ?? [];
+    $periodosPorPrestamo[$id] = completarPeriodosPrestamo($periodosOriginales, (string) $prestamo['fecha_prestamo']);
+}
+
 $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
 ?>
 <h2 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-cash-coin text-primary"></i><span>Préstamos</span></h2>
