@@ -84,11 +84,11 @@ function sincronizarConceptosPrestamo(PDO $pdo): array {
     $resultado = [];
 
     foreach ($conceptos as $flag => $data) {
-        $columnasActualizar = array_merge($data, array_fill_keys(array_keys($conceptos), 0), [
+        $columnasFlags = array_merge(array_fill_keys(array_keys($conceptos), 0), [
             'es_polla' => 0,
             'es_gasto_general' => 0,
         ]);
-        $columnasActualizar[$flag] = 1;
+        $columnasFlags[$flag] = 1;
 
         $stmtBandera = $pdo->prepare("SELECT * FROM actividades_maestro WHERE $flag = 1 ORDER BY id_actividad ASC");
         $stmtBandera->execute();
@@ -112,7 +112,7 @@ function sincronizarConceptosPrestamo(PDO $pdo): array {
         if ($principal) {
             $sets = [];
             $params = [];
-            foreach ($columnasActualizar as $col => $valor) {
+            foreach ($columnasFlags as $col => $valor) {
                 $sets[] = "$col = :$col";
                 $params[":$col"] = $valor;
             }
@@ -123,7 +123,7 @@ function sincronizarConceptosPrestamo(PDO $pdo): array {
             continue;
         }
 
-        $columnasInsert = array_merge($columnasActualizar, ['activo' => 1]);
+        $columnasInsert = array_merge($data, $columnasFlags, ['activo' => 1]);
         $campos = array_keys($columnasInsert);
         $placeholders = array_map(fn($c) => ':' . $c, $campos);
         $sql = 'INSERT INTO actividades_maestro (' . implode(',', $campos) . ') VALUES (' . implode(',', $placeholders) . ')';
