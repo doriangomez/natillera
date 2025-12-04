@@ -12,6 +12,7 @@ $mediosPago = getMediosPago($pdo);
 
 $tasaSocioConfig = isset($configGeneral['tasa_interes_socio']) ? (float) $configGeneral['tasa_interes_socio'] : 0;
 $tasaParticularConfig = isset($configGeneral['tasa_interes_particular']) ? (float) $configGeneral['tasa_interes_particular'] : 0;
+$periodosConfiguracion = getPeriodosConfiguracion($pdo);
 
 $prestamos = $pdo->query(
     "SELECT p.*, s.nombre_completo, aval.nombre_completo AS nombre_aval,
@@ -23,7 +24,7 @@ $prestamos = $pdo->query(
      LIMIT 100"
 )->fetchAll();
 
-function completarPeriodosPrestamo(array $periodos, string $fechaPrestamo): array {
+function completarPeriodosPrestamo(array $periodos, string $fechaPrestamo, array $periodosConfiguracion = []): array {
     usort($periodos, function ($a, $b) {
         if ((int) $a['anio'] === (int) $b['anio']) {
             return (int) $a['mes'] <=> (int) $b['mes'];
@@ -36,6 +37,59 @@ function completarPeriodosPrestamo(array $periodos, string $fechaPrestamo): arra
     foreach ($periodos as $periodo) {
         $clave = sprintf('%04d-%02d', (int) $periodo['anio'], (int) $periodo['mes']);
         $mapaPeriodos[$clave] = $periodo;
+    }
+
+    if (!empty($periodosConfiguracion)) {
+        usort($periodosConfiguracion, function ($a, $b) {
+            if ((int) $a['anio'] === (int) $b['anio']) {
+                return (int) $a['mes'] <=> (int) $b['mes'];
+            }
+
+            return (int) $a['anio'] <=> (int) $b['anio'];
+        });
+
+        $inicioPrestamo = DateTime::createFromFormat('Y-m-d', $fechaPrestamo) ?: new DateTime('first day of this month');
+        $inicioPrestamo->modify('first day of this month');
+
+        $resultado = [];
+        $capitalAcumulado = null;
+
+        foreach ($periodosConfiguracion as $periodoConfig) {
+            $fechaConfig = DateTime::createFromFormat(
+                'Y-m-d',
+                sprintf('%04d-%02d-01', (int) $periodoConfig['anio'], (int) $periodoConfig['mes'])
+            );
+
+            if (!$fechaConfig || $fechaConfig < $inicioPrestamo) {
+                continue;
+            }
+
+            $clave = sprintf('%04d-%02d', (int) $periodoConfig['anio'], (int) $periodoConfig['mes']);
+
+            if (isset($mapaPeriodos[$clave])) {
+                $periodo = $mapaPeriodos[$clave];
+                $capitalAcumulado = isset($periodo['capital_final'])
+                    ? (float) $periodo['capital_final']
+                    : ($capitalAcumulado ?? 0.0);
+            } else {
+                $capitalReferencia = $capitalAcumulado ?? 0.0;
+                $periodo = [
+                    'anio' => (int) $periodoConfig['anio'],
+                    'mes' => (int) $periodoConfig['mes'],
+                    'capital_inicio' => $capitalReferencia,
+                    'interes_causado' => 0,
+                    'interes_pagado' => 0,
+                    'abono_capital' => 0,
+                    'capital_final' => $capitalReferencia,
+                    'estado' => 'Pendiente',
+                ];
+                $capitalAcumulado = $capitalReferencia;
+            }
+
+            $resultado[] = $periodo;
+        }
+
+        return $resultado;
     }
 
     $inicio = DateTime::createFromFormat('Y-m-d', $fechaPrestamo) ?: new DateTime('first day of this month');
@@ -90,7 +144,11 @@ $periodosPorPrestamo = obtenerPeriodosPrestamo($pdo, array_column($prestamos, 'i
 foreach ($prestamos as $prestamo) {
     $id = (int) $prestamo['id_prestamo'];
     $periodosOriginales = $periodosPorPrestamo[$id] ?? [];
-    $periodosPorPrestamo[$id] = completarPeriodosPrestamo($periodosOriginales, (string) $prestamo['fecha_prestamo']);
+    $periodosPorPrestamo[$id] = completarPeriodosPrestamo(
+        $periodosOriginales,
+        (string) $prestamo['fecha_prestamo'],
+        $periodosConfiguracion
+    );
 }
 
 $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
