@@ -48,6 +48,20 @@ function obtenerPeriodosPrestamo(PDO $pdo, array $prestamoIds = []): array {
     return $datos;
 }
 
+function obtenerPeriodosConfiguracionOrdenados(PDO $pdo): array {
+    $periodos = getPeriodosConfiguracion($pdo);
+
+    usort($periodos, function ($a, $b) {
+        if ((int) $a['anio'] === (int) $b['anio']) {
+            return (int) $a['mes'] <=> (int) $b['mes'];
+        }
+
+        return (int) $a['anio'] <=> (int) $b['anio'];
+    });
+
+    return $periodos;
+}
+
 function extenderPeriodosPrestamoHastaMesActual(PDO $pdo): void {
     asegurarTablaPeriodosPrestamo($pdo);
 
@@ -103,25 +117,61 @@ function obtenerPeriodosParaMatriz(PDO $pdo, array $prestamo): array {
     extenderPeriodosPrestamoHastaMesActual($pdo);
 
     $periodosPrestamo = obtenerPeriodosPrestamo($pdo, [(int) $prestamo['id_prestamo']]);
+    $periodosConfigurados = obtenerPeriodosConfiguracionOrdenados($pdo);
     $periodos = [];
+    $periodosRegistrados = $periodosPrestamo[(int) $prestamo['id_prestamo']] ?? [];
+    $mapaRegistrados = [];
 
-    foreach ($periodosPrestamo[(int) $prestamo['id_prestamo']] ?? [] as $periodo) {
-        $fecha = DateTime::createFromFormat(
-            'Y-m-d',
-            sprintf('%04d-%02d-01', (int) $periodo['anio'], (int) $periodo['mes'])
-        );
+    foreach ($periodosRegistrados as $periodo) {
+        $clave = sprintf('%04d-%02d', (int) $periodo['anio'], (int) $periodo['mes']);
+        $mapaRegistrados[$clave] = $periodo;
+    }
 
-        $periodos[] = [
-            'anio' => (int) $periodo['anio'],
-            'mes' => (int) $periodo['mes'],
-            'label' => $fecha ? $fecha->format('M Y') : sprintf('%02d/%04d', $periodo['mes'], $periodo['anio']),
-            'fecha' => $fecha,
-            'estado_periodo' => $periodo['estado'] ?? '',
-        ];
+    $fechaPrestamo = DateTime::createFromFormat('Y-m-d', (string) $prestamo['fecha_prestamo']) ?: new DateTime('first day of this month');
+    $fechaPrestamo->modify('first day of this month');
+
+    if (!empty($periodosConfigurados)) {
+        foreach ($periodosConfigurados as $periodoConfig) {
+            $fechaConfig = DateTime::createFromFormat(
+                'Y-m-d',
+                sprintf('%04d-%02d-01', (int) $periodoConfig['anio'], (int) $periodoConfig['mes'])
+            );
+
+            if (!$fechaConfig || $fechaConfig < $fechaPrestamo) {
+                continue;
+            }
+
+            $clave = sprintf('%04d-%02d', (int) $periodoConfig['anio'], (int) $periodoConfig['mes']);
+            $periodoRegistrado = $mapaRegistrados[$clave] ?? null;
+
+            $periodos[] = [
+                'anio' => (int) $periodoConfig['anio'],
+                'mes' => (int) $periodoConfig['mes'],
+                'label' => $fechaConfig->format('M Y'),
+                'fecha' => $fechaConfig,
+                'estado_periodo' => $periodoRegistrado['estado'] ?? '',
+            ];
+        }
     }
 
     if (empty($periodos)) {
-        $fechaPrestamo = DateTime::createFromFormat('Y-m-d', (string) $prestamo['fecha_prestamo']) ?: new DateTime('first day of this month');
+        foreach ($periodosRegistrados as $periodo) {
+            $fecha = DateTime::createFromFormat(
+                'Y-m-d',
+                sprintf('%04d-%02d-01', (int) $periodo['anio'], (int) $periodo['mes'])
+            );
+
+            $periodos[] = [
+                'anio' => (int) $periodo['anio'],
+                'mes' => (int) $periodo['mes'],
+                'label' => $fecha ? $fecha->format('M Y') : sprintf('%02d/%04d', $periodo['mes'], $periodo['anio']),
+                'fecha' => $fecha,
+                'estado_periodo' => $periodo['estado'] ?? '',
+            ];
+        }
+    }
+
+    if (empty($periodos)) {
         $periodos[] = [
             'anio' => (int) $fechaPrestamo->format('Y'),
             'mes' => (int) $fechaPrestamo->format('n'),
