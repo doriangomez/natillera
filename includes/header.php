@@ -177,6 +177,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <a class="nav-link-sidebar<?php echo $currentPage === 'reglamento.php' ? ' active' : ''; ?>" href="reglamento.php"><i class="bi bi-journal-text"></i><span>Reglamento</span></a>
             <a class="nav-link-sidebar" href="../actions/export_csv.php?tipo=menu"><i class="bi bi-filetype-csv"></i><span>Exportar</span></a>
             <?php if ($isAdmin): ?>
+                <a class="nav-link-sidebar<?php echo $currentPage === 'copias.php' ? ' active' : ''; ?>" href="copias.php"><i class="bi bi-hdd-stack"></i><span>Copias</span></a>
+            <?php endif; ?>
+            <?php if ($isAdmin): ?>
                 <a class="nav-link-sidebar<?php echo $currentPage === 'configuracion.php' ? ' active' : ''; ?>" href="configuracion.php"><i class="bi bi-gear"></i><span>Configuración</span></a>
             <?php endif; ?>
             <a class="nav-link-sidebar" href="../actions/logout.php"><i class="bi bi-box-arrow-right"></i><span>Cerrar sesión</span></a>
