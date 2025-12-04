@@ -6,6 +6,149 @@ function clean($value) {
     return htmlspecialchars(trim((string)$value), ENT_QUOTES, 'UTF-8');
 }
 
+function asegurarForeignKey(PDO $pdo, array $definicion): void {
+    $tabla = $definicion['tabla'];
+    $columna = $definicion['columna'];
+    $referencia = $definicion['referencia'];
+    $colReferencia = $definicion['col_referencia'];
+    $nombre = $definicion['nombre'];
+    $onDelete = strtoupper($definicion['on_delete'] ?? 'CASCADE');
+    $onUpdate = strtoupper($definicion['on_update'] ?? 'CASCADE');
+
+    try {
+        $colExiste = $pdo->prepare("SHOW COLUMNS FROM `$tabla` LIKE :columna");
+        $colExiste->execute([':columna' => $columna]);
+        if ($colExiste->rowCount() === 0) {
+            return;
+        }
+
+        $stmtFk = $pdo->prepare(
+            "SELECT rc.CONSTRAINT_NAME, rc.DELETE_RULE, rc.UPDATE_RULE, rc.REFERENCED_TABLE_NAME
+             FROM information_schema.referential_constraints rc
+             JOIN information_schema.key_column_usage k
+               ON rc.constraint_name = k.constraint_name
+              AND rc.constraint_schema = k.constraint_schema
+            WHERE rc.constraint_schema = DATABASE()
+              AND rc.table_name = :tabla
+              AND k.column_name = :columna"
+        );
+        $stmtFk->execute([':tabla' => $tabla, ':columna' => $columna]);
+        $fk = $stmtFk->fetch(PDO::FETCH_ASSOC);
+
+        if ($fk) {
+            $deleteRule = strtoupper($fk['DELETE_RULE'] ?? '');
+            $updateRule = strtoupper($fk['UPDATE_RULE'] ?? '');
+            $refActual = $fk['REFERENCED_TABLE_NAME'] ?? '';
+            if ($deleteRule === $onDelete && $updateRule === $onUpdate && $refActual === $referencia) {
+                return;
+            }
+            $pdo->exec("ALTER TABLE `$tabla` DROP FOREIGN KEY `{$fk['CONSTRAINT_NAME']}`");
+        }
+
+        $pdo->exec(
+            "ALTER TABLE `$tabla`
+             ADD CONSTRAINT `$nombre`
+             FOREIGN KEY (`$columna`) REFERENCES `$referencia`(`$colReferencia`)
+             ON DELETE $onDelete ON UPDATE $onUpdate"
+        );
+    } catch (Exception $e) {
+        // Ignorar errores de motor o permisos; no se detiene el flujo principal.
+    }
+}
+
+function asegurarEsquemaMovimientos(PDO $pdo): void {
+    static $reforzado = false;
+    if ($reforzado) {
+        return;
+    }
+    $reforzado = true;
+
+    $columnas = [
+        'anio INT DEFAULT NULL',
+        'mes INT DEFAULT NULL',
+        'quincena INT DEFAULT 0',
+        "modulo VARCHAR(100) DEFAULT NULL",
+    ];
+
+    foreach ($columnas as $def) {
+        try {
+            $nombre = explode(' ', $def)[0];
+            $existe = $pdo->query("SHOW COLUMNS FROM movimientos LIKE '$nombre'");
+            if ($existe && $existe->rowCount() === 0) {
+                $pdo->exec("ALTER TABLE movimientos ADD COLUMN $def");
+            }
+        } catch (Exception $e) {
+            // Continuar sin interrumpir la operación.
+        }
+    }
+
+    $fks = [
+        [
+            'tabla' => 'movimientos',
+            'columna' => 'id_socio',
+            'referencia' => 'socios',
+            'col_referencia' => 'id_socio',
+            'nombre' => 'fk_movimientos_socios',
+        ],
+        [
+            'tabla' => 'movimientos',
+            'columna' => 'id_actividad',
+            'referencia' => 'actividades_maestro',
+            'col_referencia' => 'id_actividad',
+            'nombre' => 'fk_movimientos_actividades',
+        ],
+        [
+            'tabla' => 'movimientos',
+            'columna' => 'id_medio_pago',
+            'referencia' => 'medios_pago',
+            'col_referencia' => 'id',
+            'nombre' => 'fk_movimientos_medios_pago',
+        ],
+        [
+            'tabla' => 'prestamos',
+            'columna' => 'id_socio',
+            'referencia' => 'socios',
+            'col_referencia' => 'id_socio',
+            'nombre' => 'fk_prestamos_socios',
+        ],
+        [
+            'tabla' => 'prestamos',
+            'columna' => 'id_socio_aval',
+            'referencia' => 'socios',
+            'col_referencia' => 'id_socio',
+            'nombre' => 'fk_prestamos_aval',
+            'on_delete' => 'SET NULL',
+        ],
+        [
+            'tabla' => 'cuotas_prestamo',
+            'columna' => 'id_prestamo',
+            'referencia' => 'prestamos',
+            'col_referencia' => 'id_prestamo',
+            'nombre' => 'fk_cuotas_prestamo',
+        ],
+        [
+            'tabla' => 'periodos_prestamo',
+            'columna' => 'id_prestamo',
+            'referencia' => 'prestamos',
+            'col_referencia' => 'id_prestamo',
+            'nombre' => 'fk_periodos_prestamo',
+        ],
+        [
+            'tabla' => 'conciliaciones_medios_pago',
+            'columna' => 'id_medio',
+            'referencia' => 'medios_pago',
+            'col_referencia' => 'id',
+            'nombre' => 'fk_conciliaciones_medio',
+        ],
+    ];
+
+    foreach ($fks as $fk) {
+        asegurarForeignKey($pdo, $fk);
+    }
+}
+
+asegurarEsquemaMovimientos($pdo);
+
 function getSocios($pdo, $search = '') {
     $sql = "SELECT * FROM socios WHERE activo = 1";
     $params = [];

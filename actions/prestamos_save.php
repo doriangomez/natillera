@@ -5,10 +5,6 @@ checkAuth();
 
 try {
     asegurarTablaPeriodosPrestamo($pdo);
-    $existeModulo = $pdo->query("SHOW COLUMNS FROM movimientos LIKE 'modulo'");
-    if ($existeModulo && $existeModulo->rowCount() === 0) {
-        $pdo->exec("ALTER TABLE movimientos ADD COLUMN modulo VARCHAR(100) DEFAULT NULL");
-    }
     $existeInteresMensual = $pdo->query("SHOW COLUMNS FROM prestamos LIKE 'interes_mensual'");
     if ($existeInteresMensual && $existeInteresMensual->rowCount() === 0) {
         $pdo->exec("ALTER TABLE prestamos ADD COLUMN interes_mensual DECIMAL(12,2) DEFAULT 0 AFTER tasa_interes");

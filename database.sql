@@ -62,9 +62,9 @@ CREATE TABLE movimientos (
     modulo VARCHAR(100) DEFAULT NULL,
     usuario_registro VARCHAR(50),
     fecha_registro DATETIME,
-    FOREIGN KEY (id_socio) REFERENCES socios(id_socio),
-    FOREIGN KEY (id_actividad) REFERENCES actividades_maestro(id_actividad),
-    FOREIGN KEY (id_medio_pago) REFERENCES medios_pago(id)
+    CONSTRAINT fk_movimientos_socios FOREIGN KEY (id_socio) REFERENCES socios(id_socio) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_movimientos_actividades FOREIGN KEY (id_actividad) REFERENCES actividades_maestro(id_actividad) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_movimientos_medios_pago FOREIGN KEY (id_medio_pago) REFERENCES medios_pago(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE natillera_estado (
@@ -87,8 +87,8 @@ CREATE TABLE prestamos (
     saldo_capital_actual DECIMAL(12,2) DEFAULT 0,
     saldo_intereses_actual DECIMAL(12,2) DEFAULT 0,
     estado VARCHAR(20) DEFAULT 'vigente',
-    FOREIGN KEY (id_socio) REFERENCES socios(id_socio),
-    FOREIGN KEY (id_socio_aval) REFERENCES socios(id_socio)
+    CONSTRAINT fk_prestamos_socios FOREIGN KEY (id_socio) REFERENCES socios(id_socio) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_prestamos_aval FOREIGN KEY (id_socio_aval) REFERENCES socios(id_socio) ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 CREATE TABLE cuotas_prestamo (
@@ -103,7 +103,7 @@ CREATE TABLE cuotas_prestamo (
     saldo_capital_despues DECIMAL(12,2) DEFAULT 0,
     saldo_intereses_despues DECIMAL(12,2) DEFAULT 0,
     observaciones TEXT,
-    FOREIGN KEY (id_prestamo) REFERENCES prestamos(id_prestamo)
+    CONSTRAINT fk_cuotas_prestamo FOREIGN KEY (id_prestamo) REFERENCES prestamos(id_prestamo) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE periodos_prestamo (
@@ -118,7 +118,7 @@ CREATE TABLE periodos_prestamo (
     capital_final DECIMAL(12,2) DEFAULT 0,
     estado VARCHAR(20) DEFAULT 'Pendiente',
     UNIQUE KEY uniq_prestamo_mes (id_prestamo, anio, mes),
-    FOREIGN KEY (id_prestamo) REFERENCES prestamos(id_prestamo)
+    CONSTRAINT fk_periodos_prestamo FOREIGN KEY (id_prestamo) REFERENCES prestamos(id_prestamo) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- Actividades de ejemplo
@@ -175,5 +175,5 @@ CREATE TABLE conciliaciones_medios_pago (
     fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
     cerrado TINYINT(1) DEFAULT 0,
     UNIQUE KEY uq_conciliacion_mensual (id_medio, anio, mes),
-    FOREIGN KEY (id_medio) REFERENCES medios_pago(id)
+    CONSTRAINT fk_conciliaciones_medio FOREIGN KEY (id_medio) REFERENCES medios_pago(id) ON DELETE CASCADE ON UPDATE CASCADE
 );

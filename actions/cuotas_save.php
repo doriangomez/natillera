@@ -5,10 +5,6 @@ checkAuth();
 
 try {
     asegurarTablaPeriodosPrestamo($pdo);
-    $existeModulo = $pdo->query("SHOW COLUMNS FROM movimientos LIKE 'modulo'");
-    if ($existeModulo && $existeModulo->rowCount() === 0) {
-        $pdo->exec("ALTER TABLE movimientos ADD COLUMN modulo VARCHAR(100) DEFAULT NULL");
-    }
 } catch (Exception $e) {
     // continuar
 }
