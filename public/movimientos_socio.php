@@ -338,11 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             modalInstance.hide();
             const url = '../actions/export_movimiento_socio_pdf.php?' + params.toString();
-            if (modo === 'individual') {
-                window.location.href = url;
-            } else {
-                window.location.href = url;
-            }
+            window.open(url, '_blank');
         });
     }
 });
