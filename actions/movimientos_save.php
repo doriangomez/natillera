@@ -17,24 +17,6 @@ if ($accion === 'eliminar') {
     exit;
 }
 
-$columnas = [
-    'anio INT DEFAULT NULL',
-    'mes INT DEFAULT NULL',
-    'quincena INT DEFAULT 0',
-    "modulo VARCHAR(100) DEFAULT NULL"
-];
-foreach ($columnas as $def) {
-    try {
-        $nombre = explode(' ', $def)[0];
-        $existe = $pdo->query("SHOW COLUMNS FROM movimientos LIKE '$nombre'");
-        if ($existe && $existe->rowCount() === 0) {
-            $pdo->exec("ALTER TABLE movimientos ADD COLUMN $def");
-        }
-    } catch (Exception $e) {
-        // continuar
-    }
-}
-
 $fecha = $_POST['fecha'];
 $anio = isset($_POST['anio']) ? (int) $_POST['anio'] : null;
 $mes = isset($_POST['mes']) ? (int) $_POST['mes'] : null;
