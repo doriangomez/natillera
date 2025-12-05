@@ -51,6 +51,17 @@ CREATE TABLE natillera_estado (
 INSERT INTO natillera_estado (id_estado, saldo_actual) VALUES (1,0)
     ON DUPLICATE KEY UPDATE saldo_actual = saldo_actual;
 
+CREATE TABLE IF NOT EXISTS retiros_caja (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    fecha DATE NOT NULL,
+    valor DECIMAL(12,2) NOT NULL,
+    medio VARCHAR(120) DEFAULT NULL,
+    referencia VARCHAR(200) DEFAULT NULL,
+    observaciones TEXT,
+    usuario_registro VARCHAR(50) DEFAULT NULL,
+    fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE prestamos (
     id_prestamo INT AUTO_INCREMENT PRIMARY KEY,
     id_socio INT NULL,
