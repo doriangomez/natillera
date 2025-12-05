@@ -221,7 +221,10 @@ function obtenerSignoActividad(array $actividad): int {
 }
 
 function registrarHistorialPeriodosPrestamo(PDO $pdo, array $periodos): void {
-    asegurarTablaPeriodosPrestamo($pdo);
+    // Evitar ejecutar DDL dentro de transacciones activas para no invalidar commits
+    if (!$pdo->inTransaction()) {
+        asegurarTablaPeriodosPrestamo($pdo);
+    }
 
     if (empty($periodos)) {
         return;
