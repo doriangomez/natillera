@@ -209,15 +209,12 @@ function filtrarMovimientosPrestamo(PDO $pdo, array $prestamo, DateTimeInterface
     $sql = 'SELECT m.*, a.nombre_actividad, a.afecta_saldo_socio, a.afecta_saldo_natillera, a.es_prestamo, a.es_pago_prestamo, a.es_pago_interes, a.es_interes_causado'
         . ' FROM movimientos m'
         . ' JOIN actividades_maestro a ON m.id_actividad = a.id_actividad'
-        . ' WHERE m.modulo IN (\'prestamos\', \'cuotas\')'
-        . '   AND m.fecha BETWEEN :inicio AND :fin'
-        . '   AND (m.id_prestamo = :id_prestamo OR m.id_prestamo IS NULL)';
+        . ' WHERE m.modulo IN (\'prestamos\', \'cuotas\') AND m.fecha BETWEEN :inicio AND :fin';
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([
         ':inicio' => $inicio->format('Y-m-d'),
         ':fin' => $fin->format('Y-m-t'),
-        ':id_prestamo' => (int) $prestamo['id_prestamo'],
     ]);
 
     $movimientos = [];
