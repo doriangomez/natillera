@@ -296,17 +296,23 @@ try {
 
     $restanteInteres = $intPagado;
     $periodosActualizados = [];
+    $periodosConMovimiento = [];
     foreach ($periodosPrestamo as $periodo) {
+        $huboMovimiento = false;
         $faltante = max(0, (float) $periodo['interes_causado'] - (float) $periodo['interes_pagado']);
         $aplicar = min($faltante, $restanteInteres);
         if ($aplicar > 0) {
             $periodo['interes_pagado'] += $aplicar;
             $restanteInteres -= $aplicar;
+            $huboMovimiento = true;
         }
 
         if ((int) $periodo['anio'] === $anioPago && (int) $periodo['mes'] === $mesPago) {
             $periodo['abono_capital'] = (float) $periodo['abono_capital'] + $capPagado;
             $periodo['capital_final'] = $saldoCapital;
+            if ($capPagado > 0) {
+                $huboMovimiento = true;
+            }
         }
 
         $periodo['estado'] = ($periodo['interes_pagado'] + 0.01 >= $periodo['interes_causado']) ? 'OK' : 'Mora';
@@ -314,6 +320,9 @@ try {
             $periodo['estado'] = 'Finalizado';
         }
 
+        if ($huboMovimiento) {
+            $periodosConMovimiento[] = $periodo;
+        }
         $periodosActualizados[] = $periodo;
     }
 
@@ -327,6 +336,8 @@ try {
             ':id' => $periodo['id_periodo'],
         ]);
     }
+
+    registrarHistorialPeriodosPrestamo($pdo, $periodosConMovimiento);
 
     $periodosEnMora = 0;
     $saldoInteresPendiente = 0.0;

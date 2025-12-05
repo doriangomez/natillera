@@ -16,6 +16,21 @@ function asegurarTablaPeriodosPrestamo(PDO $pdo): void {
             UNIQUE KEY uniq_prestamo_mes (id_prestamo, anio, mes),
             FOREIGN KEY (id_prestamo) REFERENCES prestamos(id_prestamo)
         )');
+
+        $pdo->exec('CREATE TABLE IF NOT EXISTS periodos_prestamo_historial (
+            id_historial INT AUTO_INCREMENT PRIMARY KEY,
+            id_prestamo INT NOT NULL,
+            anio INT NOT NULL,
+            mes INT NOT NULL,
+            capital_inicio DECIMAL(12,2) DEFAULT 0,
+            interes_causado DECIMAL(12,2) DEFAULT 0,
+            interes_pagado DECIMAL(12,2) DEFAULT 0,
+            abono_capital DECIMAL(12,2) DEFAULT 0,
+            capital_final DECIMAL(12,2) DEFAULT 0,
+            estado VARCHAR(20) DEFAULT "Pendiente",
+            fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (id_prestamo) REFERENCES prestamos(id_prestamo)
+        )');
     } catch (Exception $e) {
         // continuar sin interrumpir el flujo
     }
@@ -203,6 +218,45 @@ function obtenerSignoActividad(array $actividad): int {
     }
 
     return $regla === 'suma' ? 1 : ($regla === 'resta' ? -1 : 0);
+}
+
+function registrarHistorialPeriodosPrestamo(PDO $pdo, array $periodos): void {
+    // Evitar ejecutar DDL dentro de transacciones activas para no invalidar commits
+    if (!$pdo->inTransaction()) {
+        asegurarTablaPeriodosPrestamo($pdo);
+    }
+
+    if (empty($periodos)) {
+        return;
+    }
+
+    $stmt = $pdo->prepare(
+        'INSERT INTO periodos_prestamo_historial (id_prestamo, anio, mes, capital_inicio, interes_causado, interes_pagado, abono_capital, capital_final, estado)
+         VALUES (:id_prestamo, :anio, :mes, :capital_inicio, :interes_causado, :interes_pagado, :abono_capital, :capital_final, :estado)'
+    );
+
+    foreach ($periodos as $periodo) {
+        $stmt->execute([
+            ':id_prestamo' => (int) $periodo['id_prestamo'],
+            ':anio' => (int) $periodo['anio'],
+            ':mes' => (int) $periodo['mes'],
+            ':capital_inicio' => (float) $periodo['capital_inicio'],
+            ':interes_causado' => (float) $periodo['interes_causado'],
+            ':interes_pagado' => (float) $periodo['interes_pagado'],
+            ':abono_capital' => (float) $periodo['abono_capital'],
+            ':capital_final' => (float) $periodo['capital_final'],
+            ':estado' => (string) ($periodo['estado'] ?? ''),
+        ]);
+    }
+}
+
+function obtenerHistorialPeriodosPrestamo(PDO $pdo, int $idPrestamo): array {
+    asegurarTablaPeriodosPrestamo($pdo);
+
+    $stmt = $pdo->prepare('SELECT * FROM periodos_prestamo_historial WHERE id_prestamo = :id ORDER BY fecha_registro DESC, id_historial DESC');
+    $stmt->execute([':id' => $idPrestamo]);
+
+    return $stmt->fetchAll();
 }
 
 function filtrarMovimientosPrestamo(PDO $pdo, array $prestamo, DateTimeInterface $inicio, DateTimeInterface $fin): array {
