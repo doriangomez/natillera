@@ -422,6 +422,131 @@ function recalcularSaldosDesdeMovimientos(PDO $pdo): void {
     }
 }
 
+function generarConciliacionInterna(PDO $pdo): array {
+    $reporte = [
+        'ok' => true,
+        'checks' => [],
+        'desviaciones_socios' => [],
+    ];
+
+    $saldoMovimientos = (float) $pdo->query(
+        "SELECT COALESCE(SUM(CASE" .
+        " WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor)" .
+        " WHEN a.afecta_saldo_natillera = 'resta' THEN -ABS(m.valor)" .
+        " ELSE 0 END), 0)" .
+        " FROM movimientos m" .
+        " JOIN actividades_maestro a ON m.id_actividad = a.id_actividad"
+    )->fetchColumn();
+
+    $saldoRegistrado = getSaldoNatillera($pdo);
+    $diferenciaNatillera = round($saldoRegistrado - $saldoMovimientos, 2);
+
+    $reporte['checks'][] = [
+        'titulo' => 'Saldo general de la natillera',
+        'detalle' => 'Comparación entre saldo guardado y suma neta de movimientos',
+        'registrado' => $saldoRegistrado,
+        'esperado' => $saldoMovimientos,
+        'diferencia' => $diferenciaNatillera,
+        'ok' => abs($diferenciaNatillera) < 0.01,
+    ];
+
+    if (abs($diferenciaNatillera) >= 0.01) {
+        $reporte['ok'] = false;
+    }
+
+    $saldosCalculados = [];
+    $stmtSaldos = $pdo->query(
+        "SELECT m.id_socio, SUM(CASE" .
+        " WHEN a.es_polla = 1 THEN 0" .
+        " WHEN a.afecta_saldo_socio = 'suma' THEN ABS(m.valor)" .
+        " WHEN a.afecta_saldo_socio = 'resta' THEN -ABS(m.valor)" .
+        " ELSE 0 END) AS saldo" .
+        " FROM movimientos m" .
+        " JOIN actividades_maestro a ON m.id_actividad = a.id_actividad" .
+        " WHERE m.id_socio IS NOT NULL" .
+        " GROUP BY m.id_socio"
+    );
+
+    foreach ($stmtSaldos->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+        $saldosCalculados[(int) $fila['id_socio']] = (float) ($fila['saldo'] ?? 0);
+    }
+
+    $desviaciones = [];
+    $stmtSocios = $pdo->query('SELECT id_socio, nombre_completo, saldo_socio FROM socios');
+    foreach ($stmtSocios->fetchAll(PDO::FETCH_ASSOC) as $socio) {
+        $esperado = $saldosCalculados[(int) $socio['id_socio']] ?? 0.0;
+        $registrado = (float) $socio['saldo_socio'];
+        $diferencia = round($registrado - $esperado, 2);
+
+        if (abs($diferencia) >= 0.01) {
+            $desviaciones[] = [
+                'id' => (int) $socio['id_socio'],
+                'nombre' => $socio['nombre_completo'],
+                'registrado' => $registrado,
+                'esperado' => $esperado,
+                'diferencia' => $diferencia,
+            ];
+        }
+    }
+
+    $reporte['desviaciones_socios'] = $desviaciones;
+    $reporte['checks'][] = [
+        'titulo' => 'Saldos de socios',
+        'detalle' => 'Verificación de saldo almacenado vs. saldo reconstruido por movimientos',
+        'registrado' => count($desviaciones) ? 'Hay diferencias' : 'Sin diferencias',
+        'esperado' => 'Sin diferencias',
+        'diferencia' => count($desviaciones),
+        'ok' => count($desviaciones) === 0,
+    ];
+
+    if (!empty($desviaciones)) {
+        $reporte['ok'] = false;
+    }
+
+    $huerfanosPeriodos = (int) $pdo->query(
+        'SELECT COUNT(*) FROM periodos_prestamo pp LEFT JOIN prestamos p ON pp.id_prestamo = p.id_prestamo ' .
+        'WHERE p.id_prestamo IS NULL'
+    )->fetchColumn();
+
+    $huerfanosCuotas = (int) $pdo->query(
+        'SELECT COUNT(*) FROM cuotas_prestamo cp LEFT JOIN prestamos p ON cp.id_prestamo = p.id_prestamo ' .
+        'WHERE p.id_prestamo IS NULL'
+    )->fetchColumn();
+
+    $reporte['checks'][] = [
+        'titulo' => 'Integridad de préstamos',
+        'detalle' => 'Cuotas y periodos sin préstamo asociado',
+        'registrado' => $huerfanosPeriodos + $huerfanosCuotas,
+        'esperado' => 0,
+        'diferencia' => $huerfanosPeriodos + $huerfanosCuotas,
+        'ok' => ($huerfanosPeriodos + $huerfanosCuotas) === 0,
+    ];
+
+    if (($huerfanosPeriodos + $huerfanosCuotas) > 0) {
+        $reporte['ok'] = false;
+    }
+
+    $movimientosSinMedio = (int) $pdo->query(
+        'SELECT COUNT(*) FROM movimientos m WHERE m.id_medio_pago IS NOT NULL ' .
+        'AND NOT EXISTS (SELECT 1 FROM medios_pago mp WHERE mp.id = m.id_medio_pago)'
+    )->fetchColumn();
+
+    $reporte['checks'][] = [
+        'titulo' => 'Movimientos con medio de pago válido',
+        'detalle' => 'Verifica que cada movimiento tenga medio de pago vigente cuando aplica',
+        'registrado' => $movimientosSinMedio,
+        'esperado' => 0,
+        'diferencia' => $movimientosSinMedio,
+        'ok' => $movimientosSinMedio === 0,
+    ];
+
+    if ($movimientosSinMedio > 0) {
+        $reporte['ok'] = false;
+    }
+
+    return $reporte;
+}
+
 function getActividad($pdo, $id) {
     asegurarEsquemaActividades($pdo);
     $stmt = $pdo->prepare("SELECT * FROM actividades_maestro WHERE id_actividad = :id");
