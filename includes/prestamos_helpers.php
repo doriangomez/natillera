@@ -219,6 +219,11 @@ function filtrarMovimientosPrestamo(PDO $pdo, array $prestamo, DateTimeInterface
 
     $movimientos = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $mov) {
+        if ((int) ($mov['id_prestamo'] ?? 0) === (int) $prestamo['id_prestamo']) {
+            $movimientos[] = $mov;
+            continue;
+        }
+
         $idDetectado = extraerIdPrestamoDesdeMotivo($mov['motivo'] ?? '') ?? null;
         if ($idDetectado !== null && $idDetectado === (int) $prestamo['id_prestamo']) {
             $movimientos[] = $mov;
