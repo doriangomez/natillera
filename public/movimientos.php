@@ -260,10 +260,17 @@ foreach ($movimientos as $m) {
         </thead>
         <tbody>
             <?php foreach($movimientos as $m): ?>
+                <?php
+                    $nombreMovimiento = $m['nombre_completo'];
+                    if (!$nombreMovimiento && in_array($m['modulo'] ?? '', ['prestamos', 'cuotas'], true)) {
+                        $nombreMovimiento = $m['observaciones'] ?: $nombreMovimiento;
+                    }
+                    $nombreMovimiento = $nombreMovimiento ?: 'General';
+                ?>
                 <tr>
                     <td><?php echo $m['fecha']; ?></td>
                     <td><?php echo trim(($m['mes'] ?? '') . '/' . ($m['anio'] ?? '')); ?><?php echo $m['quincena'] ? ' - Q' . $m['quincena'] : ''; ?></td>
-                    <td><?php echo $m['nombre_completo'] ?? 'General'; ?></td>
+                    <td><?php echo clean($nombreMovimiento); ?></td>
                     <td><?php echo $m['nombre_actividad']; ?></td>
                     <td>$<?php echo number_format($m['valor'],0,',','.'); ?></td>
                     <td><?php echo clean($m['medio_nombre'] ?: $m['medio_consignacion']); ?></td>

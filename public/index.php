@@ -76,7 +76,7 @@ $sqlWhere = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
 $movimientosStmt = $pdo->prepare("
     WITH mov_filtrado AS (
-        SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad,
+        SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad, m.modulo, m.observaciones,
                s.nombre_completo, a.nombre_actividad, a.afecta_saldo_socio, a.afecta_saldo_natillera,
                a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general,
                COALESCE(mp.nombre, m.medio_consignacion) AS medio_nombre
@@ -299,10 +299,16 @@ $movimientos = $movimientosStmt->fetchAll();
                                     $tipoMovimiento = 'Egreso';
                                     $claseTipo = 'bg-danger-subtle text-danger';
                                 }
+
+                                $nombreMovimiento = $m['nombre_completo'];
+                                if (!$nombreMovimiento && in_array($m['modulo'], ['prestamos', 'cuotas'], true)) {
+                                    $nombreMovimiento = $m['observaciones'] ?: $nombreMovimiento;
+                                }
+                                $nombreMovimiento = $nombreMovimiento ?: 'General';
                             ?>
                             <tr>
                                 <td><?php echo clean($m['fecha']); ?></td>
-                                <td><?php echo $m['nombre_completo'] ? clean($m['nombre_completo']) : 'General'; ?></td>
+                                <td><?php echo clean($nombreMovimiento); ?></td>
                                 <td><?php echo clean($m['nombre_actividad']); ?></td>
                                 <td><?php echo clean($m['medio_nombre']); ?></td>
                                 <td><span class="badge <?php echo $claseTipo; ?>">
