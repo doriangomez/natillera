@@ -8,10 +8,41 @@ $idMovimiento = isset($_POST['id_movimiento']) ? (int) $_POST['id_movimiento'] :
 $redirect = $_POST['redirect'] ?? '../public/movimientos.php';
 
 if ($accion === 'eliminar') {
+    $movInfo = null;
     if ($idMovimiento > 0) {
+        $stmtInfo = $pdo->prepare('SELECT id_prestamo, modulo, fecha FROM movimientos WHERE id_movimiento = :id');
+        $stmtInfo->execute([':id' => $idMovimiento]);
+        $movInfo = $stmtInfo->fetch();
+
         $stmt = $pdo->prepare('DELETE FROM movimientos WHERE id_movimiento = :id LIMIT 1');
         $stmt->execute([':id' => $idMovimiento]);
     }
+
+    if (!empty($movInfo['id_prestamo'])) {
+        $idPrestamo = (int) $movInfo['id_prestamo'];
+
+        if (($movInfo['modulo'] ?? '') === 'cuotas' && !empty($movInfo['fecha'])) {
+            $stmtRestoMovs = $pdo->prepare(
+                'SELECT COUNT(*) FROM movimientos WHERE id_prestamo = :id AND modulo = :mod AND fecha = :fecha'
+            );
+            $stmtRestoMovs->execute([
+                ':id' => $idPrestamo,
+                ':mod' => 'cuotas',
+                ':fecha' => $movInfo['fecha'],
+            ]);
+
+            if ((int) $stmtRestoMovs->fetchColumn() === 0) {
+                $stmtDelCuota = $pdo->prepare('DELETE FROM cuotas_prestamo WHERE id_prestamo = :id AND fecha_pago = :fecha');
+                $stmtDelCuota->execute([
+                    ':id' => $idPrestamo,
+                    ':fecha' => $movInfo['fecha'],
+                ]);
+            }
+        }
+
+        recalcularPrestamoDesdeMovimientos($pdo, $idPrestamo);
+    }
+
     recalcularSaldosDesdeMovimientos($pdo);
     header('Location: ' . $redirect);
     exit;

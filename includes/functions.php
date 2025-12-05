@@ -491,6 +491,59 @@ function recalcularSaldosDesdeMovimientos(PDO $pdo): void {
     }
 }
 
+function recalcularPrestamoDesdeMovimientos(PDO $pdo, int $idPrestamo): void {
+    $stmtPrestamo = $pdo->prepare('SELECT monto_prestamo FROM prestamos WHERE id_prestamo = :id');
+    $stmtPrestamo->execute([':id' => $idPrestamo]);
+    $prestamo = $stmtPrestamo->fetch();
+
+    if (!$prestamo) {
+        return;
+    }
+
+    $stmtCapital = $pdo->prepare(
+        'SELECT COALESCE(SUM(ABS(m.valor)), 0) FROM movimientos m '
+        . 'JOIN actividades_maestro a ON m.id_actividad = a.id_actividad '
+        . 'WHERE m.id_prestamo = :id AND a.es_pago_prestamo = 1'
+    );
+    $stmtCapital->execute([':id' => $idPrestamo]);
+    $capitalPagado = (float) $stmtCapital->fetchColumn();
+
+    $stmtInteresPagado = $pdo->prepare(
+        'SELECT COALESCE(SUM(ABS(m.valor)), 0) FROM movimientos m '
+        . 'JOIN actividades_maestro a ON m.id_actividad = a.id_actividad '
+        . 'WHERE m.id_prestamo = :id AND a.es_pago_interes = 1'
+    );
+    $stmtInteresPagado->execute([':id' => $idPrestamo]);
+    $interesPagado = (float) $stmtInteresPagado->fetchColumn();
+
+    $interesCausado = 0.0;
+    try {
+        $stmtInteresCausado = $pdo->prepare('SELECT COALESCE(SUM(interes_causado), 0) FROM periodos_prestamo WHERE id_prestamo = :id');
+        $stmtInteresCausado->execute([':id' => $idPrestamo]);
+        $interesCausado = (float) $stmtInteresCausado->fetchColumn();
+    } catch (Exception $e) {
+        $interesCausado = 0.0;
+    }
+
+    $saldoCapital = max(0, (float) $prestamo['monto_prestamo'] - $capitalPagado);
+    $saldoInteres = max(0, $interesCausado - $interesPagado);
+
+    $estado = 'Activo';
+    if ($saldoCapital <= 0.01) {
+        $estado = 'Finalizado';
+    } elseif ($saldoInteres > 0.01) {
+        $estado = 'En mora';
+    }
+
+    $pdo->prepare('UPDATE prestamos SET saldo_capital_actual = :cap, saldo_intereses_actual = :int, estado = :estado WHERE id_prestamo = :id')
+        ->execute([
+            ':cap' => $saldoCapital,
+            ':int' => $saldoInteres,
+            ':estado' => $estado,
+            ':id' => $idPrestamo,
+        ]);
+}
+
 function generarConciliacionInterna(PDO $pdo): array {
     $reporte = [
         'ok' => true,
