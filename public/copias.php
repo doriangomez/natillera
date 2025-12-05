@@ -1,6 +1,13 @@
 <?php
 require_once __DIR__ . '/../includes/header.php';
 checkAdmin();
+
+$ejecutarConciliacion = isset($_GET['auditar']);
+$diagnosticoDatos = null;
+
+if ($ejecutarConciliacion) {
+    $diagnosticoDatos = generarConciliacionInterna($pdo);
+}
 ?>
 
 <div class="row g-4">
@@ -44,6 +51,99 @@ checkAdmin();
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-clipboard2-pulse"></i>
+                    <span>Conciliación interna y salud de datos</span>
+                </div>
+                <a class="btn btn-outline-primary btn-sm" href="copias.php?auditar=1">
+                    <i class="bi bi-arrow-repeat"></i>
+                    Ejecutar validación
+                </a>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Valida la coherencia entre saldos, movimientos y préstamos antes de generar respaldos.</p>
+
+                <?php if ($ejecutarConciliacion && $diagnosticoDatos): ?>
+                    <?php if ($diagnosticoDatos['ok']): ?>
+                        <div class="alert alert-success">No se encontraron inconsistencias en la conciliación interna.</div>
+                    <?php else: ?>
+                        <div class="alert alert-warning">Se encontraron hallazgos que requieren revisión. Consulta los detalles.</div>
+                    <?php endif; ?>
+
+                    <div class="table-responsive mb-3">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Revisión</th>
+                                    <th>Registrado</th>
+                                    <th>Esperado</th>
+                                    <th>Diferencia</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($diagnosticoDatos['checks'] as $check): ?>
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold"><?php echo clean($check['titulo']); ?></div>
+                                            <div class="text-muted small"><?php echo clean($check['detalle']); ?></div>
+                                        </td>
+                                        <td><?php echo htmlspecialchars((string) $check['registrado']); ?></td>
+                                        <td><?php echo htmlspecialchars((string) $check['esperado']); ?></td>
+                                        <td><?php echo htmlspecialchars((string) $check['diferencia']); ?></td>
+                                        <td>
+                                            <?php if (!empty($check['ok'])): ?>
+                                                <span class="badge bg-success">OK</span>
+                                            <?php else: ?>
+                                                <span class="badge bg-danger">Revisar</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <?php if (!empty($diagnosticoDatos['desviaciones_socios'])): ?>
+                        <div class="alert alert-info">
+                            <div class="fw-semibold mb-1">Saldos de socios con diferencias</div>
+                            <p class="mb-2">La tabla muestra los socios cuyo saldo almacenado no coincide con el reconstruido a partir de los movimientos.</p>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Nombre</th>
+                                            <th>Registrado</th>
+                                            <th>Calculado</th>
+                                            <th>Diferencia</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($diagnosticoDatos['desviaciones_socios'] as $desviacion): ?>
+                                            <tr>
+                                                <td><?php echo (int) $desviacion['id']; ?></td>
+                                                <td><?php echo htmlspecialchars($desviacion['nombre']); ?></td>
+                                                <td><?php echo number_format((float) $desviacion['registrado'], 2); ?></td>
+                                                <td><?php echo number_format((float) $desviacion['esperado'], 2); ?></td>
+                                                <td class="fw-semibold text-danger"><?php echo number_format((float) $desviacion['diferencia'], 2); ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <div class="alert alert-secondary mb-0">Ejecuta la validación para obtener un resumen de salud de datos.</div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
