@@ -29,6 +29,16 @@ $anioDefault = !empty($aniosDisponibles) ? (int) reset($aniosDisponibles) : (int
 $mesesDefault = $periodosPorAnio[$anioDefault] ?? [(int) date('n')];
 $mesDefault = (int) (reset($mesesDefault) ?: date('n'));
 $fechaDefault = sprintf('%04d-%02d-01', $anioDefault, $mesDefault);
+$periodosParaFiltros = !empty($periodosPorAnio) ? $periodosPorAnio : [$anioDefault => $mesesDefault];
+
+$filtroAnio = isset($_GET['anio_filtro']) ? (int) $_GET['anio_filtro'] : $anioDefault;
+$mesesParaFiltro = $periodosParaFiltros[$filtroAnio] ?? $mesesDefault;
+$filtroMes = isset($_GET['mes_filtro']) ? (int) $_GET['mes_filtro'] : $mesDefault;
+if (!in_array($filtroMes, $mesesParaFiltro, true)) {
+    $filtroMes = (int) reset($mesesParaFiltro);
+}
+$periodoInicio = sprintf('%04d-%02d-01', $filtroAnio, $filtroMes);
+$periodoFin = date('Y-m-t', strtotime($periodoInicio));
 
 $filtroSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
 $filtroActividad = isset($_GET['actividad']) ? (int) $_GET['actividad'] : 0;
@@ -36,6 +46,11 @@ $filtroFechaIni = $_GET['desde'] ?? '';
 $filtroFechaFin = $_GET['hasta'] ?? '';
 $filtroTipo = $_GET['tipo'] ?? '';
 $filtroMedio = isset($_GET['medio']) ? (int) $_GET['medio'] : 0;
+
+if (!$filtroFechaIni && !$filtroFechaFin) {
+    $filtroFechaIni = $periodoInicio;
+    $filtroFechaFin = $periodoFin;
+}
 
 $where = [];
 $params = [];
@@ -70,6 +85,22 @@ foreach ($movimientos as $m) {
     <div class="card-header category-ingresos"><i class="bi bi-funnel"></i><span>Filtrar movimientos</span></div>
     <div class="card-body">
         <form class="row g-2" method="GET">
+            <div class="col-md-2">
+                <label class="form-label">Año del periodo</label>
+                <select name="anio_filtro" class="form-select">
+                    <?php foreach($periodosParaFiltros as $anio => $meses): ?>
+                        <option value="<?php echo $anio; ?>" <?php echo ($filtroAnio===(int)$anio)?'selected':''; ?>><?php echo $anio; ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Mes del periodo</label>
+                <select name="mes_filtro" class="form-select">
+                    <?php foreach($mesesParaFiltro as $m): ?>
+                        <option value="<?php echo $m; ?>" <?php echo ($filtroMes===$m)?'selected':''; ?>><?php echo $nombresMeses[$m]; ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div class="col-md-2"><label class="form-label">Desde</label><input type="date" name="desde" class="form-control" value="<?php echo $filtroFechaIni; ?>"></div>
             <div class="col-md-2"><label class="form-label">Hasta</label><input type="date" name="hasta" class="form-control" value="<?php echo $filtroFechaFin; ?>"></div>
             <div class="col-md-3"><label class="form-label">Socio</label>
@@ -106,6 +137,9 @@ foreach ($movimientos as $m) {
             <div class="col-md-12">
                 <button class="btn btn-primary btn-icon"><span><i class="bi bi-funnel"></i> Filtrar</span></button>
                 <a class="btn btn-outline-secondary btn-icon" href="../actions/export_csv.php?tipo=movimientos"><span><i class="bi bi-file-earmark-arrow-down"></i> Exportar CSV</span></a>
+            </div>
+            <div class="col-12">
+                <p class="text-muted small mb-0">Los reportes se basan en la <strong>fecha de movimiento</strong> definida por el periodo seleccionado, no en la fecha de registro.</p>
             </div>
         </form>
     </div>
@@ -239,6 +273,10 @@ const mesSelect = document.querySelector('select[name="mes"]');
 const valorInput = document.querySelector('input[name="valor"]');
 const formularioMovimiento = document.querySelector('form[action="../actions/movimientos_save.php"]');
 const fechaInput = document.querySelector('input[name="fecha"]');
+const filtroAnioSelect = document.querySelector('select[name="anio_filtro"]');
+const filtroMesSelect = document.querySelector('select[name="mes_filtro"]');
+const fechaDesdeInput = document.querySelector('input[name="desde"]');
+const fechaHastaInput = document.querySelector('input[name="hasta"]');
 const periodosPorAnio = <?php echo json_encode($periodosPorAnio); ?>;
 const nombresMeses = <?php echo json_encode($nombresMeses); ?>;
 
@@ -277,6 +315,34 @@ function actualizarFecha(){
     const dia = String(Math.min(parseInt(diaActual, 10) || 1, maxDia)).padStart(2, '0');
     fechaInput.value = `${anio}-${mes}-${dia}`;
 }
+
+function actualizarMesesFiltro(){
+    if(!filtroAnioSelect || !filtroMesSelect) return;
+    const anio = filtroAnioSelect.value;
+    const mesesDisponibles = periodosPorAnio[anio] ?? [];
+    if(mesesDisponibles.length){
+        filtroMesSelect.querySelectorAll('option').forEach(opt => opt.remove());
+        mesesDisponibles.forEach(val => {
+            const option = document.createElement('option');
+            option.value = val;
+            option.textContent = nombresMeses[val] || val;
+            filtroMesSelect.appendChild(option);
+        });
+        if(!mesesDisponibles.includes(parseInt(filtroMesSelect.value, 10))){
+            filtroMesSelect.value = mesesDisponibles[0];
+        }
+    }
+    actualizarRangoFiltro();
+}
+
+function actualizarRangoFiltro(){
+    if(!filtroAnioSelect || !filtroMesSelect || !fechaDesdeInput || !fechaHastaInput) return;
+    const anio = filtroAnioSelect.value;
+    const mes = filtroMesSelect.value.toString().padStart(2, '0');
+    const ultimoDia = new Date(parseInt(anio, 10), parseInt(mes, 10), 0).getDate();
+    fechaDesdeInput.value = `${anio}-${mes}-01`;
+    fechaHastaInput.value = `${anio}-${mes}-${String(ultimoDia).padStart(2, '0')}`;
+}
 if(actividadSelect){
     actividadSelect.addEventListener('change', actualizarTipoActividad);
     actualizarTipoActividad();
@@ -285,6 +351,11 @@ if(anioSelect && mesSelect){
     anioSelect.addEventListener('change', actualizarMeses);
     mesSelect.addEventListener('change', actualizarFecha);
     actualizarMeses();
+}
+if(filtroAnioSelect && filtroMesSelect){
+    filtroAnioSelect.addEventListener('change', actualizarMesesFiltro);
+    filtroMesSelect.addEventListener('change', actualizarRangoFiltro);
+    actualizarMesesFiltro();
 }
 
 function esPollaSeleccionada(){

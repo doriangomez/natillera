@@ -65,6 +65,8 @@ if ($accion === 'eliminar') {
 
 $idPrestamo = (int) $_POST['id_prestamo'];
 $fechaPago = $_POST['fecha_pago'];
+$anioPago = isset($_POST['anio']) ? (int) $_POST['anio'] : 0;
+$mesPago = isset($_POST['mes']) ? (int) $_POST['mes'] : 0;
 $capPagado = (float) $_POST['valor_capital_pagado'];
 $intPagado = (float) $_POST['valor_interes_pagado'];
 $medio = $_POST['medio_consignacion'];
@@ -72,6 +74,26 @@ $medio = $_POST['medio_consignacion'];
 $fechaPagoObj = DateTime::createFromFormat('Y-m-d', $fechaPago);
 if (!$fechaPagoObj) {
     $_SESSION['error'] = 'La fecha de pago no es válida.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+$anioFecha = (int) $fechaPagoObj->format('Y');
+$mesFecha = (int) $fechaPagoObj->format('n');
+if ($anioPago <= 0 || $mesPago <= 0) {
+    $_SESSION['error'] = 'Debes seleccionar el año y el mes del periodo a pagar.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+if ($anioFecha !== $anioPago || $mesFecha !== $mesPago) {
+    $_SESSION['error'] = 'El año y el mes seleccionados deben coincidir con la fecha de pago.';
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+
+$stmtPeriodoValido = $pdo->prepare('SELECT COUNT(*) FROM periodos_configuracion WHERE anio = :anio AND mes = :mes AND activo = 1');
+$stmtPeriodoValido->execute([':anio' => $anioPago, ':mes' => $mesPago]);
+if ((int) $stmtPeriodoValido->fetchColumn() === 0) {
+    $_SESSION['error'] = 'El periodo seleccionado no está habilitado en la configuración.';
     header('Location: ../public/prestamos.php');
     exit;
 }
@@ -220,16 +242,7 @@ $observacionBase = $prestamo['es_particular']
     ? sprintf('Pago préstamo a tercero %s (aval: %s)', $prestamo['nombre_deudor'], $nombreAval ?: 'sin aval registrado')
     : 'Pago cuota';
 
-function extraerPeriodos(string $fecha): array {
-    $dt = DateTime::createFromFormat('Y-m-d', $fecha);
-    return [
-        (int) $dt->format('Y'),
-        (int) $dt->format('n'),
-        (int) ($dt->format('j') <= 15 ? 1 : 2),
-    ];
-}
-
-[$anioPago, $mesPago, $quincenaPago] = extraerPeriodos($fechaPago);
+$quincenaPago = (int) ($fechaPagoObj->format('j') <= 15 ? 1 : 2);
 
 $registrarMovimiento = function(array $actividad, float $valor, string $motivo, string $observacion, string $fecha, int $anio, int $mes, int $quincena) use ($pdo, $medio, $socioMovimiento) {
     if ($valor <= 0) {
