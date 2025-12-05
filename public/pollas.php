@@ -9,6 +9,14 @@ $nombresMeses = getNombresMeses();
 $periodosActivos = $pdo
     ->query('SELECT anio, mes FROM periodos_configuracion WHERE activo = 1 ORDER BY anio ASC, mes ASC')
     ->fetchAll();
+$periodosPorAnio = [];
+foreach ($periodosActivos as $p) {
+    $periodosPorAnio[$p['anio']][] = (int) $p['mes'];
+}
+$periodoPorDefecto = $periodosActivos[0] ?? null;
+$anioResultadoDefault = $periodoPorDefecto['anio'] ?? (int) date('Y');
+$mesResultadoDefault = $periodoPorDefecto['mes'] ?? (int) date('n');
+$mesResultadoTextoDefault = sprintf('%04d-%02d', $anioResultadoDefault, $mesResultadoDefault);
 $periodosColumnas = array_map(function ($p) use ($nombresMeses) {
     return [
         'anio' => (int) $p['anio'],
@@ -56,9 +64,32 @@ unset($detalleMes);
         </div>
         <form class="row g-3" method="POST" action="../actions/polla_resultados_save.php">
             <input type="hidden" name="accion" value="crear">
+            <input type="hidden" name="mes_resultado" id="mesResultadoInput" value="<?php echo $mesResultadoTextoDefault; ?>">
+            <div class="col-md-3">
+                <label class="form-label">Año</label>
+                <select name="anio" class="form-select" <?php echo empty($periodosPorAnio) ? 'disabled' : ''; ?> required>
+                    <?php if (!empty($periodosPorAnio)): ?>
+                        <?php foreach ($periodosPorAnio as $anio => $meses): ?>
+                            <option value="<?php echo $anio; ?>" <?php echo ((int) $anio === (int) $anioResultadoDefault) ? 'selected' : ''; ?>><?php echo $anio; ?></option>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <option value="<?php echo $anioResultadoDefault; ?>" selected><?php echo $anioResultadoDefault; ?></option>
+                    <?php endif; ?>
+                </select>
+                <?php if (empty($periodosPorAnio)): ?>
+                    <div class="form-text text-warning">Configura periodos activos para habilitar el registro.</div>
+                <?php endif; ?>
+            </div>
             <div class="col-md-3">
                 <label class="form-label">Mes</label>
-                <input type="month" name="mes_resultado" class="form-control" value="<?php echo date('Y-m'); ?>" required>
+                <select name="mes" class="form-select" <?php echo empty($periodosPorAnio) ? 'disabled' : ''; ?> required>
+                    <?php for ($m = 1; $m <= 12; $m++): ?>
+                        <?php
+                            $habilitado = empty($periodosPorAnio) || in_array($m, $periodosPorAnio[$anioResultadoDefault] ?? [], true);
+                        ?>
+                        <option value="<?php echo $m; ?>" <?php echo $m === $mesResultadoDefault ? 'selected' : ''; ?> <?php echo $habilitado ? '' : 'disabled'; ?>><?php echo $nombresMeses[$m]; ?></option>
+                    <?php endfor; ?>
+                </select>
             </div>
             <div class="col-md-3">
                 <label class="form-label">Número ganador</label>
@@ -69,7 +100,7 @@ unset($detalleMes);
                 <input type="text" name="observaciones" class="form-control" maxlength="255" placeholder="Detalle opcional">
             </div>
             <div class="col-md-2 align-self-end">
-                <button class="btn btn-primary w-100">Guardar</button>
+                <button class="btn btn-primary w-100" <?php echo empty($periodosPorAnio) ? 'disabled' : ''; ?>>Guardar</button>
             </div>
         </form>
     </div>
@@ -191,22 +222,75 @@ unset($detalleMes);
 <div class="table-responsive">
     <table class="table table-striped table-sm align-middle">
         <thead><tr><th>Mes</th><th>Número ganador</th><th>Observaciones</th><th></th></tr></thead>
-        <tbody>
-            <?php foreach($resultadosPolla as $r): ?>
-                <tr>
-                    <td><?php echo sprintf('%04d-%02d', $r['anio'], $r['mes']); ?></td>
-                    <td class="fw-semibold text-primary"><?php echo clean($r['numero_ganador']); ?></td>
-                    <td class="text-muted small"><?php echo clean($r['observaciones']); ?></td>
-                    <td class="text-end">
-                        <form method="POST" action="../actions/polla_resultados_save.php" onsubmit="return confirm('¿Eliminar el resultado guardado?');" class="d-inline">
-                            <input type="hidden" name="accion" value="eliminar">
-                            <input type="hidden" name="id_resultado" value="<?php echo (int)$r['id_resultado']; ?>">
-                            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i></button>
-                        </form>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
+    <tbody>
+        <?php foreach($resultadosPolla as $r): ?>
+            <tr>
+                <td><?php echo sprintf('%04d-%02d', $r['anio'], $r['mes']); ?></td>
+                <td class="fw-semibold text-primary"><?php echo clean($r['numero_ganador']); ?></td>
+                <td class="text-muted small"><?php echo clean($r['observaciones']); ?></td>
+                <td class="text-end">
+                    <form method="POST" action="../actions/polla_resultados_save.php" onsubmit="return confirm('¿Eliminar el resultado guardado?');" class="d-inline">
+                        <input type="hidden" name="accion" value="eliminar">
+                        <input type="hidden" name="id_resultado" value="<?php echo (int)$r['id_resultado']; ?>">
+                        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i></button>
+                    </form>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+    </tbody>
+</table>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const periodosPorAnio = <?php echo json_encode($periodosPorAnio); ?>;
+    const nombresMeses = <?php echo json_encode($nombresMeses); ?>;
+    const anioSelect = document.querySelector('select[name="anio"]');
+    const mesSelect = document.querySelector('select[name="mes"]');
+    const mesResultadoInput = document.getElementById('mesResultadoInput');
+
+    function poblarMeses(anio, mesSeleccionado = null) {
+        if (!mesSelect) {
+            return;
+        }
+
+        const mesesDisponibles = periodosPorAnio?.[anio] || [];
+        const meses = mesesDisponibles.length ? mesesDisponibles : Array.from({ length: 12 }, (_, i) => i + 1);
+        mesSelect.innerHTML = '';
+
+        meses.forEach((mes) => {
+            const option = document.createElement('option');
+            option.value = mes;
+            option.textContent = nombresMeses[mes] || mes;
+            option.selected = mesSeleccionado ? Number(mesSeleccionado) === Number(mes) : mesSelect.options.length === 0;
+            mesSelect.appendChild(option);
+        });
+    }
+
+    function actualizarMesResultado() {
+        if (!mesResultadoInput || !anioSelect || !mesSelect) {
+            return;
+        }
+        const anio = anioSelect.value;
+        const mes = mesSelect.value;
+        mesResultadoInput.value = anio && mes ? `${anio}-${String(mes).padStart(2, '0')}` : '';
+    }
+
+    if (anioSelect) {
+        anioSelect.addEventListener('change', () => {
+            const anio = Number(anioSelect.value || new Date().getFullYear());
+            poblarMeses(anio, mesSelect?.value || null);
+            actualizarMesResultado();
+        });
+    }
+
+    if (mesSelect) {
+        mesSelect.addEventListener('change', actualizarMesResultado);
+    }
+
+    if (anioSelect) {
+        poblarMeses(Number(anioSelect.value || new Date().getFullYear()), Number(mesSelect?.value || 0));
+    }
+    actualizarMesResultado();
+});
+</script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

@@ -13,6 +13,21 @@ $mediosPago = getMediosPago($pdo);
 $tasaSocioConfig = isset($configGeneral['tasa_interes_socio']) ? (float) $configGeneral['tasa_interes_socio'] : 0;
 $tasaParticularConfig = isset($configGeneral['tasa_interes_particular']) ? (float) $configGeneral['tasa_interes_particular'] : 0;
 $periodosConfiguracion = getPeriodosConfiguracion($pdo);
+$periodosActivos = array_values(array_filter($periodosConfiguracion, fn($p) => (int) ($p['activo'] ?? 0) === 1));
+
+$periodosPorAnio = [];
+foreach ($periodosActivos as $periodo) {
+    $periodosPorAnio[$periodo['anio']][] = (int) $periodo['mes'];
+}
+if (!empty($periodosPorAnio)) {
+    krsort($periodosPorAnio);
+}
+
+$aniosDisponibles = array_keys($periodosPorAnio);
+$anioPeriodoDefault = !empty($aniosDisponibles) ? (int) reset($aniosDisponibles) : (int) date('Y');
+$mesesPorDefecto = $periodosPorAnio[$anioPeriodoDefault] ?? [(int) date('n')];
+$mesPeriodoDefault = (int) (reset($mesesPorDefecto) ?: date('n'));
+$fechaPagoDefault = sprintf('%04d-%02d-01', $anioPeriodoDefault, $mesPeriodoDefault);
 
 $prestamos = $pdo->query(
     "SELECT p.*, s.nombre_completo, aval.nombre_completo AS nombre_aval,
@@ -248,6 +263,9 @@ $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS |
 <div class="card mb-3">
     <div class="card-header category-prestamos"><i class="bi bi-cash-stack"></i><span>Registrar pago de préstamo</span></div>
     <div class="card-body">
+        <?php if (empty($periodosActivos)): ?>
+            <div class="alert alert-warning">Configure los periodos activos en el módulo de configuración para habilitar el año y mes de pago.</div>
+        <?php endif; ?>
         <form method="POST" action="../actions/cuotas_save.php">
             <div class="row g-2">
                 <div class="col-md-4">
@@ -278,7 +296,30 @@ $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS |
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Fecha pago</label>
-                    <input type="date" name="fecha_pago" class="form-control" value="<?php echo date('Y-m-d'); ?>">
+                    <input type="date" name="fecha_pago" class="form-control" value="<?php echo $fechaPagoDefault; ?>" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Año</label>
+                    <select name="anio" class="form-select" <?php echo empty($periodosActivos) ? 'disabled' : ''; ?> required>
+                        <?php if (!empty($periodosPorAnio)): ?>
+                            <?php foreach ($periodosPorAnio as $anio => $meses): ?>
+                                <option value="<?php echo $anio; ?>" <?php echo ((int) $anio === $anioPeriodoDefault) ? 'selected' : ''; ?>><?php echo $anio; ?></option>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <option value="<?php echo $anioPeriodoDefault; ?>" selected><?php echo $anioPeriodoDefault; ?></option>
+                        <?php endif; ?>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Mes</label>
+                    <select name="mes" class="form-select" <?php echo empty($periodosActivos) ? 'disabled' : ''; ?> required>
+                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                            <?php
+                                $habilitado = empty($periodosPorAnio) || in_array($m, $mesesPorDefecto, true);
+                            ?>
+                            <option value="<?php echo $m; ?>" <?php echo $m === $mesPeriodoDefault ? 'selected' : ''; ?> <?php echo $habilitado ? '' : 'disabled'; ?>><?php echo strftime('%B', mktime(0, 0, 0, $m, 1)); ?></option>
+                        <?php endfor; ?>
+                    </select>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Capital pagado</label>
@@ -475,6 +516,8 @@ $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS |
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const periodosPrestamos = <?php echo $periodosJson ?: '{}'; ?>;
+    const periodosPorAnio = <?php echo json_encode($periodosPorAnio); ?>;
+    const nombresMeses = <?php echo json_encode(getNombresMeses()); ?>;
     const socioSelect = document.querySelector('select[name="id_socio"]');
     const tipoDeudor = document.querySelector('select[name="es_particular"]');
     const montoPrestamo = document.querySelector('input[name="monto_prestamo"]');
@@ -482,6 +525,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const avalSelect = document.querySelector('select[name="id_socio_aval"]');
     const prestamoSelect = document.querySelector('select[name="id_prestamo"]');
     const fechaPagoInput = document.querySelector('input[name="fecha_pago"]');
+    const anioPagoSelect = document.querySelector('select[name="anio"]');
+    const mesPagoSelect = document.querySelector('select[name="mes"]');
     const interesInput = document.querySelector('input[name="valor_interes_pagado"]');
     const capitalInput = document.querySelector('input[name="valor_capital_pagado"]');
     const interesSugeridoSpan = document.getElementById('interesSugerido');
@@ -518,6 +563,91 @@ document.addEventListener('DOMContentLoaded', () => {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
     });
+
+    function primerPeriodoDisponible() {
+        const anios = Object.keys(periodosPorAnio || {});
+        if (anios.length > 0) {
+            const primerAnio = Number(anios[0]);
+            const meses = periodosPorAnio[primerAnio] || [];
+            return { anio: primerAnio, mes: Number(meses[0] || 1) };
+        }
+
+        const hoy = new Date();
+        return { anio: hoy.getFullYear(), mes: hoy.getMonth() + 1 };
+    }
+
+    function poblarMesesPeriodo(anio, mesSeleccionado = null) {
+        if (!mesPagoSelect) {
+            return;
+        }
+
+        const mesesDisponibles = periodosPorAnio?.[anio] || [];
+        const meses = mesesDisponibles.length ? mesesDisponibles : Array.from({ length: 12 }, (_, i) => i + 1);
+        mesPagoSelect.innerHTML = '';
+
+        meses.forEach((m) => {
+            const option = document.createElement('option');
+            option.value = m;
+            option.textContent = nombresMeses[m] || m;
+            if (mesSeleccionado === null) {
+                option.selected = mesPagoSelect.options.length === 0;
+            } else {
+                option.selected = Number(mesSeleccionado) === Number(m);
+            }
+            mesPagoSelect.appendChild(option);
+        });
+    }
+
+    function obtenerPeriodoActualSeleccionado() {
+        const periodoBase = primerPeriodoDisponible();
+        const anioSeleccionado = Number(anioPagoSelect?.value || periodoBase.anio);
+        const mesesDisponibles = periodosPorAnio?.[anioSeleccionado] || [];
+        let mesSeleccionado = Number(mesPagoSelect?.value || 0);
+
+        if (!mesSeleccionado || (mesesDisponibles.length && !mesesDisponibles.includes(mesSeleccionado))) {
+            mesSeleccionado = mesesDisponibles.length ? mesesDisponibles[0] : periodoBase.mes;
+        }
+
+        return { anio: anioSeleccionado, mes: mesSeleccionado };
+    }
+
+    function sincronizarFechaDesdeSelects() {
+        if (!fechaPagoInput) {
+            return;
+        }
+
+        const periodo = obtenerPeriodoActualSeleccionado();
+        const mesConCero = String(periodo.mes).padStart(2, '0');
+        fechaPagoInput.value = `${periodo.anio}-${mesConCero}-01`;
+        actualizarSugerenciaPago();
+    }
+
+    function sincronizarSelectsDesdeFecha() {
+        if (!fechaPagoInput) {
+            return;
+        }
+
+        const periodoBase = primerPeriodoDisponible();
+        const fecha = new Date(fechaPagoInput.value || `${periodoBase.anio}-${String(periodoBase.mes).padStart(2, '0')}-01`);
+        const anioFecha = fecha.getFullYear();
+        const mesFecha = fecha.getMonth() + 1;
+
+        const periodoPermitido = periodosPorAnio?.[anioFecha] || [];
+        if (Object.keys(periodosPorAnio || {}).length === 0 || periodoPermitido.includes(mesFecha)) {
+            if (anioPagoSelect) {
+                anioPagoSelect.value = anioFecha;
+            }
+            poblarMesesPeriodo(anioFecha, mesFecha);
+            return;
+        }
+
+        const periodoSeguro = primerPeriodoDisponible();
+        if (anioPagoSelect) {
+            anioPagoSelect.value = periodoSeguro.anio;
+        }
+        poblarMesesPeriodo(periodoSeguro.anio, periodoSeguro.mes);
+        fechaPagoInput.value = `${periodoSeguro.anio}-${String(periodoSeguro.mes).padStart(2, '0')}-01`;
+    }
 
     function inicioMes(fecha) {
         const dt = new Date(fecha);
@@ -839,6 +969,17 @@ document.addEventListener('DOMContentLoaded', () => {
         modalHistorial.show();
     }
 
+    if (anioPagoSelect) {
+        const periodoInicial = primerPeriodoDisponible();
+        poblarMesesPeriodo(Number(anioPagoSelect.value || periodoInicial.anio), mesPagoSelect?.value || periodoInicial.mes);
+    } else if (mesPagoSelect) {
+        const periodoInicial = primerPeriodoDisponible();
+        poblarMesesPeriodo(periodoInicial.anio, periodoInicial.mes);
+    }
+
+    sincronizarSelectsDesdeFecha();
+    actualizarSugerenciaPago();
+
     socioSelect.addEventListener('change', obtenerResumenSocio);
     tipoDeudor.addEventListener('change', () => {
         sincronizarCamposDeudor();
@@ -868,8 +1009,24 @@ document.addEventListener('DOMContentLoaded', () => {
             actualizarSugerenciaPago();
         });
     }
+
+    if (anioPagoSelect) {
+        anioPagoSelect.addEventListener('change', () => {
+            const periodo = obtenerPeriodoActualSeleccionado();
+            poblarMesesPeriodo(Number(anioPagoSelect.value || periodo.anio), periodo.mes);
+            sincronizarFechaDesdeSelects();
+        });
+    }
+
+    if (mesPagoSelect) {
+        mesPagoSelect.addEventListener('change', sincronizarFechaDesdeSelects);
+    }
+
     if (fechaPagoInput) {
-        fechaPagoInput.addEventListener('change', actualizarSugerenciaPago);
+        fechaPagoInput.addEventListener('change', () => {
+            sincronizarSelectsDesdeFecha();
+            actualizarSugerenciaPago();
+        });
     }
 
     if (interesInput) {
