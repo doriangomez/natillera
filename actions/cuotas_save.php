@@ -254,13 +254,14 @@ $registrarMovimiento = function(array $actividad, float $valor, string $motivo, 
     $esIngreso = (int) ($actividad['es_ingreso'] ?? 0);
     $esEgreso = $esIngreso ? 0 : ($reglaNatillera === 'resta' ? 1 : 0);
 
-    $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
+    $stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_prestamo, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_prestamo, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
     $stmtMov->execute([
         ':fecha' => $fecha,
         ':anio' => $anio,
         ':mes' => $mes,
         ':quincena' => $quincena,
         ':id_socio' => $socioMovimiento,
+        ':id_prestamo' => $idPrestamo,
         ':id_actividad' => $actividad['id_actividad'],
         ':motivo' => $motivo,
         ':valor' => abs($valor),
