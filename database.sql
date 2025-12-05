@@ -44,6 +44,30 @@ CREATE TABLE medios_pago (
     activo TINYINT(1) DEFAULT 1
 );
 
+CREATE TABLE natillera_estado (
+    id_estado INT PRIMARY KEY,
+    saldo_actual DECIMAL(12,2) DEFAULT 0
+);
+INSERT INTO natillera_estado (id_estado, saldo_actual) VALUES (1,0)
+    ON DUPLICATE KEY UPDATE saldo_actual = saldo_actual;
+
+CREATE TABLE prestamos (
+    id_prestamo INT AUTO_INCREMENT PRIMARY KEY,
+    id_socio INT NULL,
+    es_particular TINYINT(1) DEFAULT 0,
+    id_socio_aval INT NULL,
+    nombre_deudor VARCHAR(150),
+    fecha_prestamo DATE,
+    monto_prestamo DECIMAL(12,2),
+    tasa_interes DECIMAL(6,2) DEFAULT 0,
+    interes_mensual DECIMAL(12,2) DEFAULT 0,
+    saldo_capital_actual DECIMAL(12,2) DEFAULT 0,
+    saldo_intereses_actual DECIMAL(12,2) DEFAULT 0,
+    estado VARCHAR(20) DEFAULT 'vigente',
+    CONSTRAINT fk_prestamos_socios FOREIGN KEY (id_socio) REFERENCES socios(id_socio) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_prestamos_aval FOREIGN KEY (id_socio_aval) REFERENCES socios(id_socio) ON DELETE SET NULL ON UPDATE CASCADE
+);
+
 CREATE TABLE movimientos (
     id_movimiento INT AUTO_INCREMENT PRIMARY KEY,
     fecha DATE NOT NULL,
@@ -67,30 +91,6 @@ CREATE TABLE movimientos (
     CONSTRAINT fk_movimientos_prestamos FOREIGN KEY (id_prestamo) REFERENCES prestamos(id_prestamo) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_movimientos_actividades FOREIGN KEY (id_actividad) REFERENCES actividades_maestro(id_actividad) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_movimientos_medios_pago FOREIGN KEY (id_medio_pago) REFERENCES medios_pago(id) ON DELETE CASCADE ON UPDATE CASCADE
-);
-
-CREATE TABLE natillera_estado (
-    id_estado INT PRIMARY KEY,
-    saldo_actual DECIMAL(12,2) DEFAULT 0
-);
-INSERT INTO natillera_estado (id_estado, saldo_actual) VALUES (1,0)
-    ON DUPLICATE KEY UPDATE saldo_actual = saldo_actual;
-
-CREATE TABLE prestamos (
-    id_prestamo INT AUTO_INCREMENT PRIMARY KEY,
-    id_socio INT NULL,
-    es_particular TINYINT(1) DEFAULT 0,
-    id_socio_aval INT NULL,
-    nombre_deudor VARCHAR(150),
-    fecha_prestamo DATE,
-    monto_prestamo DECIMAL(12,2),
-    tasa_interes DECIMAL(6,2) DEFAULT 0,
-    interes_mensual DECIMAL(12,2) DEFAULT 0,
-    saldo_capital_actual DECIMAL(12,2) DEFAULT 0,
-    saldo_intereses_actual DECIMAL(12,2) DEFAULT 0,
-    estado VARCHAR(20) DEFAULT 'vigente',
-    CONSTRAINT fk_prestamos_socios FOREIGN KEY (id_socio) REFERENCES socios(id_socio) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT fk_prestamos_aval FOREIGN KEY (id_socio_aval) REFERENCES socios(id_socio) ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 CREATE TABLE cuotas_prestamo (
