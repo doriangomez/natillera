@@ -264,13 +264,14 @@ $observacionMovimiento = $esParticular
     ? sprintf('Préstamo a particular %s (aval: %s)', $nombreDeudor, $nombreAval ?: 'sin aval registrado')
     : sprintf('Préstamo a socio %s', $nombreSocioMovimiento ?: $idSocio);
 
-$stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
+$stmtMov = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_prestamo, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_prestamo, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
 $stmtMov->execute([
     ':fecha' => $fecha,
     ':anio' => $anioFecha,
     ':mes' => $mesFecha,
     ':quincena' => $quincena,
     ':id_socio' => $socioMovimiento,
+    ':id_prestamo' => $idPrestamo,
     ':id_actividad' => $actividadPrestamo['id_actividad'],
     ':motivo' => 'Registro préstamo #' . $idPrestamo,
     ':valor' => $valorPrestamoMovimiento,
@@ -290,13 +291,14 @@ if ($interesMensual > 0) {
     $esIngresoInteres = (int) ($actividadInteres['es_ingreso'] ?? 0);
     $esEgresoInteres = $esIngresoInteres ? 0 : ($reglaNatilleraInteres === 'resta' ? 1 : 0);
 
-    $stmtInteres = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
+$stmtInteres = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_prestamo, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo) VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_prestamo, :id_actividad, :motivo, :valor, :medio, :es_ingreso, :es_egreso, :obs, :usuario, NOW(), :modulo)');
     $stmtInteres->execute([
         ':fecha' => $fecha,
         ':anio' => $anioFecha,
         ':mes' => $mesFecha,
         ':quincena' => $quincena,
         ':id_socio' => $socioMovimiento,
+        ':id_prestamo' => $idPrestamo,
         ':id_actividad' => $actividadInteres['id_actividad'],
         ':motivo' => 'Interés anticipado préstamo #' . $idPrestamo,
         ':valor' => abs($interesMensual),

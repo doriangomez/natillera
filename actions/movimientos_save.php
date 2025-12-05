@@ -24,6 +24,7 @@ $quincena = isset($_POST['quincena']) ? (int) $_POST['quincena'] : null;
 $idSocio = (isset($_POST['id_socio']) && $_POST['id_socio'] !== '') ? (int) $_POST['id_socio'] : null;
 $idActividad = (int) $_POST['id_actividad'];
 $valor = (float) $_POST['valor'];
+$idPrestamo = isset($_POST['id_prestamo']) ? (int) $_POST['id_prestamo'] : null;
 $motivo = '';
 
 if (!$anio || !$mes) {
@@ -110,14 +111,15 @@ if ($esEgreso) {
     $valor = -abs($valor);
 }
 
-$stmt = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_actividad, motivo, valor, medio_consignacion, id_medio_pago, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo)
-VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_actividad, :motivo, :valor, :medio, :medio_id, :ingreso, :egreso, :obs, :usuario, NOW(), :modulo)');
+$stmt = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_prestamo, id_actividad, motivo, valor, medio_consignacion, id_medio_pago, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo)
+VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_prestamo, :id_actividad, :motivo, :valor, :medio, :medio_id, :ingreso, :egreso, :obs, :usuario, NOW(), :modulo)');
 $stmt->execute([
     ':fecha' => $fecha,
     ':anio' => $anio,
     ':mes' => $mes,
     ':quincena' => $quincena,
     ':id_socio' => $idSocio,
+    ':id_prestamo' => $idPrestamo ?: null,
     ':id_actividad' => $idActividad,
     ':motivo' => $motivo,
     ':valor' => $valor,

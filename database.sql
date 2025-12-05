@@ -51,6 +51,7 @@ CREATE TABLE movimientos (
     mes INT DEFAULT NULL,
     quincena INT DEFAULT 0,
     id_socio INT NULL,
+    id_prestamo INT NULL,
     id_actividad INT NOT NULL,
     motivo VARCHAR(200),
     valor DECIMAL(12,2) NOT NULL,
@@ -63,6 +64,7 @@ CREATE TABLE movimientos (
     usuario_registro VARCHAR(50),
     fecha_registro DATETIME,
     CONSTRAINT fk_movimientos_socios FOREIGN KEY (id_socio) REFERENCES socios(id_socio) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_movimientos_prestamos FOREIGN KEY (id_prestamo) REFERENCES prestamos(id_prestamo) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_movimientos_actividades FOREIGN KEY (id_actividad) REFERENCES actividades_maestro(id_actividad) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_movimientos_medios_pago FOREIGN KEY (id_medio_pago) REFERENCES medios_pago(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
