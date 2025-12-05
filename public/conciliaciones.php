@@ -2,7 +2,6 @@
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-
 $periodosConfig = $pdo
     ->query('SELECT anio, mes FROM periodos_configuracion WHERE activo = 1 ORDER BY anio DESC, mes DESC')
     ->fetchAll();
@@ -54,62 +53,56 @@ if (empty($periodosDisponibles)) {
 }
 
 $medios = getMediosPago($pdo, true);
+$medioReferencia = $medios[0] ?? null;
 
-$totalesSistema = [];
-
-$stmtTotales = $pdo->prepare(
-    'SELECT COALESCE(m.id_medio_pago, mp_lookup.id) AS medio_id, '
-    . 'COALESCE(SUM(CASE'
+$stmtSaldo = $pdo->prepare(
+    'SELECT COALESCE(SUM(CASE'
     . " WHEN a.afecta_saldo_natillera = 'suma' THEN m.valor"
     . " WHEN a.afecta_saldo_natillera = 'resta' THEN -m.valor"
-    . ' ELSE 0 END), 0) AS total '
+    . ' ELSE 0 END), 0) AS saldo '
     . 'FROM movimientos m '
     . 'JOIN actividades_maestro a ON m.id_actividad = a.id_actividad '
-    . 'LEFT JOIN medios_pago mp_lookup ON mp_lookup.nombre = m.medio_consignacion '
-    . 'WHERE m.anio = :y AND m.mes = :m '
-    . 'GROUP BY medio_id'
+    . 'WHERE m.anio = :y AND m.mes = :m'
 );
-$stmtTotales->execute([':y' => $anio, ':m' => $mes]);
-foreach ($stmtTotales->fetchAll(PDO::FETCH_ASSOC) as $filaTotal) {
-    if ($filaTotal['medio_id'] === null) {
-        continue;
-    }
-    $totalesSistema[(int) $filaTotal['medio_id']] = (float) $filaTotal['total'];
-}
+$stmtSaldo->execute([':y' => $anio, ':m' => $mes]);
+$saldoSistema = (float) $stmtSaldo->fetchColumn();
 
-$stmtConc = $pdo->prepare('SELECT * FROM conciliaciones_medios_pago WHERE anio = :y AND mes = :m');
+$stmtConc = $pdo->prepare(
+    'SELECT '
+    . 'SUM(saldo_sistema) AS saldo_sistema, '
+    . 'SUM(valor_conciliado) AS valor_conciliado, '
+    . 'SUM(diferencia) AS diferencia, '
+    . 'MAX(nota) AS nota, '
+    . 'MAX(fecha_registro) AS fecha_registro, '
+    . 'MAX(cerrado) AS cerrado '
+    . 'FROM conciliaciones_medios_pago WHERE anio = :y AND mes = :m'
+);
 $stmtConc->execute([':y' => $anio, ':m' => $mes]);
-$conciliaciones = [];
-$mesCerrado = false;
-foreach ($stmtConc->fetchAll() as $row) {
-    $conciliaciones[$row['id_medio']] = $row;
-    if (!empty($row['cerrado'])) {
-        $mesCerrado = true;
-    }
-}
+$conciliacionActual = $stmtConc->fetch(PDO::FETCH_ASSOC) ?: [];
+$mesCerrado = !empty($conciliacionActual['cerrado']);
 
-$totalSistemaGlobal = 0;
-$totalConciliadoGlobal = 0;
+$valorConciliado = isset($conciliacionActual['valor_conciliado'])
+    ? (float) $conciliacionActual['valor_conciliado']
+    : 0.0;
+$notaConciliacion = $conciliacionActual['nota'] ?? '';
+$diferenciaGlobal = $saldoSistema - $valorConciliado;
 
-foreach ($medios as $medio) {
-    $totalSistema = $totalesSistema[$medio['id']] ?? 0;
-    $valorConciliado = isset($conciliaciones[$medio['id']]['valor_conciliado'])
-        ? (float) $conciliaciones[$medio['id']]['valor_conciliado']
-        : 0.0;
-
-    $totalSistemaGlobal += $totalSistema;
-    $totalConciliadoGlobal += $valorConciliado;
-}
-
-$diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
+$totalSistemaGlobal = $saldoSistema;
+$totalConciliadoGlobal = $valorConciliado;
 
 $registroConciliaciones = $pdo
     ->query(
-        'SELECT cm.id, cm.anio, cm.mes, mp.nombre AS medio_nombre, cm.saldo_sistema, cm.valor_conciliado, cm.diferencia,
-                cm.nota, cm.fecha_registro, cm.cerrado
-         FROM conciliaciones_medios_pago cm
-         JOIN medios_pago mp ON mp.id = cm.id_medio
-         ORDER BY cm.anio DESC, cm.mes DESC, mp.nombre'
+        'SELECT anio, mes, '
+        . 'MIN(id) AS id, '
+        . 'SUM(saldo_sistema) AS saldo_sistema, '
+        . 'SUM(valor_conciliado) AS valor_conciliado, '
+        . 'SUM(diferencia) AS diferencia, '
+        . "GROUP_CONCAT(nota SEPARATOR '\n---\n') AS nota, "
+        . 'MAX(fecha_registro) AS fecha_registro, '
+        . 'MAX(cerrado) AS cerrado '
+        . 'FROM conciliaciones_medios_pago '
+        . 'GROUP BY anio, mes '
+        . 'ORDER BY anio DESC, mes DESC'
     )
     ->fetchAll();
 
@@ -124,14 +117,12 @@ foreach ($registroConciliaciones as $cc) {
     $totalesRegistro['conciliado'] += (float) $cc['valor_conciliado'];
     $totalesRegistro['diferencia'] += (float) $cc['diferencia'];
 }
-
-$diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <p class="text-muted small mb-1">Control mensual por medio de pago</p>
-        <h1 class="h4 mb-0">Conciliación de medios de pago</h1>
+        <p class="text-muted small mb-1">Control mensual del saldo total de la natillera</p>
+        <h1 class="h4 mb-0">Conciliación mensual</h1>
     </div>
     <?php if ($mesCerrado): ?>
         <span class="badge bg-secondary">Mes conciliado. Solo consulta.</span>
@@ -205,7 +196,7 @@ $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
                     <table class="table table-striped align-middle">
                         <thead class="table-light">
                             <tr>
-                                <th>Medio de pago</th>
+                                <th>Concepto</th>
                                 <th class="text-end">Total sistema</th>
                                 <th class="text-end">Valor conciliado</th>
                                 <th class="text-end">Diferencia</th>
@@ -213,18 +204,16 @@ $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($medios as $medio):
-                                $totalSistema = $totalesSistema[$medio['id']] ?? 0;
-                                $valorConciliado = isset($conciliaciones[$medio['id']]['valor_conciliado'])
-                                    ? (float) $conciliaciones[$medio['id']]['valor_conciliado']
-                                    : 0.0;
-                                $nota = $conciliaciones[$medio['id']]['nota'] ?? '';
-                                $diferencia = $totalSistema - $valorConciliado;
-                            ?>
+                            <?php if ($medioReferencia): ?>
+                                <?php
+                                    $totalSistema = $saldoSistema;
+                                    $valorConciliadoMostrar = $valorConciliado;
+                                    $diferenciaFila = $diferenciaGlobal;
+                                ?>
                                 <tr data-total-sistema="<?php echo $totalSistema; ?>">
                                     <td>
-                                        <div class="fw-semibold mb-1"><?php echo clean($medio['nombre']); ?></div>
-                                        <input type="hidden" name="medio_ids[]" value="<?php echo $medio['id']; ?>">
+                                        <div class="fw-semibold mb-1">Total natillera del sistema</div>
+                                        <input type="hidden" name="medio_ids[]" value="<?php echo $medioReferencia['id']; ?>">
                                     </td>
                                     <td class="text-end fw-semibold" data-total-text>
                                         $<?php echo number_format($totalSistema, 2, ',', '.'); ?>
@@ -233,43 +222,46 @@ $diferenciaGlobal = $totalSistemaGlobal - $totalConciliadoGlobal;
                                         <input
                                             type="number"
                                             step="0.01"
-                                            min="0"
-                                            name="valor_conciliado[<?php echo $medio['id']; ?>]"
+                                            name="valor_conciliado[<?php echo $medioReferencia['id']; ?>]"
                                             class="form-control text-end valor-conciliado"
-                                            value="<?php echo number_format($valorConciliado, 2, '.', ''); ?>"
+                                            value="<?php echo number_format($valorConciliadoMostrar, 2, '.', ''); ?>"
                                             <?php echo $mesCerrado ? 'disabled' : ''; ?>
-                                            aria-label="Valor conciliado para <?php echo clean($medio['nombre']); ?>">
+                                            aria-label="Valor conciliado del periodo">
                                     </td>
-                                    <td class="text-end fw-semibold diferencia">$<?php echo number_format($diferencia, 2, ',', '.'); ?></td>
+                                    <td class="text-end fw-semibold diferencia">$<?php echo number_format($diferenciaFila, 2, ',', '.'); ?></td>
                                     <td style="min-width: 240px;">
                                         <textarea
-                                            name="nota[<?php echo $medio['id']; ?>]"
+                                            name="nota[<?php echo $medioReferencia['id']; ?>]"
                                             class="form-control"
                                             rows="2"
                                             <?php echo $mesCerrado ? 'disabled' : ''; ?>
-                                            placeholder="Notas opcionales"><?php echo clean($nota); ?></textarea>
+                                            placeholder="Notas opcionales"><?php echo clean($notaConciliacion); ?></textarea>
                                     </td>
                                 </tr>
-                            <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">No hay medios de pago configurados para registrar la conciliación.</td>
+                                </tr>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
                 <div class="row g-3 mt-3">
                     <div class="col-md-4">
                         <div class="p-3 bg-light rounded border">
-                            <div class="text-muted small">TOTAL SISTEMA GLOBAL</div>
+                            <div class="text-muted small">TOTAL SISTEMA</div>
                             <div class="fs-5 fw-bold" id="total-sistema-global">$<?php echo number_format($totalSistemaGlobal, 2, ',', '.'); ?></div>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="p-3 bg-light rounded border">
-                            <div class="text-muted small">TOTAL CONCILIADO GLOBAL</div>
+                            <div class="text-muted small">TOTAL CONCILIADO</div>
                             <div class="fs-5 fw-bold" id="total-conciliado-global">$<?php echo number_format($totalConciliadoGlobal, 2, ',', '.'); ?></div>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="p-3 bg-light rounded border">
-                            <div class="text-muted small">DIFERENCIA GLOBAL</div>
+                            <div class="text-muted small">DIFERENCIA</div>
                             <div class="fs-5 fw-bold" id="diferencia-global">$<?php echo number_format($diferenciaGlobal, 2, ',', '.'); ?></div>
                         </div>
                     </div>
@@ -332,7 +324,7 @@ if (selectAnio && selectMes) {
                         <tr>
                             <th>Mes</th>
                             <th>Año</th>
-                            <th>Medio de pago</th>
+                            <th>Concepto</th>
                             <th class="text-end">Valor sistema</th>
                             <th class="text-end">Valor conciliado</th>
                             <th class="text-end">Diferencia</th>
@@ -347,11 +339,11 @@ if (selectAnio && selectMes) {
                             <tr>
                                 <td><?php echo $nombresMeses[(int) $cerrada['mes']] ?? $cerrada['mes']; ?></td>
                                 <td><?php echo $cerrada['anio']; ?></td>
-                                <td><?php echo clean($cerrada['medio_nombre']); ?></td>
+                                <td>Total natillera del sistema</td>
                                 <td class="text-end">$<?php echo number_format($cerrada['saldo_sistema'], 2, ',', '.'); ?></td>
                                 <td class="text-end">$<?php echo number_format($cerrada['valor_conciliado'], 2, ',', '.'); ?></td>
                                 <td class="text-end fw-semibold">$<?php echo number_format($cerrada['diferencia'], 2, ',', '.'); ?></td>
-                                <td><?php echo $cerrada['nota'] !== null ? clean($cerrada['nota']) : '—'; ?></td>
+                                <td><?php echo $cerrada['nota'] !== null ? nl2br(clean($cerrada['nota'])) : '—'; ?></td>
                                 <td><?php echo $cerrada['fecha_registro'] ?: '—'; ?></td>
                                 <td>
                                     <?php if (!empty($cerrada['cerrado'])): ?>
@@ -363,7 +355,9 @@ if (selectAnio && selectMes) {
                                 <td class="text-end">
                                     <div class="d-flex justify-content-end gap-1">
                                         <form method="POST" action="../actions/conciliacion_manage.php" class="d-inline" onsubmit="return confirm('¿Deseas eliminar esta conciliación?');">
-                                            <input type="hidden" name="id" value="<?php echo $cerrada['id']; ?>">
+                                            <input type="hidden" name="id" value="<?php echo $cerrada['id'] ?? 0; ?>">
+                                            <input type="hidden" name="anio" value="<?php echo $cerrada['anio']; ?>">
+                                            <input type="hidden" name="mes" value="<?php echo $cerrada['mes']; ?>">
                                             <input type="hidden" name="action" value="delete">
                                             <input type="hidden" name="redirect" value="../public/conciliaciones.php">
                                             <button type="submit" class="btn btn-outline-danger btn-sm" aria-label="Eliminar conciliación">
@@ -372,7 +366,9 @@ if (selectAnio && selectMes) {
                                         </form>
                                         <?php if (!empty($cerrada['cerrado'])): ?>
                                             <form method="POST" action="../actions/conciliacion_manage.php" class="d-inline" onsubmit="return confirm('¿Reabrir este mes para edición?');">
-                                                <input type="hidden" name="id" value="<?php echo $cerrada['id']; ?>">
+                                                <input type="hidden" name="id" value="<?php echo $cerrada['id'] ?? 0; ?>">
+                                                <input type="hidden" name="anio" value="<?php echo $cerrada['anio']; ?>">
+                                                <input type="hidden" name="mes" value="<?php echo $cerrada['mes']; ?>">
                                                 <input type="hidden" name="action" value="reopen">
                                                 <input type="hidden" name="redirect" value="../public/conciliaciones.php">
                                                 <button type="submit" class="btn btn-outline-secondary btn-sm" aria-label="Reabrir mes">
