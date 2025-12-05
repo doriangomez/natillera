@@ -156,6 +156,24 @@ function completarPeriodosPrestamo(array $periodos, string $fechaPrestamo, array
 
 $periodosPorPrestamo = obtenerPeriodosPrestamo($pdo, array_column($prestamos, 'id_prestamo'));
 
+$pagosPorPrestamo = [];
+$prestamoIds = array_column($prestamos, 'id_prestamo');
+if (!empty($prestamoIds)) {
+    $placeholders = implode(',', array_fill(0, count($prestamoIds), '?'));
+    $stmtPagos = $pdo->prepare(
+        "SELECT cp.*, p.es_particular, COALESCE(s.nombre_completo, p.nombre_deudor) AS deudor, p.nombre_deudor"
+        . " FROM cuotas_prestamo cp"
+        . " JOIN prestamos p ON cp.id_prestamo = p.id_prestamo"
+        . " LEFT JOIN socios s ON p.id_socio = s.id_socio"
+        . " WHERE cp.id_prestamo IN ($placeholders)"
+        . " ORDER BY cp.fecha_pago DESC, cp.id_cuota DESC"
+    );
+    $stmtPagos->execute(array_map('intval', $prestamoIds));
+    foreach ($stmtPagos->fetchAll() as $pago) {
+        $pagosPorPrestamo[(int) $pago['id_prestamo']][] = $pago;
+    }
+}
+
 foreach ($prestamos as $prestamo) {
     $id = (int) $prestamo['id_prestamo'];
     $periodosOriginales = $periodosPorPrestamo[$id] ?? [];
@@ -413,6 +431,54 @@ $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS |
         <?php endforeach; ?>
     </tbody>
 </table>
+</div>
+<div class="card mt-3">
+    <div class="card-header category-prestamos"><i class="bi bi-journal-text"></i><span>Histórico de pagos</span></div>
+    <div class="card-body">
+        <?php foreach ($prestamos as $p): $pagos = $pagosPorPrestamo[$p['id_prestamo']] ?? []; ?>
+            <div class="mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="fw-semibold">Préstamo #<?php echo $p['id_prestamo']; ?> - <?php echo clean($p['es_particular'] ? $p['nombre_deudor'] : $p['nombre_completo']); ?></div>
+                    <span class="badge bg-body-secondary text-dark">Pagos registrados: <?php echo count($pagos); ?></span>
+                </div>
+                <?php if (empty($pagos)): ?>
+                    <div class="alert alert-info mb-0">No hay pagos registrados para este préstamo.</div>
+                    <?php continue; ?>
+                <?php endif; ?>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Fecha pago</th>
+                                <th class="text-end">Capital pagado</th>
+                                <th class="text-end">Interés pagado</th>
+                                <th class="text-end">Saldo capital</th>
+                                <th class="text-end">Saldo intereses</th>
+                                <th>Observaciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($pagos as $pago): ?>
+                                <tr>
+                                    <td><?php echo (int) $pago['numero_cuota']; ?></td>
+                                    <td><?php echo clean($pago['fecha_pago']); ?></td>
+                                    <td class="text-end">$<?php echo number_format((float) $pago['valor_capital_pagado'], 0, ',', '.'); ?></td>
+                                    <td class="text-end">$<?php echo number_format((float) $pago['valor_interes_pagado'], 0, ',', '.'); ?></td>
+                                    <td class="text-end">$<?php echo number_format((float) $pago['saldo_capital_despues'], 0, ',', '.'); ?></td>
+                                    <td class="text-end">$<?php echo number_format((float) $pago['saldo_intereses_despues'], 0, ',', '.'); ?></td>
+                                    <td class="text-break small"><?php echo clean($pago['observaciones']); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php endforeach; ?>
+        <?php if (empty(array_filter($pagosPorPrestamo))): ?>
+            <div class="alert alert-info mb-0">No hay pagos registrados aún.</div>
+        <?php endif; ?>
+    </div>
 </div>
 <div class="card mt-3">
     <div class="card-header category-prestamos"><i class="bi bi-calendar3"></i><span>Matriz mensual de cumplimiento</span></div>
