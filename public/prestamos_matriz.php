@@ -60,6 +60,9 @@ function formatearMoneda(float $valor): string {
                 <a class="btn btn-outline-secondary btn-sm" href="../actions/export_matriz_prestamo.php?id_prestamo=<?php echo $prestamo['id_prestamo']; ?>&formato=pdf">
                     <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
                 </a>
+                <a class="btn btn-outline-primary btn-sm" href="../actions/export_estado_prestamo_pdf.php?id_prestamo=<?php echo $prestamo['id_prestamo']; ?>">
+                    <i class="bi bi-clipboard2-data"></i> Informe de estado
+                </a>
             </div>
         </div>
         <div class="card-body">
