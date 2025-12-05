@@ -134,6 +134,13 @@ function asegurarEsquemaMovimientos(PDO $pdo): void {
             'nombre' => 'fk_periodos_prestamo',
         ],
         [
+            'tabla' => 'periodos_prestamo_historial',
+            'columna' => 'id_prestamo',
+            'referencia' => 'prestamos',
+            'col_referencia' => 'id_prestamo',
+            'nombre' => 'fk_historial_periodos_prestamo',
+        ],
+        [
             'tabla' => 'conciliaciones_medios_pago',
             'columna' => 'id_medio',
             'referencia' => 'medios_pago',
