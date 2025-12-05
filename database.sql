@@ -134,6 +134,21 @@ CREATE TABLE periodos_prestamo (
     CONSTRAINT fk_periodos_prestamo FOREIGN KEY (id_prestamo) REFERENCES prestamos(id_prestamo) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+CREATE TABLE periodos_prestamo_historial (
+    id_historial INT AUTO_INCREMENT PRIMARY KEY,
+    id_prestamo INT NOT NULL,
+    anio INT NOT NULL,
+    mes INT NOT NULL,
+    capital_inicio DECIMAL(12,2) DEFAULT 0,
+    interes_causado DECIMAL(12,2) DEFAULT 0,
+    interes_pagado DECIMAL(12,2) DEFAULT 0,
+    abono_capital DECIMAL(12,2) DEFAULT 0,
+    capital_final DECIMAL(12,2) DEFAULT 0,
+    estado VARCHAR(20) DEFAULT 'Pendiente',
+    fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_historial_periodos_prestamo FOREIGN KEY (id_prestamo) REFERENCES prestamos(id_prestamo) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 -- Actividades de ejemplo
 INSERT INTO actividades_maestro (nombre_actividad, descripcion, afecta_saldo_socio, afecta_saldo_natillera, es_ingreso, es_prestamo, es_pago_prestamo, es_pago_interes, es_interes_causado, es_polla, es_gasto_general, activo) VALUES
 ('Préstamo a socio', 'Desembolso de préstamo al socio o aval para un particular', 'resta', 'resta', 0, 1, 0, 0, 0, 0, 0, 1),

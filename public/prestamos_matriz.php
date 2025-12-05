@@ -19,6 +19,10 @@ $matrices = [];
 foreach ($prestamos as $prestamo) {
     $matrices[$prestamo['id_prestamo']] = construirMatrizMovimientosPrestamo($pdo, $prestamo);
 }
+$historialPeriodos = [];
+foreach ($prestamos as $prestamo) {
+    $historialPeriodos[$prestamo['id_prestamo']] = obtenerHistorialPeriodosPrestamo($pdo, (int) $prestamo['id_prestamo']);
+}
 
 function formatearMoneda(float $valor): string {
     $prefijo = $valor < 0 ? '-' : '';
@@ -101,6 +105,47 @@ function formatearMoneda(float $valor): string {
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            </div>
+            <?php $historial = $historialPeriodos[$prestamo['id_prestamo']] ?? []; ?>
+            <div class="mt-4">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-clock-history"></i>
+                    <h6 class="mb-0">Histórico de pagos y abonos</h6>
+                </div>
+                <?php if (!empty($historial)): ?>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Mes/Año</th>
+                                    <th class="text-end">Capital inicio</th>
+                                    <th class="text-end">Interés causado</th>
+                                    <th class="text-end">Interés pagado</th>
+                                    <th class="text-end">Abono capital</th>
+                                    <th class="text-end">Capital final</th>
+                                    <th>Estado</th>
+                                    <th class="text-end">Registrado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($historial as $registro): ?>
+                                    <tr>
+                                        <td><?php echo sprintf('%02d/%04d', (int) $registro['mes'], (int) $registro['anio']); ?></td>
+                                        <td class="text-end"><?php echo formatearMoneda((float) $registro['capital_inicio']); ?></td>
+                                        <td class="text-end"><?php echo formatearMoneda((float) $registro['interes_causado']); ?></td>
+                                        <td class="text-end"><?php echo formatearMoneda((float) $registro['interes_pagado']); ?></td>
+                                        <td class="text-end"><?php echo formatearMoneda((float) $registro['abono_capital']); ?></td>
+                                        <td class="text-end"><?php echo formatearMoneda((float) $registro['capital_final']); ?></td>
+                                        <td><?php echo clean($registro['estado'] ?? ''); ?></td>
+                                        <td class="text-end"><span class="text-muted small"><?php echo clean($registro['fecha_registro']); ?></span></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php else: ?>
+                    <div class="text-muted small">Aún no hay trazabilidad registrada para este préstamo.</div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
