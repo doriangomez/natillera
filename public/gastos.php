@@ -2,9 +2,8 @@
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-$periodosConfig = $pdo
-    ->query('SELECT anio, mes FROM periodos_configuracion WHERE activo = 1 ORDER BY anio DESC, mes DESC')
-    ->fetchAll();
+$periodosConfig = getPeriodosConfiguracion($pdo);
+$periodosActivos = array_values(array_filter($periodosConfig, fn($p) => (int) ($p['activo'] ?? 0) === 1));
 
 $nombresMeses = [
     1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
@@ -13,7 +12,7 @@ $nombresMeses = [
 ];
 
 $periodosPorAnio = [];
-foreach ($periodosConfig as $p) {
+foreach ($periodosActivos as $p) {
     $periodosPorAnio[$p['anio']][] = (int) $p['mes'];
 }
 if (!empty($periodosPorAnio)) {
@@ -21,29 +20,27 @@ if (!empty($periodosPorAnio)) {
 }
 
 $aniosDisponibles = array_keys($periodosPorAnio);
-$anioDefault = !empty($aniosDisponibles) ? (int) reset($aniosDisponibles) : (int) date('Y');
-$mesesDefault = $periodosPorAnio[$anioDefault] ?? [(int) date('n')];
-$mesDefault = (int) (reset($mesesDefault) ?: date('n'));
-$periodosParaFiltros = !empty($periodosPorAnio) ? $periodosPorAnio : [$anioDefault => $mesesDefault];
+$anioDefault = !empty($aniosDisponibles) ? (int) reset($aniosDisponibles) : null;
+$mesesDefault = ($anioDefault !== null && isset($periodosPorAnio[$anioDefault])) ? $periodosPorAnio[$anioDefault] : [];
+$mesDefault = (int) (reset($mesesDefault) ?: 0);
+$periodosParaFiltros = $periodosPorAnio;
+$hayPeriodosActivos = !empty($periodosPorAnio);
 
-$filtroAnio = isset($_GET['anio']) ? (int) $_GET['anio'] : $anioDefault;
-if (!array_key_exists($filtroAnio, $periodosParaFiltros)) {
-    $filtroAnio = $anioDefault;
+$filtroAnio = isset($_GET['anio']) ? (int) $_GET['anio'] : ($anioDefault ?? 0);
+if ($filtroAnio && !array_key_exists($filtroAnio, $periodosParaFiltros)) {
+    $filtroAnio = $anioDefault ?? 0;
 }
 
 $mesesDisponibles = $periodosParaFiltros[$filtroAnio] ?? [];
-if (empty($mesesDisponibles)) {
-    $mesesDisponibles = $mesesDefault;
-}
 
-$filtroMes = isset($_GET['mes']) ? (int) $_GET['mes'] : $mesDefault;
-if (!in_array($filtroMes, $mesesDisponibles, true)) {
+$filtroMes = isset($_GET['mes']) ? (int) $_GET['mes'] : ($mesDefault ?: 0);
+if ($filtroMes && !in_array($filtroMes, $mesesDisponibles, true)) {
     $filtroMes = (int) reset($mesesDisponibles);
 }
 
 $fechaInicio = $_GET['desde'] ?? '';
 $fechaFin = $_GET['hasta'] ?? '';
-if (!$fechaInicio && !$fechaFin) {
+if (!$fechaInicio && !$fechaFin && $filtroAnio && $filtroMes) {
     $fechaInicio = sprintf('%04d-%02d-01', $filtroAnio, $filtroMes);
     $fechaFin = date('Y-m-t', strtotime($fechaInicio));
 }
@@ -85,18 +82,26 @@ $totalGastos = array_sum(array_column($gastos, 'valor'));
         <form class="row g-2" method="GET">
             <div class="col-md-2">
                 <label class="form-label">Año</label>
-                <select name="anio" class="form-select">
-                    <?php foreach($periodosParaFiltros as $anio => $meses): ?>
-                        <option value="<?php echo $anio; ?>" <?php echo ($filtroAnio===(int)$anio)?'selected':''; ?>><?php echo $anio; ?></option>
-                    <?php endforeach; ?>
+                <select name="anio" class="form-select" <?php echo empty($periodosParaFiltros) ? 'disabled' : ''; ?>>
+                    <?php if (empty($periodosParaFiltros)): ?>
+                        <option value="" selected>Sin periodos</option>
+                    <?php else: ?>
+                        <?php foreach($periodosParaFiltros as $anio => $meses): ?>
+                            <option value="<?php echo $anio; ?>" <?php echo ($filtroAnio===(int)$anio)?'selected':''; ?>><?php echo $anio; ?></option>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </select>
             </div>
             <div class="col-md-2">
                 <label class="form-label">Mes</label>
-                <select name="mes" class="form-select">
-                    <?php foreach($mesesDisponibles as $m): ?>
-                        <option value="<?php echo $m; ?>" <?php echo ($filtroMes===$m)?'selected':''; ?>><?php echo $nombresMeses[$m]; ?></option>
-                    <?php endforeach; ?>
+                <select name="mes" class="form-select" <?php echo empty($mesesDisponibles) ? 'disabled' : ''; ?>>
+                    <?php if (empty($mesesDisponibles)): ?>
+                        <option value="" selected>Sin meses</option>
+                    <?php else: ?>
+                        <?php foreach($mesesDisponibles as $m): ?>
+                            <option value="<?php echo $m; ?>" <?php echo ($filtroMes===$m)?'selected':''; ?>><?php echo $nombresMeses[$m]; ?></option>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </select>
             </div>
             <div class="col-md-2">
@@ -113,6 +118,9 @@ $totalGastos = array_sum(array_column($gastos, 'valor'));
             </div>
         </form>
         <p class="text-muted small mb-0">Los periodos usan la <strong>fecha de movimiento</strong>; la fecha de registro solo se conserva como soporte.</p>
+        <?php if (!$hayPeriodosActivos): ?>
+            <p class="text-danger small mb-0 mt-1">No hay periodos activos configurados; agrega meses y años en el módulo de configuración.</p>
+        <?php endif; ?>
     </div>
 </div>
 <div class="row g-4">
@@ -185,17 +193,25 @@ function actualizarMesesDisponibles(){
     if(!anioFiltro || !mesFiltro) return;
     const anio = anioFiltro.value;
     const mesesDisponibles = periodosPorAnio[anio] ?? [];
+    mesFiltro.querySelectorAll('option').forEach(opt => opt.remove());
     if(mesesDisponibles.length){
-        mesFiltro.querySelectorAll('option').forEach(opt => opt.remove());
         mesesDisponibles.forEach(val => {
             const option = document.createElement('option');
             option.value = val;
             option.textContent = nombresMeses[val] || val;
             mesFiltro.appendChild(option);
         });
+        mesFiltro.disabled = false;
         if(!mesesDisponibles.includes(parseInt(mesFiltro.value, 10))){
             mesFiltro.value = mesesDisponibles[0];
         }
+    } else {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Sin meses';
+        mesFiltro.appendChild(option);
+        mesFiltro.value = '';
+        mesFiltro.disabled = true;
     }
     actualizarRangoFechas();
 }
@@ -203,7 +219,8 @@ function actualizarMesesDisponibles(){
 function actualizarRangoFechas(){
     if(!anioFiltro || !mesFiltro || !fechaDesde || !fechaHasta) return;
     const anio = anioFiltro.value;
-    const mes = mesFiltro.value.toString().padStart(2, '0');
+    const mes = mesFiltro.value?.toString().padStart(2, '0');
+    if(!anio || !mes) return;
     const ultimoDia = new Date(parseInt(anio, 10), parseInt(mes, 10), 0).getDate();
     fechaDesde.value = `${anio}-${mes}-01`;
     fechaHasta.value = `${anio}-${mes}-${String(ultimoDia).padStart(2, '0')}`;
