@@ -239,7 +239,7 @@ if (!empty($prestamo['id_socio_aval'])) {
 }
 
 $observacionBase = $prestamo['es_particular']
-    ? sprintf('Pago préstamo a tercero %s (aval: %s)', $prestamo['nombre_deudor'], $nombreAval ?: 'sin aval registrado')
+    ? sprintf('Pago préstamo a particular %s (aval: %s)', $prestamo['nombre_deudor'], $nombreAval ?: 'sin aval registrado')
     : 'Pago cuota';
 
 $quincenaPago = (int) ($fechaPagoObj->format('j') <= 15 ? 1 : 2);
