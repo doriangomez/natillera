@@ -25,7 +25,7 @@ $sql = "SELECT m.*, s.nombre_completo, a.nombre_actividad, mp.nombre AS medio,
         LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
         LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id";
 if ($where) { $sql .= ' WHERE ' . implode(' AND ', $where); }
-$sql .= ' ORDER BY m.fecha DESC';
+$sql .= ' ORDER BY m.id_movimiento DESC';
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $movs = $stmt->fetchAll();
