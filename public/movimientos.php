@@ -32,7 +32,15 @@ $fechaDefault = sprintf('%04d-%02d-01', $anioDefault, $mesDefault);
 $periodosParaFiltros = !empty($periodosPorAnio) ? $periodosPorAnio : [$anioDefault => $mesesDefault];
 
 $filtroAnio = isset($_GET['anio_filtro']) ? (int) $_GET['anio_filtro'] : $anioDefault;
-$mesesParaFiltro = $periodosParaFiltros[$filtroAnio] ?? $mesesDefault;
+if (!array_key_exists($filtroAnio, $periodosParaFiltros)) {
+    $filtroAnio = $anioDefault;
+}
+
+$mesesParaFiltro = $periodosParaFiltros[$filtroAnio] ?? [];
+if (empty($mesesParaFiltro)) {
+    $mesesParaFiltro = $mesesDefault;
+}
+
 $filtroMes = isset($_GET['mes_filtro']) ? (int) $_GET['mes_filtro'] : $mesDefault;
 if (!in_array($filtroMes, $mesesParaFiltro, true)) {
     $filtroMes = (int) reset($mesesParaFiltro);
@@ -171,12 +179,17 @@ foreach ($movimientos as $m) {
                 <div class="col-md-2">
                     <label class="form-label"><span class="text-danger">*</span> Mes</label>
                     <select name="mes" class="form-select" required>
-                        <?php for($m=1;$m<=12;$m++): ?>
-                            <?php
-                                $habilitado = empty($periodosPorAnio) || in_array($m, $mesesDefault, true);
-                            ?>
-                            <option value="<?php echo $m; ?>" <?php echo $m === $mesDefault ? 'selected' : ''; ?> <?php echo $habilitado ? '' : 'disabled'; ?>><?php echo $nombresMeses[$m]; ?></option>
-                        <?php endfor; ?>
+                        <?php
+                            $mesesParaAnioActual = !empty($periodosPorAnio)
+                                ? ($periodosPorAnio[$anioDefault] ?? [])
+                                : range(1, 12);
+                            if (empty($mesesParaAnioActual)) {
+                                $mesesParaAnioActual = $mesesDefault;
+                            }
+                        ?>
+                        <?php foreach($mesesParaAnioActual as $m): ?>
+                            <option value="<?php echo $m; ?>" <?php echo $m === $mesDefault ? 'selected' : ''; ?>><?php echo $nombresMeses[$m]; ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="col-md-2">

@@ -27,7 +27,15 @@ $mesDefault = (int) (reset($mesesDefault) ?: date('n'));
 $periodosParaFiltros = !empty($periodosPorAnio) ? $periodosPorAnio : [$anioDefault => $mesesDefault];
 
 $filtroAnio = isset($_GET['anio']) ? (int) $_GET['anio'] : $anioDefault;
-$mesesDisponibles = $periodosParaFiltros[$filtroAnio] ?? $mesesDefault;
+if (!array_key_exists($filtroAnio, $periodosParaFiltros)) {
+    $filtroAnio = $anioDefault;
+}
+
+$mesesDisponibles = $periodosParaFiltros[$filtroAnio] ?? [];
+if (empty($mesesDisponibles)) {
+    $mesesDisponibles = $mesesDefault;
+}
+
 $filtroMes = isset($_GET['mes']) ? (int) $_GET['mes'] : $mesDefault;
 if (!in_array($filtroMes, $mesesDisponibles, true)) {
     $filtroMes = (int) reset($mesesDisponibles);
