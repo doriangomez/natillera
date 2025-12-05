@@ -28,7 +28,7 @@ switch ($tipo) {
                 LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id
                 LEFT JOIN prestamos p ON a.es_prestamo = 1 AND p.id_socio = m.id_socio";
         if ($where) { $sql .= ' WHERE ' . implode(' AND ', $where); }
-        $sql .= ' ORDER BY m.fecha DESC';
+        $sql .= ' ORDER BY m.id_movimiento DESC';
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_NUM);

@@ -118,7 +118,7 @@ $movimientosStmt = $pdo->prepare("
         FROM mov_signado
     )
     SELECT * FROM calculado
-    ORDER BY fecha DESC, id_movimiento DESC
+    ORDER BY id_movimiento DESC
 ");
 $movimientosStmt->execute($params);
 $movimientos = $movimientosStmt->fetchAll();

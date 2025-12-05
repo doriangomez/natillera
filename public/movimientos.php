@@ -74,7 +74,7 @@ $sql = "SELECT m.*, s.nombre_completo, a.nombre_actividad, mp.nombre AS medio_no
 if ($where) {
     $sql .= ' WHERE ' . implode(' AND ', $where);
 }
-$sql .= ' ORDER BY m.fecha DESC LIMIT 200';
+$sql .= ' ORDER BY m.id_movimiento DESC LIMIT 200';
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $movimientos = $stmt->fetchAll();

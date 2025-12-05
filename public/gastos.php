@@ -60,7 +60,7 @@ if ($fechaFin) {
     $params[':ff'] = $fechaFin;
 }
 
-$sql .= ' ORDER BY m.fecha DESC LIMIT 300';
+$sql .= ' ORDER BY m.id_movimiento DESC LIMIT 300';
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $gastos = $stmt->fetchAll();

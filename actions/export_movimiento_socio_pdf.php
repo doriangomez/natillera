@@ -47,7 +47,7 @@ function obtenerMovimientos(PDO $pdo, array $filtros): array
             JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
             LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id";
     if ($where) { $sql .= ' WHERE ' . implode(' AND ', $where); }
-    $sql .= ' ORDER BY m.fecha ASC, m.id_movimiento ASC';
+    $sql .= ' ORDER BY m.id_movimiento DESC';
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
 
@@ -83,7 +83,7 @@ function obtenerPagosIntereses(PDO $pdo, int $idSocio, array $filtros): array
             FROM movimientos m
             JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
             WHERE " . implode(' AND ', $where) . '
-            ORDER BY m.fecha ASC, m.id_movimiento ASC';
+            ORDER BY m.id_movimiento DESC';
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
