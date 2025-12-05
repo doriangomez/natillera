@@ -244,7 +244,7 @@ $observacionBase = $prestamo['es_particular']
 
 $quincenaPago = (int) ($fechaPagoObj->format('j') <= 15 ? 1 : 2);
 
-$registrarMovimiento = function(array $actividad, float $valor, string $motivo, string $observacion, string $fecha, int $anio, int $mes, int $quincena) use ($pdo, $medio, $socioMovimiento) {
+    $registrarMovimiento = function(array $actividad, float $valor, string $motivo, string $observacion, string $fecha, int $anio, int $mes, int $quincena) use ($pdo, $medio, $socioMovimiento, $idPrestamo) {
     if ($valor <= 0) {
         return;
     }
