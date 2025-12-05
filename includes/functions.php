@@ -149,6 +149,68 @@ function asegurarEsquemaMovimientos(PDO $pdo): void {
 
 asegurarEsquemaMovimientos($pdo);
 
+function asegurarEsquemaRetirosCaja(PDO $pdo): void {
+    static $creada = false;
+    if ($creada) {
+        return;
+    }
+
+    $sql = "CREATE TABLE IF NOT EXISTS retiros_caja (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        fecha DATE NOT NULL,
+        valor DECIMAL(12,2) NOT NULL,
+        medio VARCHAR(120) DEFAULT NULL,
+        referencia VARCHAR(200) DEFAULT NULL,
+        observaciones TEXT,
+        usuario_registro VARCHAR(50) DEFAULT NULL,
+        fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    $pdo->exec($sql);
+    $creada = true;
+}
+
+function registrarRetiroCaja(PDO $pdo, array $data): void {
+    asegurarEsquemaRetirosCaja($pdo);
+
+    $stmt = $pdo->prepare(
+        'INSERT INTO retiros_caja (fecha, valor, medio, referencia, observaciones, usuario_registro)
+         VALUES (:fecha, :valor, :medio, :referencia, :observaciones, :usuario)'
+    );
+
+    $stmt->execute([
+        ':fecha' => $data['fecha'],
+        ':valor' => $data['valor'],
+        ':medio' => $data['medio'],
+        ':referencia' => $data['referencia'],
+        ':observaciones' => $data['observaciones'],
+        ':usuario' => $data['usuario'],
+    ]);
+}
+
+function obtenerRetirosCaja(PDO $pdo, ?string $desde = null, ?string $hasta = null): array {
+    asegurarEsquemaRetirosCaja($pdo);
+
+    $sql = 'SELECT * FROM retiros_caja WHERE 1=1';
+    $params = [];
+
+    if ($desde) {
+        $sql .= ' AND fecha >= :desde';
+        $params[':desde'] = $desde;
+    }
+    if ($hasta) {
+        $sql .= ' AND fecha <= :hasta';
+        $params[':hasta'] = $hasta;
+    }
+
+    $sql .= ' ORDER BY fecha DESC, id DESC LIMIT 300';
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+
+    return $stmt->fetchAll();
+}
+
 function getSocios($pdo, $search = '') {
     $sql = "SELECT * FROM socios WHERE activo = 1";
     $params = [];
