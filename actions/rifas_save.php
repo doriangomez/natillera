@@ -7,7 +7,6 @@ $accion = $_POST['accion'] ?? '';
 $usuario = $_SESSION['usuario'] ?? null;
 
 try {
-    sincronizarActividadesRifa($pdo);
     asegurarEsquemaRifas($pdo);
 
     if ($accion === 'crear_rifa') {
@@ -22,6 +21,16 @@ try {
             'id_actividad_premio' => (int) ($_POST['id_actividad_premio'] ?? 0),
             'usuario_registro' => $usuario,
         ];
+
+        $actividadIngreso = getActividad($pdo, $datos['id_actividad_ingreso']);
+        $actividadPremio = getActividad($pdo, $datos['id_actividad_premio']);
+
+        if (!$actividadIngreso || (int) ($actividadIngreso['es_ingreso'] ?? 0) !== 1) {
+            throw new RuntimeException('Debe seleccionar una actividad de ingreso válida.');
+        }
+        if (!$actividadPremio || (int) ($actividadPremio['es_ingreso'] ?? 1) !== 0) {
+            throw new RuntimeException('Debe seleccionar una actividad de egreso/premio válida.');
+        }
 
         foreach (['nombre','fecha_inicio','fecha_fin'] as $campo) {
             if (empty($datos[$campo])) {
