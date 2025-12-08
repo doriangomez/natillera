@@ -88,6 +88,12 @@ try {
         );
         $_SESSION['exito'] = 'Premio registrado y rifa cerrada.';
     }
+
+    if ($accion === 'eliminar_rifa') {
+        $idRifa = (int) ($_POST['id_rifa'] ?? 0);
+        eliminarRifa($pdo, $idRifa);
+        $_SESSION['exito'] = 'Rifa eliminada correctamente, incluyendo movimientos asociados.';
+    }
 } catch (Throwable $e) {
     $_SESSION['error'] = $e->getMessage();
 }

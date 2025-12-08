@@ -189,13 +189,46 @@ function registrarHistorialBoleta(PDO $pdo, int $idBoleta, int $idRifa, string $
 function obtenerRifas(PDO $pdo): array
 {
     asegurarEsquemaRifas($pdo);
-    $stmt = $pdo->query('SELECT r.*, 
+    $stmt = $pdo->query('SELECT r.*,
         (SELECT COUNT(*) FROM rifas_boletas b WHERE b.id_rifa = r.id_rifa) AS total_boletas,
         (SELECT COUNT(*) FROM rifas_boletas b WHERE b.id_rifa = r.id_rifa AND b.estado = "pagada") AS boletas_pagadas,
         (SELECT COALESCE(SUM(valor),0) FROM rifas_boletas b WHERE b.id_rifa = r.id_rifa AND b.estado = "pagada") AS total_recaudado,
         (SELECT COUNT(*) FROM rifas_boletas b WHERE b.id_rifa = r.id_rifa AND b.estado = "pendiente") AS boletas_pendientes
         FROM rifas r ORDER BY r.fecha_inicio DESC');
     return $stmt->fetchAll();
+}
+
+function eliminarRifa(PDO $pdo, int $idRifa): void
+{
+    $stmtRifa = $pdo->prepare('SELECT * FROM rifas WHERE id_rifa = :id LIMIT 1');
+    $stmtRifa->execute([':id' => $idRifa]);
+    $rifa = $stmtRifa->fetch();
+
+    if (!$rifa) {
+        throw new RuntimeException('La rifa seleccionada no existe.');
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $pdo->prepare('DELETE FROM movimientos WHERE modulo = "rifas" AND id_actividad IN (:ingreso, :premio)')
+            ->execute([
+                ':ingreso' => (int) $rifa['id_actividad_ingreso'],
+                ':premio' => (int) $rifa['id_actividad_premio'],
+            ]);
+
+        $pdo->prepare('DELETE FROM rifas WHERE id_rifa = :id')
+            ->execute([':id' => $idRifa]);
+
+        recalcularSaldosDesdeMovimientos($pdo);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
 }
 
 function obtenerRifa(PDO $pdo, int $idRifa): ?array
@@ -330,6 +363,39 @@ function registrarPremioRifa(PDO $pdo, int $idRifa, string $numeroGanador, float
     $pdo->prepare('UPDATE rifas SET estado = "cerrada" WHERE id_rifa = :id')
         ->execute([':id' => $idRifa]);
     recalcularSaldosDesdeMovimientos($pdo);
+}
+
+function obtenerInformeMovimientosRifa(PDO $pdo, array $rifa): array
+{
+    $stmt = $pdo->prepare(
+        'SELECT m.fecha, m.motivo, m.valor, m.medio_consignacion, m.observaciones, m.usuario_registro, a.nombre_actividad, s.nombre_completo ' .
+        'FROM movimientos m ' .
+        'JOIN actividades_maestro a ON a.id_actividad = m.id_actividad ' .
+        'LEFT JOIN socios s ON s.id_socio = m.id_socio ' .
+        'WHERE m.modulo = "rifas" AND m.id_actividad IN (:ingreso, :premio) ' .
+        'ORDER BY m.fecha DESC, m.id DESC'
+    );
+    $stmt->execute([
+        ':ingreso' => (int) $rifa['id_actividad_ingreso'],
+        ':premio' => (int) $rifa['id_actividad_premio'],
+    ]);
+
+    $movimientos = $stmt->fetchAll();
+
+    $totales = [
+        'ingresos' => 0,
+        'egresos' => 0,
+    ];
+
+    foreach ($movimientos as $mov) {
+        if ((float) $mov['valor'] >= 0) {
+            $totales['ingresos'] += abs((float) $mov['valor']);
+        } else {
+            $totales['egresos'] += abs((float) $mov['valor']);
+        }
+    }
+
+    return ['movimientos' => $movimientos, 'totales' => $totales];
 }
 
 function obtenerResumenBoletas(PDO $pdo, int $idRifa): array
