@@ -379,7 +379,7 @@ function obtenerInformeMovimientosRifa(PDO $pdo, array $rifa): array
         'JOIN actividades_maestro a ON a.id_actividad = m.id_actividad ' .
         'LEFT JOIN socios s ON s.id_socio = m.id_socio ' .
         'WHERE m.modulo = "rifas" AND m.id_actividad IN (:ingreso, :premio) ' .
-        'ORDER BY m.fecha DESC, m.id DESC'
+        'ORDER BY m.fecha DESC, m.id_movimiento DESC'
     );
     $stmt->execute([
         ':ingreso' => (int) $rifa['id_actividad_ingreso'],
