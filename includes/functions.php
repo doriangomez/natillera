@@ -553,6 +553,7 @@ function generarConciliacionInterna(PDO $pdo): array {
         'ok' => true,
         'checks' => [],
         'desviaciones_socios' => [],
+        'desviaciones_prestamos' => [],
     ];
 
     $saldoMovimientos = (float) $pdo->query(
@@ -626,6 +627,75 @@ function generarConciliacionInterna(PDO $pdo): array {
     ];
 
     if (!empty($desviaciones)) {
+        $reporte['ok'] = false;
+    }
+
+    $prestamosConDesviaciones = [];
+
+    $stmtPrestamos = $pdo->query(
+        'SELECT p.id_prestamo, p.monto_prestamo, p.saldo_capital_actual, p.saldo_intereses_actual, '
+        . 'COALESCE(s.nombre_completo, p.nombre_deudor) AS deudor '
+        . 'FROM prestamos p '
+        . 'LEFT JOIN socios s ON p.id_socio = s.id_socio'
+    );
+
+    $stmtCapitalPagado = $pdo->prepare(
+        'SELECT COALESCE(SUM(ABS(m.valor)), 0) FROM movimientos m '
+        . 'JOIN actividades_maestro a ON m.id_actividad = a.id_actividad '
+        . 'WHERE m.id_prestamo = :id AND a.es_pago_prestamo = 1'
+    );
+
+    $stmtInteresPagado = $pdo->prepare(
+        'SELECT COALESCE(SUM(ABS(m.valor)), 0) FROM movimientos m '
+        . 'JOIN actividades_maestro a ON m.id_actividad = a.id_actividad '
+        . 'WHERE m.id_prestamo = :id AND a.es_pago_interes = 1'
+    );
+
+    $stmtInteresCausado = $pdo->prepare(
+        'SELECT COALESCE(SUM(interes_causado), 0) FROM periodos_prestamo WHERE id_prestamo = :id'
+    );
+
+    foreach ($stmtPrestamos->fetchAll(PDO::FETCH_ASSOC) as $prestamo) {
+        $stmtCapitalPagado->execute([':id' => $prestamo['id_prestamo']]);
+        $capitalPagado = (float) $stmtCapitalPagado->fetchColumn();
+
+        $stmtInteresPagado->execute([':id' => $prestamo['id_prestamo']]);
+        $interesPagado = (float) $stmtInteresPagado->fetchColumn();
+
+        $stmtInteresCausado->execute([':id' => $prestamo['id_prestamo']]);
+        $interesCausado = (float) $stmtInteresCausado->fetchColumn();
+
+        $capitalEsperado = round((float) $prestamo['monto_prestamo'] - $capitalPagado, 2);
+        $interesEsperado = round($interesCausado - $interesPagado, 2);
+
+        $diferenciaCapital = round((float) $prestamo['saldo_capital_actual'] - $capitalEsperado, 2);
+        $diferenciaInteres = round((float) $prestamo['saldo_intereses_actual'] - $interesEsperado, 2);
+
+        if (abs($diferenciaCapital) >= 0.01 || abs($diferenciaInteres) >= 0.01) {
+            $prestamosConDesviaciones[] = [
+                'id' => (int) $prestamo['id_prestamo'],
+                'deudor' => $prestamo['deudor'] ?? 'Sin identificar',
+                'capital_registrado' => (float) $prestamo['saldo_capital_actual'],
+                'capital_esperado' => $capitalEsperado,
+                'diferencia_capital' => $diferenciaCapital,
+                'interes_registrado' => (float) $prestamo['saldo_intereses_actual'],
+                'interes_esperado' => $interesEsperado,
+                'diferencia_interes' => $diferenciaInteres,
+            ];
+        }
+    }
+
+    $reporte['desviaciones_prestamos'] = $prestamosConDesviaciones;
+    $reporte['checks'][] = [
+        'titulo' => 'Préstamos alineados con movimientos',
+        'detalle' => 'Saldos de capital e intereses coinciden con los movimientos y periodos registrados',
+        'registrado' => count($prestamosConDesviaciones) ? 'Hay diferencias' : 'Sin diferencias',
+        'esperado' => 'Sin diferencias',
+        'diferencia' => count($prestamosConDesviaciones),
+        'ok' => count($prestamosConDesviaciones) === 0,
+    ];
+
+    if (!empty($prestamosConDesviaciones)) {
         $reporte['ok'] = false;
     }
 
