@@ -38,6 +38,37 @@ switch ($tipo) {
         $rows = $pdo->query('SELECT nombre_completo, saldo_socio FROM socios WHERE activo=1')->fetchAll(PDO::FETCH_NUM);
         generarCSV(['Socio','Saldo'],$rows);
         break;
+    case 'aportes_socios':
+        $condicionAporte = "m.es_ingreso = 1 AND COALESCE(a.es_prestamo,0) = 0 AND COALESCE(a.es_pago_prestamo,0) = 0 AND COALESCE(a.es_pago_interes,0) = 0 AND COALESCE(a.es_polla,0) = 0";
+        $rows = $pdo->query(
+            "SELECT s.id_socio, s.nombre_completo, s.saldo_socio,\n"
+            . "       COALESCE(SUM(CASE WHEN $condicionAporte THEN m.valor ELSE 0 END),0) AS total_aportado,\n"
+            . "       COALESCE(COUNT(DISTINCT CASE WHEN $condicionAporte THEN DATE_FORMAT(m.fecha, '%Y-%m') END),0) AS meses_aporte\n"
+            . "FROM socios s\n"
+            . "LEFT JOIN movimientos m ON m.id_socio = s.id_socio\n"
+            . "LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad\n"
+            . "WHERE s.activo = 1\n"
+            . "GROUP BY s.id_socio\n"
+            . "ORDER BY s.nombre_completo"
+        )->fetchAll();
+
+        $rowsFormateadas = [];
+        foreach ($rows as $r) {
+            $mesesAporte = (int) ($r['meses_aporte'] ?? 0);
+            $totalAportado = (float) ($r['total_aportado'] ?? 0);
+            $aportePromedio = $mesesAporte > 0 ? $totalAportado / $mesesAporte : 0;
+
+            $rowsFormateadas[] = [
+                $r['id_socio'],
+                $r['nombre_completo'],
+                round($aportePromedio, 2),
+                $totalAportado,
+                $r['saldo_socio'],
+            ];
+        }
+
+        generarCSV(['ID','Nombre','Aporte mensual promedio','Total aportado','Saldo vigente'],$rowsFormateadas);
+        break;
     case 'prestamos':
         $rows = $pdo->query('SELECT id_prestamo, nombre_deudor, saldo_capital_actual, saldo_intereses_actual FROM prestamos')->fetchAll(PDO::FETCH_NUM);
         generarCSV(['ID','Deudor','Saldo capital','Saldo intereses'],$rows);
