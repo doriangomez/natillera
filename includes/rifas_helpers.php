@@ -211,6 +211,12 @@ function eliminarRifa(PDO $pdo, int $idRifa): void
     try {
         $pdo->beginTransaction();
 
+        $pdo->prepare('DELETE FROM rifas_boletas_historial WHERE id_rifa = :id')
+            ->execute([':id' => $idRifa]);
+
+        $pdo->prepare('DELETE FROM rifas_boletas WHERE id_rifa = :id')
+            ->execute([':id' => $idRifa]);
+
         $pdo->prepare('DELETE FROM movimientos WHERE modulo = "rifas" AND id_actividad IN (:ingreso, :premio)')
             ->execute([
                 ':ingreso' => (int) $rifa['id_actividad_ingreso'],
