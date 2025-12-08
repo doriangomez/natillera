@@ -43,6 +43,17 @@ $stmtPie = $pdo->prepare($sqlPie);
 $stmtPie->execute($params);
 $ingresosPorActividad = $stmtPie->fetchAll();
 
+// Distribución de egresos por actividad
+$sqlEgresosActividad = "SELECT a.nombre_actividad, SUM(m.valor) AS total
+    FROM movimientos m
+    JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+    WHERE m.es_egreso = 1 " . ($baseWhere ? 'AND ' . substr($baseWhere, 6) : '') . "
+    GROUP BY a.id_actividad
+    ORDER BY total DESC";
+$stmtEgresosActividad = $pdo->prepare($sqlEgresosActividad);
+$stmtEgresosActividad->execute($params);
+$egresosPorActividad = $stmtEgresosActividad->fetchAll();
+
 // Evolución mensual de pollas
 $wherePollas = $where;
 $wherePollas[] = 'a.es_polla = 1';
@@ -72,6 +83,20 @@ $stmtPrestamos = $pdo->prepare($sqlPrestamos);
 $stmtPrestamos->execute($params);
 $prestamoData = $stmtPrestamos->fetch();
 
+// Movimientos por medio de pago
+$sqlMedios = "SELECT
+    COALESCE(mp.nombre, 'Sin medio') AS medio,
+    SUM(CASE WHEN m.es_ingreso = 1 THEN m.valor ELSE 0 END) AS ingresos,
+    SUM(CASE WHEN m.es_egreso = 1 THEN m.valor ELSE 0 END) AS egresos
+    FROM movimientos m
+    LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id
+    $baseWhere
+    GROUP BY medio
+    ORDER BY medio";
+$stmtMedios = $pdo->prepare($sqlMedios);
+$stmtMedios->execute($params);
+$movimientosPorMedio = $stmtMedios->fetchAll();
+
 function toChartPairs($rows, $labelKey, $valueKey) {
     $labels = [];
     $values = [];
@@ -85,7 +110,20 @@ function toChartPairs($rows, $labelKey, $valueKey) {
 list($mesesBar, $ingresosBar) = toChartPairs($ingVsEgr, 'mes', 'ingresos');
 $egresosBar = array_map(fn($row) => (float) $row['egresos'], $ingVsEgr);
 list($actividadesLabels, $ingresosValues) = toChartPairs($ingresosPorActividad, 'nombre_actividad', 'total');
+list($egresosActividadLabels, $egresosValues) = toChartPairs($egresosPorActividad, 'nombre_actividad', 'total');
 list($mesesPollas, $pollasValues) = toChartPairs($pollasMes, 'mes', 'total');
+list($mediosLabels, $mediosIngresos) = toChartPairs($movimientosPorMedio, 'medio', 'ingresos');
+$mediosEgresos = array_map(fn($row) => (float) $row['egresos'], $movimientosPorMedio);
+
+$netoMensual = [];
+$saldoAcumulado = [];
+$saldo = 0;
+foreach ($ingVsEgr as $row) {
+    $neto = (float) $row['ingresos'] - (float) $row['egresos'];
+    $saldo += $neto;
+    $netoMensual[] = $neto;
+    $saldoAcumulado[] = $saldo;
+}
 
 $prestado = (float) ($prestamoData['prestado'] ?? 0);
 $recuperado = (float) ($prestamoData['recuperado'] ?? 0);
@@ -164,6 +202,34 @@ $recuperado = (float) ($prestamoData['recuperado'] ?? 0);
         </div>
     </div>
 </div>
+<div class="row g-3 mb-3">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header category-egresos"><i class="bi bi-graph-down"></i><span>Egresos por actividad</span></div>
+            <div class="card-body">
+                <canvas id="chartEgresosActividad"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header category-balance"><i class="bi bi-activity"></i><span>Saldo neto mensual</span></div>
+            <div class="card-body">
+                <canvas id="chartSaldoMensual"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row g-3">
+    <div class="col-12">
+        <div class="card h-100">
+            <div class="card-header category-ingresos"><i class="bi bi-credit-card-2-back"></i><span>Movimientos por medio de pago</span></div>
+            <div class="card-body">
+                <canvas id="chartMediosPago"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 const ingresosEgresosCtx = document.getElementById('chartIngresosEgresos');
@@ -198,6 +264,78 @@ new Chart(ingresosActividadCtx, {
         }]
     },
     options: { responsive: true, maintainAspectRatio: false }
+});
+
+const egresosActividadCtx = document.getElementById('chartEgresosActividad');
+new Chart(egresosActividadCtx, {
+    type: 'doughnut',
+    data: {
+        labels: <?php echo json_encode($egresosActividadLabels); ?>,
+        datasets: [{
+            data: <?php echo json_encode($egresosValues); ?>,
+            backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#0ea5e9', '#3b82f6', '#6366f1', '#a855f7']
+        }]
+    },
+    options: { responsive: true, maintainAspectRatio: false }
+});
+
+const saldoMensualCtx = document.getElementById('chartSaldoMensual');
+new Chart(saldoMensualCtx, {
+    type: 'line',
+    data: {
+        labels: <?php echo json_encode($mesesBar); ?>,
+        datasets: [
+            {
+                label: 'Neto del mes',
+                data: <?php echo json_encode($netoMensual); ?>,
+                borderColor: '#22d3ee',
+                backgroundColor: 'rgba(34,211,238,0.2)',
+                fill: true,
+                tension: 0.2
+            },
+            {
+                label: 'Saldo acumulado',
+                data: <?php echo json_encode($saldoAcumulado); ?>,
+                borderColor: '#0f172a',
+                backgroundColor: 'rgba(15,23,42,0.15)',
+                fill: true,
+                tension: 0.2
+            }
+        ]
+    },
+    options: { responsive: true, maintainAspectRatio: false }
+});
+
+const mediosPagoCtx = document.getElementById('chartMediosPago');
+new Chart(mediosPagoCtx, {
+    type: 'bar',
+    data: {
+        labels: <?php echo json_encode($mediosLabels); ?>,
+        datasets: [
+            {
+                label: 'Ingresos',
+                backgroundColor: '#22c55e',
+                data: <?php echo json_encode($mediosIngresos); ?>
+            },
+            {
+                label: 'Egresos',
+                backgroundColor: '#ef4444',
+                data: <?php echo json_encode($mediosEgresos); ?>
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            x: {
+                stacked: true
+            },
+            y: {
+                stacked: true
+            }
+        }
+    }
 });
 
 const pollasCtx = document.getElementById('chartPollas');
