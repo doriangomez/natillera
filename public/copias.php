@@ -20,7 +20,7 @@ if ($ejecutarConciliacion) {
             <div class="card-body">
                 <p class="text-muted mb-4">Descarga la información completa de la base de datos ya sea en un archivo compatible con Excel o en un script SQL listo para restaurar.</p>
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-lg-4 col-md-6">
                         <div class="p-4 border rounded-3 h-100 bg-light">
                             <div class="d-flex align-items-center justify-content-between mb-3">
                                 <div>
@@ -35,7 +35,7 @@ if ($ejecutarConciliacion) {
                             </a>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-lg-4 col-md-6">
                         <div class="p-4 border rounded-3 h-100 bg-light">
                             <div class="d-flex align-items-center justify-content-between mb-3">
                                 <div>
@@ -47,6 +47,21 @@ if ($ejecutarConciliacion) {
                             <a class="btn btn-outline-secondary w-100" href="../actions/copias_dump.php">
                                 <i class="bi bi-database-down"></i>
                                 Descargar dump
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 col-md-6">
+                        <div class="p-4 border rounded-3 h-100 bg-light">
+                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                <div>
+                                    <h5 class="mb-1">Registros del sistema</h5>
+                                    <p class="text-muted mb-0">Descarga el archivo completo de logs para auditar eventos y errores.</p>
+                                </div>
+                                <div class="badge-soft">Logs</div>
+                            </div>
+                            <a class="btn btn-outline-dark w-100" href="../actions/copias_logs.php">
+                                <i class="bi bi-clipboard-data"></i>
+                                Descargar logs
                             </a>
                         </div>
                     </div>
