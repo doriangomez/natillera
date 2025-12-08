@@ -8,6 +8,10 @@ $actividadCuota = $actividadCuotaId > 0 ? getActividad($pdo, $actividadCuotaId) 
 $periodos = getPeriodosActivosConfiguracion($pdo);
 $socios = getSocios($pdo);
 
+usort($socios, function (array $a, array $b): int {
+    return (int) $a['id_socio'] <=> (int) $b['id_socio'];
+});
+
 $condicionesPeriodo = [];
 $params = [];
 foreach ($periodos as $idx => $p) {
