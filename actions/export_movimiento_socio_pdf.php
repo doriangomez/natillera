@@ -396,12 +396,14 @@ function construirHtmlPdf(array $data): string
 
     $filasCuotas = [];
     $totalCuotas = 0;
+    $saldoAcumulado = 0;
     foreach ($data['cuotasPorMes'] as $c) {
-        $filasCuotas[] = [$c['label'], formatearMoneda((float)$c['total'])];
         $totalCuotas += (float)$c['total'];
+        $saldoAcumulado += (float)$c['total'];
+        $filasCuotas[] = [$c['label'], formatearMoneda((float)$c['total']), formatearMoneda($saldoAcumulado)];
     }
     if ($filasCuotas) {
-        $filasCuotas[] = ['Total aportado', formatearMoneda($totalCuotas)];
+        $filasCuotas[] = ['Total aportado', formatearMoneda($totalCuotas), formatearMoneda($saldoAcumulado)];
     }
 
     $filasDetalles = [];
@@ -496,12 +498,7 @@ function construirHtmlPdf(array $data): string
 
     <div class="section" data-section="pagos-cuota">
         <h2 class="section-title">Pagos de cuota</h2>
-        <?php echo tablaHtml(['Mes', 'Valor'], $filasCuotas, 'table', ['','text-right']); ?>
-    </div>
-
-    <div class="section" data-section="detalle-cuotas">
-        <h2 class="section-title">Detalle de cuotas</h2>
-        <p class="nota">Detalle omitido del reporte a solicitud del usuario.</p>
+        <?php echo tablaHtml(['Mes', 'Valor', 'Saldo'], $filasCuotas, 'table', ['', 'text-right', 'text-right']); ?>
     </div>
 
     <div class="section" data-section="pagos-pollas">
@@ -548,7 +545,6 @@ function validarHtmlPremium(string $html): void
     $seccionesObligatorias = [
         'Datos del socio',
         'Pagos de cuota',
-        'Detalle de cuotas',
         'Pagos de pollas',
         'Estado de préstamos',
         'Pago de intereses',
