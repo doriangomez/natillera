@@ -70,6 +70,18 @@ $medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
                             <input type="number" step="0.01" min="0" name="tasa_interes_particular" class="form-control" value="<?php echo clean($config['tasa_interes_particular'] ?? 0); ?>">
                         </div>
                     </div>
+                    <div class="mt-3">
+                        <label class="form-label">Concepto para pago de cuota de socio</label>
+                        <select name="actividad_pago_cuota" class="form-select">
+                            <option value="0">Selecciona un concepto del maestro de actividades</option>
+                            <?php foreach ($actividades as $a): ?>
+                                <option value="<?php echo (int) $a['id_actividad']; ?>" <?php echo ((int) ($config['actividad_pago_cuota'] ?? 0) === (int) $a['id_actividad']) ? 'selected' : ''; ?>>
+                                    <?php echo clean($a['nombre_actividad']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">Este concepto se usará para calcular la matriz de pagos de cuotas por socio.</div>
+                    </div>
                     <div class="d-flex gap-2">
                         <button class="btn btn-primary" type="submit">Guardar parámetros</button>
                         <a class="btn btn-outline-secondary" href="index.php">Volver al panel</a>
