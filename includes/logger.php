@@ -13,8 +13,30 @@ function registrarLog(string $nivel, string $mensaje, array $contexto = []): voi
     }
 
     $archivo = $directorio . '/app.log';
+    $origen = null;
+
+    $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
+    foreach ($backtrace as $frame) {
+        if (!isset($frame['file']) || str_ends_with($frame['file'], 'logger.php')) {
+            continue;
+        }
+
+        $origen = [
+            'archivo' => $frame['file'],
+            'modulo' => basename($frame['file']),
+        ];
+        break;
+    }
+
     $fecha = (new DateTimeImmutable('now', new DateTimeZone('UTC')))
         ->format('Y-m-d H:i:s.u T');
+
+    if ($origen !== null) {
+        $contexto += [
+            'modulo_origen' => $origen['modulo'],
+            'archivo_origen' => $origen['archivo'],
+        ];
+    }
 
     $linea = sprintf('[%s] %s: %s', $fecha, strtoupper($nivel), $mensaje);
     if (!empty($contexto)) {
