@@ -144,7 +144,9 @@ class LoggedPDO extends PDO
         );
 
         try {
-            $stmt = parent::query($statement, $mode ?? PDO::ATTR_DEFAULT_FETCH_MODE, ...$fetch_mode_args);
+            $stmt = $mode === null
+                ? parent::query($statement)
+                : parent::query($statement, $mode, ...$fetch_mode_args);
             ($this->logger)('query_direct_success', 'Consulta directa exitosa', [
                 'conexion' => $this->connectionId,
                 'sql' => $statement,
