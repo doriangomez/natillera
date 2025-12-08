@@ -48,6 +48,30 @@ function asegurarEsquemaRifas(PDO $pdo): void
         CONSTRAINT fk_historial_boleta FOREIGN KEY (id_boleta) REFERENCES rifas_boletas(id_boleta) ON DELETE CASCADE ON UPDATE CASCADE,
         CONSTRAINT fk_historial_rifa FOREIGN KEY (id_rifa) REFERENCES rifas(id_rifa) ON DELETE CASCADE ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    asegurarForeignKey($pdo, [
+        'tabla' => 'rifas_boletas',
+        'columna' => 'id_rifa',
+        'referencia' => 'rifas',
+        'col_referencia' => 'id_rifa',
+        'nombre' => 'fk_boleta_rifa',
+    ]);
+
+    asegurarForeignKey($pdo, [
+        'tabla' => 'rifas_boletas_historial',
+        'columna' => 'id_boleta',
+        'referencia' => 'rifas_boletas',
+        'col_referencia' => 'id_boleta',
+        'nombre' => 'fk_historial_boleta',
+    ]);
+
+    asegurarForeignKey($pdo, [
+        'tabla' => 'rifas_boletas_historial',
+        'columna' => 'id_rifa',
+        'referencia' => 'rifas',
+        'col_referencia' => 'id_rifa',
+        'nombre' => 'fk_historial_rifa',
+    ]);
 }
 
 function sincronizarActividadesRifa(PDO $pdo): array
