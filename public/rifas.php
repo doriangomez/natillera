@@ -1,13 +1,11 @@
 <?php
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/rifas_helpers.php';
-
-sincronizarActividadesRifa($pdo);
 asegurarEsquemaRifas($pdo);
 
 $socios = getSocios($pdo);
 $mediosPago = getMediosPago($pdo);
-$actividadesRifa = getActividades($pdo, false, true, true);
+$actividadesRifa = getActividades($pdo, false, true, false);
 $actividadesIngreso = array_filter($actividadesRifa, fn($a) => (int) ($a['es_ingreso'] ?? 0) === 1);
 $actividadesPremio = array_filter($actividadesRifa, fn($a) => (int) ($a['es_ingreso'] ?? 0) === 0);
 $rifas = obtenerRifas($pdo);
