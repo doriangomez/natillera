@@ -90,6 +90,10 @@ try {
     }
 
     if ($accion === 'eliminar_rifa') {
+        if (!function_exists('eliminarRifa')) {
+            throw new RuntimeException('No se pudo cargar la función para eliminar rifas.');
+        }
+
         $idRifa = (int) ($_POST['id_rifa'] ?? 0);
         eliminarRifa($pdo, $idRifa);
         $_SESSION['exito'] = 'Rifa eliminada correctamente, incluyendo movimientos asociados.';
