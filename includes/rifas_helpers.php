@@ -211,6 +211,12 @@ function eliminarRifa(PDO $pdo, int $idRifa): void
     try {
         $pdo->beginTransaction();
 
+        $pdo->prepare('DELETE FROM rifas_boletas_historial WHERE id_rifa = :id')
+            ->execute([':id' => $idRifa]);
+
+        $pdo->prepare('DELETE FROM rifas_boletas WHERE id_rifa = :id')
+            ->execute([':id' => $idRifa]);
+
         $pdo->prepare('DELETE FROM movimientos WHERE modulo = "rifas" AND id_actividad IN (:ingreso, :premio)')
             ->execute([
                 ':ingreso' => (int) $rifa['id_actividad_ingreso'],
@@ -373,7 +379,7 @@ function obtenerInformeMovimientosRifa(PDO $pdo, array $rifa): array
         'JOIN actividades_maestro a ON a.id_actividad = m.id_actividad ' .
         'LEFT JOIN socios s ON s.id_socio = m.id_socio ' .
         'WHERE m.modulo = "rifas" AND m.id_actividad IN (:ingreso, :premio) ' .
-        'ORDER BY m.fecha DESC, m.id DESC'
+        'ORDER BY m.fecha DESC, m.id_movimiento DESC'
     );
     $stmt->execute([
         ':ingreso' => (int) $rifa['id_actividad_ingreso'],
