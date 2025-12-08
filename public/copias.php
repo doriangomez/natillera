@@ -141,6 +141,47 @@ if ($ejecutarConciliacion) {
                             </div>
                         </div>
                     <?php endif; ?>
+
+                    <?php if (!empty($diagnosticoDatos['desviaciones_prestamos'])): ?>
+                        <div class="alert alert-warning">
+                            <div class="fw-semibold mb-1">Préstamos con saldos diferentes a los movimientos</div>
+                            <p class="mb-2">Revisa los saldos registrados frente a los calculados por capital desembolsado, pagos y causación de intereses.</p>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Deudor</th>
+                                            <th class="text-end">Capital registrado</th>
+                                            <th class="text-end">Capital esperado</th>
+                                            <th class="text-end">Dif. capital</th>
+                                            <th class="text-end">Interés registrado</th>
+                                            <th class="text-end">Interés esperado</th>
+                                            <th class="text-end">Dif. interés</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($diagnosticoDatos['desviaciones_prestamos'] as $desviacion): ?>
+                                            <tr>
+                                                <td><?php echo (int) $desviacion['id']; ?></td>
+                                                <td><?php echo htmlspecialchars($desviacion['deudor']); ?></td>
+                                                <td class="text-end">$<?php echo number_format((float) $desviacion['capital_registrado'], 2); ?></td>
+                                                <td class="text-end">$<?php echo number_format((float) $desviacion['capital_esperado'], 2); ?></td>
+                                                <td class="text-end fw-semibold <?php echo abs($desviacion['diferencia_capital']) >= 0.01 ? 'text-danger' : 'text-success'; ?>">
+                                                    $<?php echo number_format((float) $desviacion['diferencia_capital'], 2); ?>
+                                                </td>
+                                                <td class="text-end">$<?php echo number_format((float) $desviacion['interes_registrado'], 2); ?></td>
+                                                <td class="text-end">$<?php echo number_format((float) $desviacion['interes_esperado'], 2); ?></td>
+                                                <td class="text-end fw-semibold <?php echo abs($desviacion['diferencia_interes']) >= 0.01 ? 'text-danger' : 'text-success'; ?>">
+                                                    $<?php echo number_format((float) $desviacion['diferencia_interes'], 2); ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                 <?php else: ?>
                     <div class="alert alert-secondary mb-0">Ejecuta la validación para obtener un resumen de salud de datos.</div>
                 <?php endif; ?>
