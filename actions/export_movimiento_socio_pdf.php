@@ -130,14 +130,17 @@ function agruparMovimientos(array $movimientos): array
         if (!empty($m['es_polla'])) {
             $pollasPorMes[] = [
                 'clave' => $mesClave,
-                'label' => $m['fecha'] . ($quincena ? ' (Q' . $quincena . ')' : ''),
+                'label' => $mesLabel,
                 'total' => abs($m['valor']),
+                'orden' => strtotime($fecha),
             ];
         }
     }
 
     ksort($cuotasPorMes);
-    ksort($pollasPorMes);
+    usort($pollasPorMes, function ($a, $b) {
+        return ($a['orden'] <=> $b['orden']);
+    });
 
     return [$cuotasPorMes, $pollasPorMes];
 }
