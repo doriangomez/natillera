@@ -242,7 +242,10 @@ $periodosEnMora = $pdo
 <div class="card mb-3">
     <div class="card-header">Detalle de participantes</div>
     <div class="card-body">
-        <a class="btn btn-outline-secondary mb-2" href="../actions/export_csv.php?tipo=saldos">Exportar saldos</a>
+        <div class="d-flex flex-wrap gap-2 mb-2">
+            <a class="btn btn-outline-secondary" href="../actions/export_csv.php?tipo=saldos">Exportar saldos</a>
+            <a class="btn btn-outline-primary" href="../actions/export_csv.php?tipo=aportes_socios">Exportar aportes por socio</a>
+        </div>
         <div class="table-responsive">
             <table class="table table-sm table-striped align-middle">
                 <thead><tr><th>#</th><th>Participante</th><th>Aporte mensual promedio</th><th>Total aportado</th><th>Saldo vigente</th></tr></thead>

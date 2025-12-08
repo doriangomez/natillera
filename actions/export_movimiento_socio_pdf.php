@@ -128,15 +128,19 @@ function agruparMovimientos(array $movimientos): array
             $cuotasPorMes[$mesClave]['total'] += $valorSocio;
         }
         if (!empty($m['es_polla'])) {
-            if (!isset($pollasPorMes[$mesClave])) {
-                $pollasPorMes[$mesClave] = ['clave' => $mesClave, 'label' => $mesLabel, 'total' => 0];
-            }
-            $pollasPorMes[$mesClave]['total'] += abs($m['valor']);
+            $pollasPorMes[] = [
+                'clave' => $mesClave,
+                'label' => $mesLabel,
+                'total' => abs($m['valor']),
+                'orden' => strtotime($fecha),
+            ];
         }
     }
 
     ksort($cuotasPorMes);
-    ksort($pollasPorMes);
+    usort($pollasPorMes, function ($a, $b) {
+        return ($a['orden'] <=> $b['orden']);
+    });
 
     return [$cuotasPorMes, $pollasPorMes];
 }
@@ -392,12 +396,14 @@ function construirHtmlPdf(array $data): string
 
     $filasCuotas = [];
     $totalCuotas = 0;
+    $saldoAcumulado = 0;
     foreach ($data['cuotasPorMes'] as $c) {
-        $filasCuotas[] = [$c['label'], formatearMoneda((float)$c['total'])];
         $totalCuotas += (float)$c['total'];
+        $saldoAcumulado += (float)$c['total'];
+        $filasCuotas[] = [$c['label'], formatearMoneda((float)$c['total']), formatearMoneda($saldoAcumulado)];
     }
     if ($filasCuotas) {
-        $filasCuotas[] = ['Total aportado', formatearMoneda($totalCuotas)];
+        $filasCuotas[] = ['Total aportado', formatearMoneda($totalCuotas), formatearMoneda($saldoAcumulado)];
     }
 
     $filasDetalles = [];
@@ -411,14 +417,9 @@ function construirHtmlPdf(array $data): string
     }
 
     $filasPollas = [];
-    $totalPollas = 0;
     foreach ($data['pollasPorMes'] as $p) {
         $numero = $resultadosPolla[$p['clave']]['numero_ganador'] ?? '—';
         $filasPollas[] = [$p['label'], formatearMoneda((float)$p['total']), $numero];
-        $totalPollas += (float)$p['total'];
-    }
-    if ($filasPollas) {
-        $filasPollas[] = ['Total pagado', formatearMoneda($totalPollas), ''];
     }
 
     $filasPrestamos = [];
@@ -497,12 +498,7 @@ function construirHtmlPdf(array $data): string
 
     <div class="section" data-section="pagos-cuota">
         <h2 class="section-title">Pagos de cuota</h2>
-        <?php echo tablaHtml(['Mes', 'Valor'], $filasCuotas, 'table', ['','text-right']); ?>
-    </div>
-
-    <div class="section" data-section="detalle-cuotas">
-        <h2 class="section-title">Detalle de cuotas</h2>
-        <?php echo tablaHtml(['Fecha', 'Actividad', 'Valor', 'Saldo después'], $filasDetalles, 'table', ['', '', 'text-right', 'text-right']); ?>
+        <?php echo tablaHtml(['Mes', 'Valor', 'Saldo'], $filasCuotas, 'table', ['', 'text-right', 'text-right']); ?>
     </div>
 
     <div class="section" data-section="pagos-pollas">
@@ -549,7 +545,6 @@ function validarHtmlPremium(string $html): void
     $seccionesObligatorias = [
         'Datos del socio',
         'Pagos de cuota',
-        'Detalle de cuotas',
         'Pagos de pollas',
         'Estado de préstamos',
         'Pago de intereses',
