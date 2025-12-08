@@ -13,7 +13,20 @@ $idRifaSeleccionada = isset($_GET['id_rifa']) ? (int) $_GET['id_rifa'] : ((int) 
 $rifaActual = $idRifaSeleccionada ? obtenerRifa($pdo, $idRifaSeleccionada) : null;
 $boletas = $rifaActual ? obtenerBoletasRifa($pdo, $idRifaSeleccionada) : [];
 $resumen = $rifaActual ? obtenerResumenBoletas($pdo, $idRifaSeleccionada) : [];
-$informeRifa = $rifaActual ? obtenerInformeMovimientosRifa($pdo, $rifaActual) : ['movimientos' => [], 'totales' => ['ingresos' => 0, 'egresos' => 0]];
+$informeRifa = ['movimientos' => [], 'totales' => ['ingresos' => 0, 'egresos' => 0]];
+
+if ($rifaActual) {
+    if (!function_exists('obtenerInformeMovimientosRifa')) {
+        $helperPath = __DIR__ . '/../includes/rifas_helpers.php';
+        if (file_exists($helperPath)) {
+            require_once $helperPath;
+        }
+    }
+
+    if (function_exists('obtenerInformeMovimientosRifa')) {
+        $informeRifa = obtenerInformeMovimientosRifa($pdo, $rifaActual);
+    }
+}
 ?>
 <h2 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-stars text-primary"></i><span>Módulo de rifas</span></h2>
 <?php if (!empty($_SESSION['error'])): ?>
