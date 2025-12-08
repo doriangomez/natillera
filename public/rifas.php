@@ -13,6 +13,20 @@ $idRifaSeleccionada = isset($_GET['id_rifa']) ? (int) $_GET['id_rifa'] : ((int) 
 $rifaActual = $idRifaSeleccionada ? obtenerRifa($pdo, $idRifaSeleccionada) : null;
 $boletas = $rifaActual ? obtenerBoletasRifa($pdo, $idRifaSeleccionada) : [];
 $resumen = $rifaActual ? obtenerResumenBoletas($pdo, $idRifaSeleccionada) : [];
+$informeRifa = ['movimientos' => [], 'totales' => ['ingresos' => 0, 'egresos' => 0]];
+
+if ($rifaActual) {
+    if (!function_exists('obtenerInformeMovimientosRifa')) {
+        $helperPath = __DIR__ . '/../includes/rifas_helpers.php';
+        if (file_exists($helperPath)) {
+            require_once $helperPath;
+        }
+    }
+
+    if (function_exists('obtenerInformeMovimientosRifa')) {
+        $informeRifa = obtenerInformeMovimientosRifa($pdo, $rifaActual);
+    }
+}
 ?>
 <h2 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-stars text-primary"></i><span>Módulo de rifas</span></h2>
 <?php if (!empty($_SESSION['error'])): ?>
@@ -127,10 +141,15 @@ $resumen = $rifaActual ? obtenerResumenBoletas($pdo, $idRifaSeleccionada) : [];
             <p class="text-muted mb-1">Administración de boletas</p>
             <h4 class="mb-0"><?php echo clean($rifaActual['nombre']); ?></h4>
         </div>
-        <div class="d-flex gap-2 flex-wrap">
+        <div class="d-flex gap-2 flex-wrap align-items-center">
             <span class="badge bg-success-subtle text-success">Pagadas: <?php echo $resumen['pagada']['cantidad'] ?? 0; ?></span>
             <span class="badge bg-warning-subtle text-warning">Pendientes: <?php echo $resumen['pendiente']['cantidad'] ?? 0; ?></span>
             <span class="badge bg-secondary-subtle text-secondary">Total: <?php echo $rifaActual['cantidad_boletas']; ?></span>
+            <form method="POST" action="../actions/rifas_save.php" onsubmit="return confirm('¿Seguro que deseas eliminar esta rifa? Esta acción también removerá boletas y movimientos relacionados.');">
+                <input type="hidden" name="accion" value="eliminar_rifa">
+                <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash3 me-1"></i>Eliminar rifa</button>
+            </form>
         </div>
     </div>
     <div class="row g-3">
@@ -275,6 +294,43 @@ $resumen = $rifaActual ? obtenerResumenBoletas($pdo, $idRifaSeleccionada) : [];
                         </table>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+    <div class="card mt-3">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <p class="text-muted mb-1">Informe contable</p>
+                    <h5 class="mb-0">Movimientos de la rifa</h5>
+                </div>
+                <div class="d-flex gap-2">
+                    <span class="badge bg-success-subtle text-success">Ingresos: $<?php echo number_format($informeRifa['totales']['ingresos'], 0, ',', '.'); ?></span>
+                    <span class="badge bg-danger-subtle text-danger">Egresos: $<?php echo number_format($informeRifa['totales']['egresos'], 0, ',', '.'); ?></span>
+                </div>
+            </div>
+            <div class="table-responsive" style="max-height: 320px;">
+                <table class="table table-sm table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr><th>Fecha</th><th>Actividad</th><th>Socio</th><th>Motivo</th><th>Medio</th><th>Valor</th><th>Registrado por</th></tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($informeRifa['movimientos'] as $mov): ?>
+                            <tr>
+                                <td><?php echo clean(date('Y-m-d', strtotime($mov['fecha']))); ?></td>
+                                <td><?php echo clean($mov['nombre_actividad']); ?></td>
+                                <td><?php echo clean($mov['nombre_completo'] ?? '—'); ?></td>
+                                <td><?php echo clean($mov['motivo'] . ($mov['observaciones'] ? ' - ' . $mov['observaciones'] : '')); ?></td>
+                                <td><?php echo clean($mov['medio_consignacion']); ?></td>
+                                <td class="text-end <?php echo ((float) $mov['valor']) >= 0 ? 'text-success' : 'text-danger'; ?>">$<?php echo number_format(abs($mov['valor']), 0, ',', '.'); ?></td>
+                                <td><?php echo clean($mov['usuario_registro'] ?? ''); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if (empty($informeRifa['movimientos'])): ?>
+                            <tr><td colspan="7" class="text-center text-muted">Aún no hay movimientos asociados a esta rifa.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
