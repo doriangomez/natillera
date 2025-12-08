@@ -51,7 +51,13 @@ foreach ($porMes as &$detalleMes) {
 }
 unset($detalleMes);
 ?>
-<h2 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-trophy-fill text-primary"></i><span>Gestión de pollas</span></h2>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h2 class="mb-0 d-flex align-items-center gap-2"><i class="bi bi-trophy-fill text-primary"></i><span>Gestión de pollas</span></h2>
+    <a class="btn btn-outline-secondary d-flex align-items-center gap-2" href="../actions/export_polla_socios_pdf.php" target="_blank" rel="noopener">
+        <i class="bi bi-file-earmark-pdf"></i>
+        <span>Reporte de pollas</span>
+    </a>
+</div>
 <div class="alert alert-info d-flex align-items-center gap-2"><i class="bi bi-info-circle-fill"></i><span>El registro de pagos y premios de pollas se realiza ahora exclusivamente desde el módulo de Movimientos. Esta vista permanece como panel informativo.</span></div>
 <div class="card mb-4">
     <div class="card-body">
