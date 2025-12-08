@@ -169,6 +169,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <a class="nav-link-sidebar<?php echo $currentPage === 'movimientos_socio.php' ? ' active' : ''; ?>" href="movimientos_socio.php"><i class="bi bi-person-lines-fill"></i><span>Movimientos por socio</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'conciliaciones.php' ? ' active' : ''; ?>" href="conciliaciones.php"><i class="bi bi-credit-card-2-front"></i><span>Conciliación medios de pago</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'pollas.php' ? ' active' : ''; ?>" href="pollas.php"><i class="bi bi-trophy"></i><span>Pollas</span></a>
+            <a class="nav-link-sidebar<?php echo $currentPage === 'rifas.php' ? ' active' : ''; ?>" href="rifas.php"><i class="bi bi-stars"></i><span>Rifas</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'prestamos.php' ? ' active' : ''; ?>" href="prestamos.php"><i class="bi bi-cash-coin"></i><span>Préstamos</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'prestamos_matriz.php' ? ' active' : ''; ?>" href="prestamos_matriz.php"><i class="bi bi-table"></i><span>Matriz de préstamos</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'retiros_caja.php' ? ' active' : ''; ?>" href="retiros_caja.php"><i class="bi bi-safe2"></i><span>Retiros a caja</span></a>
