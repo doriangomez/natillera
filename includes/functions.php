@@ -244,6 +244,7 @@ function asegurarEsquemaActividades(PDO $pdo): void {
         'es_ingreso TINYINT(1) DEFAULT 0',
         'es_pago_interes TINYINT(1) DEFAULT 0',
         'es_interes_causado TINYINT(1) DEFAULT 0',
+        'es_rifa TINYINT(1) DEFAULT 0',
     ];
 
     foreach ($columnas as $definicion) {
@@ -387,12 +388,15 @@ function recalcularAutoIncrementSocios(PDO $pdo): void {
     $pdo->exec('ALTER TABLE socios AUTO_INCREMENT = ' . $siguiente);
 }
 
-function getActividades($pdo, $soloPolla = false, $incluirInactivas = false) {
+function getActividades($pdo, $soloPolla = false, $incluirInactivas = false, $soloRifa = false) {
     asegurarEsquemaActividades($pdo);
     $sql = "SELECT * FROM actividades_maestro";
     $condiciones = [];
     if ($soloPolla) {
         $condiciones[] = "es_polla = 1";
+    }
+    if ($soloRifa) {
+        $condiciones[] = "es_rifa = 1";
     }
     if (!$incluirInactivas) {
         $condiciones[] = "activo = 1";
