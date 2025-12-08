@@ -411,14 +411,9 @@ function construirHtmlPdf(array $data): string
     }
 
     $filasPollas = [];
-    $totalPollas = 0;
     foreach ($data['pollasPorMes'] as $p) {
         $numero = $resultadosPolla[$p['clave']]['numero_ganador'] ?? '—';
         $filasPollas[] = [$p['label'], formatearMoneda((float)$p['total']), $numero];
-        $totalPollas += (float)$p['total'];
-    }
-    if ($filasPollas) {
-        $filasPollas[] = ['Total pagado', formatearMoneda($totalPollas), ''];
     }
 
     $filasPrestamos = [];
