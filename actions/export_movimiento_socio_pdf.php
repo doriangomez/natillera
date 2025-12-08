@@ -128,10 +128,11 @@ function agruparMovimientos(array $movimientos): array
             $cuotasPorMes[$mesClave]['total'] += $valorSocio;
         }
         if (!empty($m['es_polla'])) {
-            if (!isset($pollasPorMes[$mesClave])) {
-                $pollasPorMes[$mesClave] = ['clave' => $mesClave, 'label' => $mesLabel, 'total' => 0];
-            }
-            $pollasPorMes[$mesClave]['total'] += abs($m['valor']);
+            $pollasPorMes[] = [
+                'clave' => $mesClave,
+                'label' => $m['fecha'] . ($quincena ? ' (Q' . $quincena . ')' : ''),
+                'total' => abs($m['valor']),
+            ];
         }
     }
 
