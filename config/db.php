@@ -6,6 +6,8 @@
 // contraseña: usualmente "" (vacío) en XAMPP
 // nombre BD: natillera_db (se crea con el script database.sql)
 
+require_once __DIR__ . '/../includes/logger.php';
+
 $host = 'localhost';
 $db   = 'natillera_db';
 $user = 'root';
@@ -20,8 +22,9 @@ $options = [
 ];
 
 try {
-    $pdo = new PDO($dsn, $user, $pass, $options);
+    $pdo = new LoggedPDO($dsn, $user, $pass, $options, 'registrarLog');
 } catch (PDOException $e) {
+    registrarLog('connection_error', $e->getMessage(), ['dsn' => $dsn]);
     die('Error de conexión: ' . $e->getMessage());
 }
 ?>
