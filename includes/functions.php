@@ -260,6 +260,28 @@ function asegurarEsquemaActividades(PDO $pdo): void {
     }
 }
 
+function asegurarColumnasConfiguracionGeneral(PDO $pdo): void {
+    $columnas = [
+        'reglamento_archivo VARCHAR(255) NULL',
+        'tasa_interes_socio DECIMAL(6,2) DEFAULT 0',
+        'tasa_interes_particular DECIMAL(6,2) DEFAULT 0',
+        'actividad_pago_cuota INT NULL',
+    ];
+
+    foreach ($columnas as $definicion) {
+        $nombre = explode(' ', $definicion)[0];
+
+        try {
+            $existe = $pdo->query("SHOW COLUMNS FROM configuracion_general LIKE '$nombre'");
+            if ($existe && $existe->rowCount() === 0) {
+                $pdo->exec("ALTER TABLE configuracion_general ADD COLUMN $definicion");
+            }
+        } catch (Exception $e) {
+            // Continuar silenciosamente si no es posible crear la columna
+        }
+    }
+}
+
 function sincronizarConceptosPrestamo(PDO $pdo): array {
     asegurarEsquemaActividades($pdo);
 
@@ -751,6 +773,8 @@ function getActividad($pdo, $id) {
 }
 
 function getConfiguracionGeneral($pdo) {
+    asegurarColumnasConfiguracionGeneral($pdo);
+
     try {
         $stmt = $pdo->prepare('SELECT * FROM configuracion_general WHERE id_config = 1');
         $stmt->execute();
@@ -767,6 +791,7 @@ function getConfiguracionGeneral($pdo) {
             'reglamento_archivo' => null,
             'tasa_interes_socio' => 0,
             'tasa_interes_particular' => 0,
+            'actividad_pago_cuota' => null,
         ];
     }
     if (!isset($config['reglamento_archivo'])) {
@@ -777,6 +802,9 @@ function getConfiguracionGeneral($pdo) {
     }
     if (!isset($config['tasa_interes_particular'])) {
         $config['tasa_interes_particular'] = 0;
+    }
+    if (!array_key_exists('actividad_pago_cuota', $config)) {
+        $config['actividad_pago_cuota'] = null;
     }
     return $config;
 }
@@ -791,6 +819,11 @@ function getNombresMeses(): array {
 
 function getPeriodosConfiguracion(PDO $pdo): array {
     $stmt = $pdo->query('SELECT id, anio, mes, activo FROM periodos_configuracion ORDER BY anio DESC, mes DESC');
+    return $stmt->fetchAll();
+}
+
+function getPeriodosActivosConfiguracion(PDO $pdo): array {
+    $stmt = $pdo->query('SELECT id, anio, mes FROM periodos_configuracion WHERE activo = 1 ORDER BY anio ASC, mes ASC');
     return $stmt->fetchAll();
 }
 

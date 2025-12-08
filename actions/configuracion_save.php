@@ -3,6 +3,8 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 checkAdmin();
 
+asegurarColumnasConfiguracionGeneral($pdo);
+
 $configActual = getConfiguracionGeneral($pdo);
 $nombre = trim($_POST['nombre_sistema'] ?? ($configActual['nombre_sistema'] ?? 'Aplicativo de Natillera creado por Dorian Gómez'));
 $datos = trim($_POST['datos_globales'] ?? ($configActual['datos_globales'] ?? ''));
@@ -12,27 +14,9 @@ $reglamentoActual = $configActual['reglamento_archivo'] ?? null;
 $nuevoReglamento = $reglamentoActual;
 $tasaSocio = isset($_POST['tasa_interes_socio']) ? (float) $_POST['tasa_interes_socio'] : ($configActual['tasa_interes_socio'] ?? 0);
 $tasaParticular = isset($_POST['tasa_interes_particular']) ? (float) $_POST['tasa_interes_particular'] : ($configActual['tasa_interes_particular'] ?? 0);
-
-// Asegurar columna de reglamento
-try {
-    $pdo->query("SHOW COLUMNS FROM configuracion_general LIKE 'reglamento_archivo'");
-    if ($pdo->query("SHOW COLUMNS FROM configuracion_general LIKE 'reglamento_archivo'")->rowCount() === 0) {
-        $pdo->exec("ALTER TABLE configuracion_general ADD COLUMN reglamento_archivo VARCHAR(255) NULL");
-    }
-} catch (Exception $e) {
-    // Continuar silenciosamente si no es posible crear la columna
-}
-
-// Asegurar columnas para tasas de interés configurables
-try {
-    if ($pdo->query("SHOW COLUMNS FROM configuracion_general LIKE 'tasa_interes_socio'")->rowCount() === 0) {
-        $pdo->exec("ALTER TABLE configuracion_general ADD COLUMN tasa_interes_socio DECIMAL(6,2) DEFAULT 0");
-    }
-    if ($pdo->query("SHOW COLUMNS FROM configuracion_general LIKE 'tasa_interes_particular'")->rowCount() === 0) {
-        $pdo->exec("ALTER TABLE configuracion_general ADD COLUMN tasa_interes_particular DECIMAL(6,2) DEFAULT 0");
-    }
-} catch (Exception $e) {
-    // Continuar silenciosamente si no es posible crear la columna
+$actividadCuota = isset($_POST['actividad_pago_cuota']) ? (int) $_POST['actividad_pago_cuota'] : null;
+if ($actividadCuota === 0) {
+    $actividadCuota = null;
 }
 
 if (isset($_FILES['logo']) && is_uploaded_file($_FILES['logo']['tmp_name'])) {
@@ -69,14 +53,15 @@ if (isset($_FILES['reglamento_pdf']) && is_uploaded_file($_FILES['reglamento_pdf
     }
 }
 
-$stmt = $pdo->prepare("INSERT INTO configuracion_general (id_config, nombre_sistema, logo_archivo, datos_globales, tasa_interes_socio, tasa_interes_particular) VALUES (1, :nombre, :logo, :datos, :tasa_socio, :tasa_particular)
-    ON DUPLICATE KEY UPDATE nombre_sistema = VALUES(nombre_sistema), logo_archivo = VALUES(logo_archivo), datos_globales = VALUES(datos_globales), tasa_interes_socio = VALUES(tasa_interes_socio), tasa_interes_particular = VALUES(tasa_interes_particular)");
+$stmt = $pdo->prepare("INSERT INTO configuracion_general (id_config, nombre_sistema, logo_archivo, datos_globales, tasa_interes_socio, tasa_interes_particular, actividad_pago_cuota) VALUES (1, :nombre, :logo, :datos, :tasa_socio, :tasa_particular, :actividad_cuota)
+    ON DUPLICATE KEY UPDATE nombre_sistema = VALUES(nombre_sistema), logo_archivo = VALUES(logo_archivo), datos_globales = VALUES(datos_globales), tasa_interes_socio = VALUES(tasa_interes_socio), tasa_interes_particular = VALUES(tasa_interes_particular), actividad_pago_cuota = VALUES(actividad_pago_cuota)");
 $stmt->execute([
     ':nombre' => $nombre,
     ':logo' => $nuevoLogo,
     ':datos' => $datos,
     ':tasa_socio' => $tasaSocio,
     ':tasa_particular' => $tasaParticular,
+    ':actividad_cuota' => $actividadCuota,
 ]);
 
 if ($nuevoReglamento !== $reglamentoActual) {

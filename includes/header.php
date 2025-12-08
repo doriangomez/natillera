@@ -167,6 +167,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <a class="nav-link-sidebar<?php echo $currentPage === 'actividades.php' ? ' active' : ''; ?>" href="actividades.php"><i class="bi bi-kanban"></i><span>Actividades</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'movimientos.php' ? ' active' : ''; ?>" href="movimientos.php"><i class="bi bi-arrows-left-right"></i><span>Movimientos</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'movimientos_socio.php' ? ' active' : ''; ?>" href="movimientos_socio.php"><i class="bi bi-person-lines-fill"></i><span>Movimientos por socio</span></a>
+            <a class="nav-link-sidebar<?php echo $currentPage === 'cuotas_matriz.php' ? ' active' : ''; ?>" href="cuotas_matriz.php"><i class="bi bi-grid-3x3-gap"></i><span>Matriz de cuotas</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'conciliaciones.php' ? ' active' : ''; ?>" href="conciliaciones.php"><i class="bi bi-credit-card-2-front"></i><span>Conciliación medios de pago</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'pollas.php' ? ' active' : ''; ?>" href="pollas.php"><i class="bi bi-trophy"></i><span>Pollas</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'rifas.php' ? ' active' : ''; ?>" href="rifas.php"><i class="bi bi-stars"></i><span>Rifas</span></a>
