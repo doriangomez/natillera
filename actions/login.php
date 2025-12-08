@@ -15,7 +15,9 @@ if ($user && password_verify($pass, $user['contraseña_hash'])) {
     $_SESSION['rol'] = $user['rol'];
     $_SESSION['last_activity'] = time();
     header('Location: ../public/index.php');
+    exit;
 } else {
     header('Location: ../public/login.php?error=1');
+    exit;
 }
 ?>
