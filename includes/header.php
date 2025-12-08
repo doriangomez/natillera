@@ -27,9 +27,13 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             background-color: #f6f7fb;
             color: #1f2937;
         }
+        body.sidebar-open {
+            overflow: hidden;
+        }
         .app-shell {
             min-height: 100vh;
             display: flex;
+            position: relative;
         }
         .sidebar {
             width: 260px;
@@ -41,6 +45,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             padding: 1.5rem 1rem;
             box-shadow: 4px 0 16px rgba(0,0,0,0.2);
             overflow-y: auto;
+            transition: transform 0.25s ease-in-out;
+        }
+        .sidebar-backdrop {
+            display: none;
         }
         .sidebar .brand {
             display: flex;
@@ -58,15 +66,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             border-radius: 14px;
             background: #fff;
             padding: 8px;
-        }
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 220px;
-            }
-            .sidebar .brand img {
-                width: 56px;
-                height: 56px;
-            }
         }
         .sidebar h1 {
             font-size: 1rem;
@@ -108,6 +107,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             padding: 1rem 1.5rem;
             border-bottom: 1px solid #e5e7eb;
         }
+        .topbar .welcome-text {
+            min-width: 0;
+        }
         .app-content {
             padding: 1.5rem;
         }
@@ -124,6 +126,12 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             align-items: center;
             gap: 0.5rem;
         }
+        .card-body {
+            overflow-x: auto;
+        }
+        .card-body table {
+            min-width: 720px;
+        }
         .btn-primary {
             background-color: #0f172a;
             border-color: #0f172a;
@@ -138,6 +146,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             padding: 0.5rem 0.75rem;
             border-radius: 10px;
             font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
         }
         .category-ingresos { color: #0f5132; background: #e6f4ea; }
         .category-egresos { color: #842029; background: #f8d7da; }
@@ -145,11 +156,70 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         .category-pollas { color: #553c9a; background: #f1e8ff; }
         .category-gastos { color: #8a4600; background: #ffedd5; }
         .btn-icon span { display: inline-flex; align-items: center; gap: 0.4rem; }
+        @media (max-width: 991.98px) {
+            .app-shell {
+                flex-direction: column;
+            }
+            .sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                height: 100vh;
+                transform: translateX(-100%);
+                z-index: 1050;
+            }
+            .sidebar .brand img {
+                width: 56px;
+                height: 56px;
+            }
+            .sidebar-backdrop {
+                display: block;
+                position: fixed;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.55);
+                opacity: 0;
+                visibility: hidden;
+                transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out;
+                z-index: 1040;
+            }
+            body.sidebar-open .sidebar {
+                transform: translateX(0);
+                box-shadow: 12px 0 24px rgba(0, 0, 0, 0.35);
+            }
+            body.sidebar-open .sidebar-backdrop {
+                opacity: 1;
+                visibility: visible;
+            }
+            .topbar {
+                position: sticky;
+                top: 0;
+                z-index: 1030;
+                padding: 0.9rem 1rem;
+            }
+            .app-content {
+                padding: 1rem;
+            }
+            .card-body table {
+                min-width: 560px;
+            }
+        }
+        @media (max-width: 575.98px) {
+            .topbar {
+                padding: 0.85rem 0.85rem;
+            }
+            .app-content {
+                padding: 0.85rem;
+            }
+            .badge-soft {
+                width: 100%;
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <body>
 <div class="app-shell">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
         <div class="brand">
             <?php if ($logoPath): ?>
                 <img src="<?php echo $logoPath; ?>" alt="Logo">
@@ -159,6 +229,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <div>
                 <h1><?php echo $appName; ?></h1>
             </div>
+        </div>
+        <div class="d-lg-none text-center mb-3">
+            <button type="button" class="btn btn-outline-light w-100" id="sidebarClose">
+                <i class="bi bi-x-lg"></i> Cerrar menú
+            </button>
         </div>
         <div class="menu-title">Menú</div>
         <nav>
@@ -188,14 +263,20 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <a class="nav-link-sidebar" href="../actions/logout.php"><i class="bi bi-box-arrow-right"></i><span>Cerrar sesión</span></a>
         </nav>
     </aside>
+    <div class="sidebar-backdrop d-lg-none"></div>
     <div class="app-main">
-        <header class="topbar d-flex justify-content-between align-items-center">
-            <div>
-                <div class="text-muted small">Aplicativo de Natillera creado por Dorian Gómez</div>
-                <div class="fw-semibold">Bienvenido, <?php echo clean($_SESSION['usuario'] ?? ''); ?></div>
+        <header class="topbar d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div class="d-flex align-items-center gap-3 flex-wrap flex-grow-1">
+                <button class="btn btn-outline-primary d-lg-none" type="button" id="sidebarToggle" aria-label="Abrir menú principal">
+                    <i class="bi bi-list"></i>
+                </button>
+                <div class="welcome-text">
+                    <div class="text-muted small">Aplicativo de Natillera creado por Dorian Gómez</div>
+                    <div class="fw-semibold text-truncate">Bienvenido, <?php echo clean($_SESSION['usuario'] ?? ''); ?></div>
+                </div>
             </div>
-            <div class="d-flex align-items-center gap-2">
-                <span class="badge-soft text-uppercase">Rol: <?php echo clean($_SESSION['rol'] ?? ''); ?></span>
+            <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                <span class="badge-soft text-uppercase"><i class="bi bi-person-badge"></i> Rol: <?php echo clean($_SESSION['rol'] ?? ''); ?></span>
             </div>
         </header>
         <main class="app-content">
