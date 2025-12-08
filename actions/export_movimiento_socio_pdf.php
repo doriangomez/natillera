@@ -499,11 +499,6 @@ function construirHtmlPdf(array $data): string
         <?php echo tablaHtml(['Mes', 'Valor'], $filasCuotas, 'table', ['','text-right']); ?>
     </div>
 
-    <div class="section" data-section="detalle-cuotas">
-        <h2 class="section-title">Detalle de cuotas</h2>
-        <?php echo tablaHtml(['Fecha', 'Actividad', 'Valor', 'Saldo después'], $filasDetalles, 'table', ['', '', 'text-right', 'text-right']); ?>
-    </div>
-
     <div class="section" data-section="pagos-pollas">
         <h2 class="section-title">Pagos de pollas</h2>
         <?php echo tablaHtml(['Mes', 'Valor', 'Número ganador'], $filasPollas, 'table', ['', 'text-right', 'text-center']); ?>
