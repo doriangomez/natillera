@@ -33,9 +33,9 @@ $valorCuotaMensual = $periodicidadPago === 'quincenal' ? $valorCuota * 2 : $valo
                         <input type="text" name="telefono" class="form-control" required value="<?php echo $editData['telefono'] ?? ''; ?>">
                     </div>
                     <div class="mb-2">
-                        <label class="form-label">Número polla</label>
-                        <input type="text" name="numero_polla" class="form-control" maxlength="2" pattern="\d{2}" inputmode="numeric" autocomplete="off" placeholder="00" value="<?php echo isset($editData['numero_polla']) ? str_pad($editData['numero_polla'], 2, '0', STR_PAD_LEFT) : ''; ?>" aria-describedby="numeroPollaHelp">
-                        <div class="form-text" id="numeroPollaHelp">Déjalo en blanco u usa un número entre 00 y 99.</div>
+                        <label class="form-label">Número polla <span class="text-danger">*</span></label>
+                        <input type="text" name="numero_polla" class="form-control" maxlength="2" pattern="\d{2}" inputmode="numeric" autocomplete="off" placeholder="00" required value="<?php echo isset($editData['numero_polla']) ? str_pad($editData['numero_polla'], 2, '0', STR_PAD_LEFT) : ''; ?>" aria-describedby="numeroPollaHelp">
+                        <div class="form-text" id="numeroPollaHelp">Usa un número entre 00 y 99.</div>
                         <div class="alert alert-warning d-flex align-items-center justify-content-between mt-2 d-none" id="numeroPollaAlert"></div>
                     </div>
                     <div class="mb-2">
