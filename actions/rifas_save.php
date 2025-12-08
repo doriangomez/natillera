@@ -91,18 +91,6 @@ try {
 
     if ($accion === 'eliminar_rifa') {
         $idRifa = (int) ($_POST['id_rifa'] ?? 0);
-
-        if (!function_exists('eliminarRifa')) {
-            $helperPath = __DIR__ . '/../includes/rifas_helpers.php';
-            if (file_exists($helperPath)) {
-                require_once $helperPath;
-            }
-        }
-
-        if (!function_exists('eliminarRifa')) {
-            throw new RuntimeException('No se pudo cargar el helper para eliminar rifas.');
-        }
-
         eliminarRifa($pdo, $idRifa);
         $_SESSION['exito'] = 'Rifa eliminada correctamente, incluyendo movimientos asociados.';
     }
