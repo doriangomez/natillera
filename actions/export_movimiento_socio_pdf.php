@@ -128,10 +128,11 @@ function agruparMovimientos(array $movimientos): array
             $cuotasPorMes[$mesClave]['total'] += $valorSocio;
         }
         if (!empty($m['es_polla'])) {
-            if (!isset($pollasPorMes[$mesClave])) {
-                $pollasPorMes[$mesClave] = ['clave' => $mesClave, 'label' => $mesLabel, 'total' => 0];
-            }
-            $pollasPorMes[$mesClave]['total'] += abs($m['valor']);
+            $pollasPorMes[] = [
+                'clave' => $mesClave,
+                'label' => $m['fecha'] . ($quincena ? ' (Q' . $quincena . ')' : ''),
+                'total' => abs($m['valor']),
+            ];
         }
     }
 
@@ -411,14 +412,9 @@ function construirHtmlPdf(array $data): string
     }
 
     $filasPollas = [];
-    $totalPollas = 0;
     foreach ($data['pollasPorMes'] as $p) {
         $numero = $resultadosPolla[$p['clave']]['numero_ganador'] ?? '—';
         $filasPollas[] = [$p['label'], formatearMoneda((float)$p['total']), $numero];
-        $totalPollas += (float)$p['total'];
-    }
-    if ($filasPollas) {
-        $filasPollas[] = ['Total pagado', formatearMoneda($totalPollas), ''];
     }
 
     $filasPrestamos = [];
