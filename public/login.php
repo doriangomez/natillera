@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once __DIR__ . '/../includes/auth.php';
 if (isset($_SESSION['usuario'])) {
     header('Location: index.php');
     exit;
@@ -14,7 +14,12 @@ try {
 $appName = $config['nombre_sistema'] ?? 'Aplicativo de Natillera creado por Dorian Gómez';
 $logoFile = $config['logo_archivo'] ?? null;
 $logoPath = $logoFile ? 'assets/logo/' . basename($logoFile) : null;
-$message = isset($_GET['error']) ? 'Credenciales inválidas' : '';
+$message = '';
+if (isset($_GET['timeout'])) {
+    $message = 'Tu sesión expiró por inactividad. Ingresa nuevamente.';
+} elseif (isset($_GET['error'])) {
+    $message = 'Credenciales inválidas';
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
