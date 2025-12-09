@@ -6,11 +6,7 @@ $config = getConfiguracionGeneral($pdo);
 $actividadCuotaId = (int) ($config['actividad_pago_cuota'] ?? 0);
 $actividadCuota = $actividadCuotaId > 0 ? getActividad($pdo, $actividadCuotaId) : null;
 $periodos = getPeriodosActivosConfiguracion($pdo);
-$socios = getSocios($pdo);
-
-usort($socios, function (array $a, array $b): int {
-    return (int) $a['id_socio'] <=> (int) $b['id_socio'];
-});
+$socios = getSocios($pdo, '', 'id_interno');
 
 $condicionesPeriodo = [];
 $params = [];
@@ -95,6 +91,7 @@ function formatearMonedaCuotas(float $valor): string {
                     <tr>
                         <td>
                             <div class="fw-semibold"><?php echo clean($s['nombre_completo']); ?></div>
+                            <div class="text-muted small">ID interno: <?php echo $s['id_interno'] !== null ? str_pad((string) $s['id_interno'], 2, '0', STR_PAD_LEFT) : '—'; ?></div>
                             <div class="text-muted small">ID: <?php echo (int) $s['id_socio']; ?></div>
                         </td>
                         <?php foreach ($periodos as $p): ?>
