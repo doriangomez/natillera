@@ -33,6 +33,11 @@ $valorCuotaMensual = $periodicidadPago === 'quincenal' ? $valorCuota * 2 : $valo
                         <input type="text" name="telefono" class="form-control" required value="<?php echo $editData['telefono'] ?? ''; ?>">
                     </div>
                     <div class="mb-2">
+                        <label class="form-label">ID Interno <span class="text-danger">*</span></label>
+                        <input type="number" name="id_interno" class="form-control" min="1" max="99" required value="<?php echo $editData['id_interno'] ?? ''; ?>" aria-describedby="idInternoHelp">
+                        <div class="form-text" id="idInternoHelp">Número interno entre 1 y 99. Debe ser único.</div>
+                    </div>
+                    <div class="mb-2">
                         <label class="form-label">Número polla <span class="text-danger">*</span></label>
                         <input type="text" name="numero_polla" class="form-control" maxlength="2" pattern="\d{2}" inputmode="numeric" autocomplete="off" placeholder="00" required value="<?php echo isset($editData['numero_polla']) ? str_pad($editData['numero_polla'], 2, '0', STR_PAD_LEFT) : ''; ?>" aria-describedby="numeroPollaHelp">
                         <div class="form-text" id="numeroPollaHelp">Usa un número entre 00 y 99.</div>
@@ -75,6 +80,7 @@ $valorCuotaMensual = $periodicidadPago === 'quincenal' ? $valorCuota * 2 : $valo
             <table class="table table-sm table-bordered align-middle">
                 <thead class="table-light">
                     <tr>
+                        <th>ID Interno</th>
                         <th>ID</th>
                         <th>Nombre</th>
                         <th>Teléfono</th>
@@ -89,6 +95,7 @@ $valorCuotaMensual = $periodicidadPago === 'quincenal' ? $valorCuota * 2 : $valo
                 <tbody>
                     <?php foreach ($lista as $s): ?>
                         <tr>
+                            <td><?php echo $s['id_interno'] !== null ? str_pad((string) $s['id_interno'], 2, '0', STR_PAD_LEFT) : ''; ?></td>
                             <td><?php echo $s['id_socio']; ?></td>
                             <td><?php echo clean($s['nombre_completo']); ?></td>
                             <td><?php echo clean($s['telefono']); ?></td>

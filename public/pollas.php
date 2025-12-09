@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-$socios = getSocios($pdo);
+$socios = getSocios($pdo, '', 'id_interno');
 $actividadesPolla = getActividades($pdo, true);
 
 $nombresMeses = getNombresMeses();

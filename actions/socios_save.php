@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 checkAuth();
+asegurarColumnaIdInternoSocios($pdo);
 
 $id = $_POST['id_socio'] ?? null;
 $accion = $_POST['accion'] ?? 'guardar';
@@ -52,6 +53,38 @@ $numeroPolla = null;
 $numeroPollaRaw = trim($_POST['numero_polla'] ?? '');
 $numeroPollaDigits = preg_replace('/\D/', '', $numeroPollaRaw);
 
+$idInternoRaw = trim($_POST['id_interno'] ?? '');
+$idInterno = null;
+if ($idInternoRaw === '' || !ctype_digit($idInternoRaw)) {
+    $_SESSION['error'] = 'El ID Interno es obligatorio y debe ser un número entre 1 y 99.';
+    header('Location: ../public/socios.php' . ($id ? '?id=' . $id : ''));
+    exit;
+}
+
+$idInterno = (int) $idInternoRaw;
+if ($idInterno < 1 || $idInterno > 99) {
+    $_SESSION['error'] = 'El ID Interno es obligatorio y debe estar entre 1 y 99.';
+    header('Location: ../public/socios.php' . ($id ? '?id=' . $id : ''));
+    exit;
+}
+
+$conflictoIdInternoStmt = $pdo->prepare('SELECT id_socio, nombre_completo FROM socios WHERE id_interno = :id_interno AND id_socio <> :id');
+$conflictoIdInternoStmt->execute([
+    ':id_interno' => $idInterno,
+    ':id' => $id ?? 0,
+]);
+$socioConIdInterno = $conflictoIdInternoStmt->fetch();
+
+if ($socioConIdInterno) {
+    $_SESSION['error'] = "El ID Interno $idInterno ya está asignado a " . $socioConIdInterno['nombre_completo'] . '.';
+    $_SESSION['error_action'] = [
+        'url' => '../public/socios.php?id=' . $socioConIdInterno['id_socio'],
+        'label' => 'Ver socio',
+    ];
+    header('Location: ../public/socios.php' . ($id ? '?id=' . $id : ''));
+    exit;
+}
+
 if ($numeroPollaDigits !== '') {
     if (strlen($numeroPollaDigits) > 2 || (int) $numeroPollaDigits > 99) {
         $_SESSION['error'] = 'El número de polla debe estar entre 00 y 99.';
@@ -83,17 +116,18 @@ $data = [
     ':nombre_completo' => $_POST['nombre_completo'],
     ':telefono' => $_POST['telefono'] ?? '',
     ':numero_polla' => $numeroPolla,
+    ':id_interno' => $idInterno,
     ':periodicidad_pago' => $_POST['periodicidad_pago'] ?? 'mensual',
     ':valor_presupuestado' => $_POST['valor_presupuestado'] ?? 0,
 ];
 
 if ($id) {
     $data[':id'] = $id;
-    $stmt = $pdo->prepare('UPDATE socios SET nombre_completo=:nombre_completo, telefono=:telefono, numero_polla=:numero_polla, periodicidad_pago=:periodicidad_pago, valor_presupuestado=:valor_presupuestado WHERE id_socio=:id');
+    $stmt = $pdo->prepare('UPDATE socios SET nombre_completo=:nombre_completo, telefono=:telefono, numero_polla=:numero_polla, id_interno=:id_interno, periodicidad_pago=:periodicidad_pago, valor_presupuestado=:valor_presupuestado WHERE id_socio=:id');
     $stmt->execute($data);
 } else {
     $data[':id_socio'] = obtenerSiguienteIdSocioDisponible($pdo);
-    $stmt = $pdo->prepare('INSERT INTO socios (id_socio, nombre_completo, telefono, numero_polla, periodicidad_pago, valor_presupuestado) VALUES (:id_socio, :nombre_completo, :telefono, :numero_polla, :periodicidad_pago, :valor_presupuestado)');
+    $stmt = $pdo->prepare('INSERT INTO socios (id_socio, nombre_completo, telefono, numero_polla, id_interno, periodicidad_pago, valor_presupuestado) VALUES (:id_socio, :nombre_completo, :telefono, :numero_polla, :id_interno, :periodicidad_pago, :valor_presupuestado)');
     $stmt->execute($data);
     recalcularAutoIncrementSocios($pdo);
 }

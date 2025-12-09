@@ -6,6 +6,34 @@ function clean($value) {
     return htmlspecialchars(trim((string)$value), ENT_QUOTES, 'UTF-8');
 }
 
+function asegurarColumnaIdInternoSocios(PDO $pdo): void {
+    static $asegurada = false;
+    if ($asegurada) {
+        return;
+    }
+
+    try {
+        $columna = $pdo->query("SHOW COLUMNS FROM socios LIKE 'id_interno'");
+        if ($columna && $columna->rowCount() === 0) {
+            $pdo->exec("ALTER TABLE socios ADD COLUMN id_interno TINYINT UNSIGNED DEFAULT NULL AFTER id_socio");
+        }
+    } catch (Exception $e) {
+        $asegurada = true;
+        return;
+    }
+
+    try {
+        $indice = $pdo->query("SHOW INDEX FROM socios WHERE Key_name = 'uq_socios_id_interno'");
+        if ($indice && $indice->rowCount() === 0) {
+            $pdo->exec('CREATE UNIQUE INDEX uq_socios_id_interno ON socios (id_interno)');
+        }
+    } catch (Exception $e) {
+        // Ignorar fallos al crear el índice para no interrumpir el flujo principal.
+    }
+
+    $asegurada = true;
+}
+
 function asegurarForeignKey(PDO $pdo, array $definicion): void {
     $tabla = $definicion['tabla'];
     $columna = $definicion['columna'];
@@ -218,14 +246,21 @@ function obtenerRetirosCaja(PDO $pdo, ?string $desde = null, ?string $hasta = nu
     return $stmt->fetchAll();
 }
 
-function getSocios($pdo, $search = '') {
+function getSocios($pdo, $search = '', string $orden = 'nombre'): array {
+    asegurarColumnaIdInternoSocios($pdo);
+
     $sql = "SELECT * FROM socios WHERE activo = 1";
     $params = [];
     if ($search !== '') {
-        $sql .= " AND (nombre_completo LIKE :q OR telefono LIKE :q OR id_socio LIKE :q)";
+        $sql .= " AND (nombre_completo LIKE :q OR telefono LIKE :q OR id_socio LIKE :q OR id_interno LIKE :q)";
         $params[':q'] = "%$search%";
     }
-    $sql .= " ORDER BY nombre_completo";
+
+    $ordenNormalizado = $orden === 'id_interno'
+        ? 'id_interno ASC, nombre_completo'
+        : 'nombre_completo';
+
+    $sql .= " ORDER BY $ordenNormalizado";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll();
