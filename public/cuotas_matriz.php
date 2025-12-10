@@ -19,23 +19,34 @@ foreach ($periodos as $idx => $p) {
 $pagosPorSocio = [];
 if ($actividadCuotaId > 0 && !empty($condicionesPeriodo)) {
     $params[':actividad'] = $actividadCuotaId;
-    $sql = 'SELECT id_socio, anio, mes, SUM(valor) AS total'
+    $sql = 'SELECT id_socio, anio, mes, quincena, SUM(valor) AS total'
         . ' FROM movimientos'
         . ' WHERE id_actividad = :actividad AND id_socio IS NOT NULL';
     if (!empty($condicionesPeriodo)) {
         $sql .= ' AND (' . implode(' OR ', $condicionesPeriodo) . ')';
     }
-    $sql .= ' GROUP BY id_socio, anio, mes';
+    $sql .= ' GROUP BY id_socio, anio, mes, quincena';
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     foreach ($stmt->fetchAll() as $row) {
         $socioId = (int) $row['id_socio'];
         $clave = sprintf('%04d-%02d', (int) $row['anio'], (int) $row['mes']);
+        $quincena = in_array((int) $row['quincena'], [1, 2], true) ? (int) $row['quincena'] : 0;
+
         if (!isset($pagosPorSocio[$socioId])) {
             $pagosPorSocio[$socioId] = [];
         }
-        $pagosPorSocio[$socioId][$clave] = (float) $row['total'];
+        if (!isset($pagosPorSocio[$socioId][$clave])) {
+            $pagosPorSocio[$socioId][$clave] = ['quincenas' => [], 'total' => 0];
+        }
+
+        if (!isset($pagosPorSocio[$socioId][$clave]['quincenas'][$quincena])) {
+            $pagosPorSocio[$socioId][$clave]['quincenas'][$quincena] = 0;
+        }
+
+        $pagosPorSocio[$socioId][$clave]['quincenas'][$quincena] += (float) $row['total'];
+        $pagosPorSocio[$socioId][$clave]['total'] += (float) $row['total'];
     }
 }
 
@@ -96,9 +107,23 @@ function formatearMonedaCuotas(float $valor): string {
                         </td>
                         <?php foreach ($periodos as $p): ?>
                             <?php $clave = sprintf('%04d-%02d', (int) $p['anio'], (int) $p['mes']); ?>
-                            <?php $valor = $socioPeriodos[$clave] ?? 0.0; ?>
-                            <td class="text-end <?php echo $valor < 0 ? 'text-danger' : ''; ?>">
-                                <?php echo $valor !== 0.0 ? formatearMonedaCuotas((float) $valor) : '-'; ?>
+                            <?php $valor = $socioPeriodos[$clave] ?? ['quincenas' => [], 'total' => 0.0]; ?>
+                            <?php $quincenas = $valor['quincenas'] ?? []; ?>
+                            <?php ksort($quincenas); ?>
+                            <td class="text-end align-middle">
+                                <?php if (!empty($quincenas)): ?>
+                                    <div class="text-end small">
+                                        <?php foreach ([1, 2] as $q): if (!empty($quincenas[$q])): ?>
+                                            <div>Q<?php echo $q; ?>: <?php echo formatearMonedaCuotas((float) $quincenas[$q]); ?></div>
+                                        <?php endif; endforeach; ?>
+                                        <?php if (!empty($quincenas[0])): ?>
+                                            <div>Sin quincena: <?php echo formatearMonedaCuotas((float) $quincenas[0]); ?></div>
+                                        <?php endif; ?>
+                                        <div class="fw-semibold mt-1">Total: <?php echo formatearMonedaCuotas((float) $valor['total']); ?></div>
+                                    </div>
+                                <?php else: ?>
+                                    <span class="text-muted">-</span>
+                                <?php endif; ?>
                             </td>
                         <?php endforeach; ?>
                     </tr>

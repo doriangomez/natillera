@@ -113,7 +113,8 @@ function agruparMovimientos(array $movimientos): array
         $mesNum = (int)date('n', strtotime($fecha));
         $anio = date('Y', strtotime($fecha));
         $mesClave = date('Y-m', strtotime($fecha));
-        $mesLabel = ($meses[$mesNum] ?? 'Mes') . ' ' . $anio . ($quincena ? ' - Q'.$quincena : '');
+        $mesLabelBase = ($meses[$mesNum] ?? 'Mes') . ' ' . $anio;
+        $quincenaLabel = $quincena ? ' - Q' . $quincena : '';
 
         $reglaSocio = normalizarReglaAfectacion($m['afecta_saldo_socio'] ?? 'neutral');
         $afectaSocio = $m['es_polla'] ? 'neutral' : $reglaSocio;
@@ -123,21 +124,38 @@ function agruparMovimientos(array $movimientos): array
 
         if ($afectaSocio !== 'neutral' && empty($m['es_polla']) && empty($m['es_prestamo']) && empty($m['es_pago_prestamo'])) {
             if (!isset($cuotasPorMes[$mesClave])) {
-                $cuotasPorMes[$mesClave] = ['clave' => $mesClave, 'label' => $mesLabel, 'total' => 0];
+                $cuotasPorMes[$mesClave] = [
+                    'clave' => $mesClave,
+                    'label' => $mesLabelBase,
+                    'quincenas' => [],
+                    'total' => 0,
+                    'orden' => strtotime($mesClave . '-01'),
+                ];
             }
+
+            $quincenaClave = in_array($quincena, [1, 2], true) ? $quincena : 0;
+            if (!isset($cuotasPorMes[$mesClave]['quincenas'][$quincenaClave])) {
+                $cuotasPorMes[$mesClave]['quincenas'][$quincenaClave] = 0;
+            }
+
+            $cuotasPorMes[$mesClave]['quincenas'][$quincenaClave] += $valorSocio;
             $cuotasPorMes[$mesClave]['total'] += $valorSocio;
         }
+
         if (!empty($m['es_polla'])) {
             $pollasPorMes[] = [
                 'clave' => $mesClave,
-                'label' => $mesLabel,
+                'label' => $mesLabelBase . $quincenaLabel,
                 'total' => abs($m['valor']),
                 'orden' => strtotime($fecha),
             ];
         }
     }
 
-    ksort($cuotasPorMes);
+    usort($cuotasPorMes, function ($a, $b) {
+        return ($a['orden'] <=> $b['orden']);
+    });
+
     usort($pollasPorMes, function ($a, $b) {
         return ($a['orden'] <=> $b['orden']);
     });
@@ -398,9 +416,13 @@ function construirHtmlPdf(array $data): string
     $totalCuotas = 0;
     $saldoAcumulado = 0;
     foreach ($data['cuotasPorMes'] as $c) {
-        $totalCuotas += (float)$c['total'];
-        $saldoAcumulado += (float)$c['total'];
-        $filasCuotas[] = [$c['label'], formatearMoneda((float)$c['total']), formatearMoneda($saldoAcumulado)];
+        ksort($c['quincenas']);
+        foreach ($c['quincenas'] as $quincena => $valorQuincena) {
+            $totalCuotas += (float)$valorQuincena;
+            $saldoAcumulado += (float)$valorQuincena;
+            $etiqueta = $c['label'] . ($quincena ? ' - Q' . $quincena : ' - Sin quincena');
+            $filasCuotas[] = [$etiqueta, formatearMoneda((float)$valorQuincena), formatearMoneda($saldoAcumulado)];
+        }
     }
     if ($filasCuotas) {
         $filasCuotas[] = ['Total aportado', formatearMoneda($totalCuotas), formatearMoneda($saldoAcumulado)];
