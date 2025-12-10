@@ -8,6 +8,7 @@ $config = getConfiguracionGeneral($pdo);
 $actividades = getActividades($pdo, false, true);
 $medios = getMediosPago($pdo, true);
 $periodosConfig = getPeriodosConfiguracion($pdo);
+$usuarios = getUsuarios($pdo);
 $periodoError = $_GET['periodo_error'] ?? '';
 $periodoGuardado = isset($_GET['periodo_guardado']);
 $anioActual = (int) date('Y');
@@ -205,6 +206,80 @@ $medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+        <div class="card mt-3" id="usuarios">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h2 class="h6 mb-0">Usuarios y contraseñas</h2>
+                        <p class="text-muted small mb-0">Crea cuentas nuevas y actualiza las existentes</p>
+                    </div>
+                    <span class="badge bg-dark">Admin</span>
+                </div>
+                <form method="POST" action="../actions/usuarios_create.php" class="border rounded p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                        <div>
+                            <div class="fw-semibold">Crear nuevo usuario</div>
+                            <div class="text-muted small">Asigna credenciales de acceso para otro administrador</div>
+                        </div>
+                        <span class="badge bg-success-subtle text-success">Alta de cuenta</span>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Usuario</label>
+                            <input type="text" name="usuario" class="form-control" required minlength="3" maxlength="50" autocomplete="username">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Contraseña</label>
+                            <input type="password" name="password" class="form-control" required minlength="8" autocomplete="new-password">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Confirmar contraseña</label>
+                            <input type="password" name="confirmar_password" class="form-control" required minlength="8" autocomplete="new-password">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Rol</label>
+                            <select name="rol" class="form-select" required>
+                                <option value="admin">Administrador</option>
+                            </select>
+                        </div>
+                        <div class="col-12 text-end">
+                            <button class="btn btn-primary" type="submit">Crear usuario</button>
+                        </div>
+                    </div>
+                    <p class="text-muted small mt-2 mb-0">La contraseña debe tener mínimo 8 caracteres.</p>
+                </form>
+                <?php if (empty($usuarios)): ?>
+                    <p class="text-muted small mb-0">No hay usuarios registrados.</p>
+                <?php else: ?>
+                    <?php foreach ($usuarios as $u): ?>
+                        <form method="POST" action="../actions/usuarios_password.php" class="border rounded p-3 mb-3">
+                            <input type="hidden" name="usuario_id" value="<?php echo (int) $u['id']; ?>">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                                <div>
+                                    <div class="fw-semibold">Usuario: <?php echo clean($u['usuario']); ?></div>
+                                    <div class="text-muted small">Rol: <?php echo clean($u['rol']); ?></div>
+                                </div>
+                                <span class="badge bg-light text-dark">Cambio de contraseña</span>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label">Nueva contraseña</label>
+                                    <input type="password" name="nuevo_password" class="form-control" required minlength="8" autocomplete="new-password">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Confirmar contraseña</label>
+                                    <input type="password" name="confirmar_password" class="form-control" required minlength="8" autocomplete="new-password">
+                                </div>
+                                <div class="col-12 text-end">
+                                    <button class="btn btn-primary" type="submit">Actualizar contraseña</button>
+                                </div>
+                            </div>
+                            <p class="text-muted small mt-2 mb-0">Debe tener mínimo 8 caracteres.</p>
+                        </form>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
         </div>
     </div>

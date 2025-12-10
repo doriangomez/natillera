@@ -894,6 +894,48 @@ function actualizarEstadoPeriodoConfiguracion(PDO $pdo, int $id, bool $activo): 
     ]);
 }
 
+function getUsuarios(PDO $pdo): array {
+    $stmt = $pdo->query('SELECT id, usuario, rol FROM usuarios ORDER BY usuario ASC');
+    return $stmt->fetchAll();
+}
+
+function getUsuarioPorId(PDO $pdo, int $id): ?array {
+    $stmt = $pdo->prepare('SELECT id, usuario, rol FROM usuarios WHERE id = :id');
+    $stmt->execute([':id' => $id]);
+    $usuario = $stmt->fetch();
+
+    return $usuario ?: null;
+}
+
+function getUsuarioPorNombre(PDO $pdo, string $nombre): ?array {
+    $stmt = $pdo->prepare('SELECT id, usuario, rol FROM usuarios WHERE usuario = :nombre');
+    $stmt->execute([':nombre' => $nombre]);
+    $usuario = $stmt->fetch();
+
+    return $usuario ?: null;
+}
+
+function actualizarPasswordUsuario(PDO $pdo, int $id, string $passwordPlano): void {
+    $hash = password_hash($passwordPlano, PASSWORD_BCRYPT);
+    $stmt = $pdo->prepare('UPDATE usuarios SET contraseña_hash = :hash WHERE id = :id');
+    $stmt->execute([
+        ':hash' => $hash,
+        ':id' => $id,
+    ]);
+}
+
+function crearUsuario(PDO $pdo, string $nombre, string $passwordPlano, string $rol = 'admin'): int {
+    $hash = password_hash($passwordPlano, PASSWORD_BCRYPT);
+    $stmt = $pdo->prepare('INSERT INTO usuarios (usuario, contraseña_hash, rol) VALUES (:usuario, :hash, :rol)');
+    $stmt->execute([
+        ':usuario' => $nombre,
+        ':hash' => $hash,
+        ':rol' => $rol,
+    ]);
+
+    return (int) $pdo->lastInsertId();
+}
+
 function generarCSV($header, $rows) {
     $fh = fopen('php://output', 'w');
     fputcsv($fh, $header, ';');
