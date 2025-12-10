@@ -3,7 +3,7 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 $search = isset($_GET['q']) ? clean($_GET['q']) : '';
-$lista = getSocios($pdo, $search);
+$lista = getSocios($pdo, $search, 'id_socio', 'desc');
 $editId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $editData = null;
 if ($editId) {
