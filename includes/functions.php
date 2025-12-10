@@ -246,7 +246,7 @@ function obtenerRetirosCaja(PDO $pdo, ?string $desde = null, ?string $hasta = nu
     return $stmt->fetchAll();
 }
 
-function getSocios($pdo, $search = '', string $orden = 'nombre'): array {
+function getSocios($pdo, $search = '', string $orden = 'nombre', string $direccion = 'asc'): array {
     asegurarColumnaIdInternoSocios($pdo);
 
     $sql = "SELECT * FROM socios WHERE activo = 1";
@@ -256,9 +256,20 @@ function getSocios($pdo, $search = '', string $orden = 'nombre'): array {
         $params[':q'] = "%$search%";
     }
 
-    $ordenNormalizado = $orden === 'id_interno'
-        ? 'id_interno ASC, nombre_completo'
-        : 'nombre_completo';
+    $columnasOrdenables = [
+        'id_interno' => 'id_interno',
+        'nombre' => 'nombre_completo',
+        'id_socio' => 'id_socio',
+    ];
+
+    $ordenColumna = $columnasOrdenables[$orden] ?? 'nombre_completo';
+    $direccionNormalizada = strtolower($direccion) === 'desc' ? 'DESC' : 'ASC';
+
+    $ordenNormalizado = "$ordenColumna $direccionNormalizada";
+
+    if ($ordenColumna !== 'nombre_completo') {
+        $ordenNormalizado .= ', nombre_completo';
+    }
 
     $sql .= " ORDER BY $ordenNormalizado";
     $stmt = $pdo->prepare($sql);
