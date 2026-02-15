@@ -16,6 +16,7 @@ CREATE TABLE socios (
     nombre_completo VARCHAR(150) NOT NULL,
     telefono VARCHAR(50),
     numero_polla VARCHAR(50),
+    grupo VARCHAR(100),
     periodicidad_pago VARCHAR(20) DEFAULT 'mensual',
     valor_presupuestado DECIMAL(12,2) DEFAULT 0,
     saldo_socio DECIMAL(12,2) DEFAULT 0,

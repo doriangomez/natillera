@@ -3,6 +3,7 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 $socios = getSocios($pdo);
+$gruposSocios = getGruposSocios($pdo);
 $actividades = getActividades($pdo);
 $mediosPago = getMediosPago($pdo);
 
@@ -206,12 +207,28 @@ foreach ($movimientos as $m) {
                         <option value="2">Segunda</option>
                     </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
+                    <label class="form-label"><span class="text-danger">*</span> Destino</label>
+                    <select name="tipo_destino" class="form-select" id="tipoDestinoSelect" required>
+                        <option value="socio" selected>Socio</option>
+                        <option value="grupo">Grupo</option>
+                    </select>
+                </div>
+                <div class="col-md-4" id="bloqueSocio">
                     <label class="form-label"><span class="text-danger">*</span> Socio</label>
                     <select name="id_socio" class="form-select" id="socioSelect" required>
                         <option value="" selected disabled>Seleccione un socio</option>
                         <?php foreach($socios as $s): ?>
                             <option value="<?php echo $s['id_socio']; ?>" data-periodicidad="<?php echo clean($s['periodicidad_pago']); ?>"><?php echo clean($s['nombre_completo']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-4 d-none" id="bloqueGrupo">
+                    <label class="form-label"><span class="text-danger">*</span> Grupo</label>
+                    <select name="grupo" class="form-select" id="grupoSelect">
+                        <option value="" selected disabled>Seleccione un grupo</option>
+                        <?php foreach($gruposSocios as $grupo): ?>
+                            <option value="<?php echo clean($grupo); ?>"><?php echo clean($grupo); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -293,6 +310,11 @@ foreach ($movimientos as $m) {
 <div class="alert alert-info">Totales mostrados: Ingresos $<?php echo number_format($totales['ingresos'],0,',','.'); ?> | Egresos $<?php echo number_format($totales['egresos'],0,',','.'); ?></div>
 <script>
 const actividadSelect = document.querySelector('select[name="id_actividad"]');
+const socioSelect = document.querySelector('select[name="id_socio"]');
+const tipoDestinoSelect = document.getElementById('tipoDestinoSelect');
+const grupoSelect = document.getElementById('grupoSelect');
+const bloqueSocio = document.getElementById('bloqueSocio');
+const bloqueGrupo = document.getElementById('bloqueGrupo');
 const tipoActividadInput = document.getElementById('tipoActividad');
 const anioSelect = document.querySelector('select[name="anio"]');
 const mesSelect = document.querySelector('select[name="mes"]');
@@ -305,6 +327,21 @@ const fechaDesdeInput = document.querySelector('input[name="desde"]');
 const fechaHastaInput = document.querySelector('input[name="hasta"]');
 const periodosPorAnio = <?php echo json_encode($periodosPorAnio); ?>;
 const nombresMeses = <?php echo json_encode($nombresMeses); ?>;
+
+
+function actualizarTipoDestino(){
+    if(!tipoDestinoSelect || !socioSelect || !grupoSelect || !bloqueSocio || !bloqueGrupo) return;
+    const esGrupo = tipoDestinoSelect.value === 'grupo';
+    bloqueSocio.classList.toggle('d-none', esGrupo);
+    bloqueGrupo.classList.toggle('d-none', !esGrupo);
+    socioSelect.required = !esGrupo;
+    grupoSelect.required = esGrupo;
+    if(esGrupo){
+        socioSelect.value = '';
+    } else {
+        grupoSelect.value = '';
+    }
+}
 
 function actualizarTipoActividad(){
     const regla = actividadSelect.selectedOptions[0]?.dataset.regla || '';
@@ -388,6 +425,10 @@ function actualizarRangoFiltro(){
     const ultimoDia = new Date(parseInt(anio, 10), parseInt(mes, 10), 0).getDate();
     fechaDesdeInput.value = `${anio}-${mes}-01`;
     fechaHastaInput.value = `${anio}-${mes}-${String(ultimoDia).padStart(2, '0')}`;
+}
+if(tipoDestinoSelect){
+    tipoDestinoSelect.addEventListener('change', actualizarTipoDestino);
+    actualizarTipoDestino();
 }
 if(actividadSelect){
     actividadSelect.addEventListener('change', actualizarTipoActividad);
