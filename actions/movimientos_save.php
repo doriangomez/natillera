@@ -148,7 +148,7 @@ $reglaSocio = !empty($actividad['es_polla']) ? 'neutral' : normalizarReglaAfecta
 $esIngreso = $reglaNatillera === 'suma' ? 1 : 0;
 $esEgreso = $reglaNatillera === 'resta' ? 1 : 0;
 
-if ($actividad && !empty($actividad['es_polla']) && !$idSocio) {
+if ($actividad && !empty($actividad['es_polla']) && $tipoDestino === 'socio' && !$idSocio) {
     $_SESSION['error'] = 'Debe seleccionar un socio para registrar movimientos de polla.';
     header('Location: ../public/movimientos.php');
     exit;
