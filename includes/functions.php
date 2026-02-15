@@ -34,6 +34,24 @@ function asegurarColumnaIdInternoSocios(PDO $pdo): void {
     $asegurada = true;
 }
 
+function asegurarColumnaGrupoSocios(PDO $pdo): void {
+    static $asegurada = false;
+    if ($asegurada) {
+        return;
+    }
+
+    try {
+        $columna = $pdo->query("SHOW COLUMNS FROM socios LIKE 'grupo'");
+        if ($columna && $columna->rowCount() === 0) {
+            $pdo->exec("ALTER TABLE socios ADD COLUMN grupo VARCHAR(100) DEFAULT NULL AFTER numero_polla");
+        }
+    } catch (Exception $e) {
+        // Continuar para no interrumpir el flujo principal.
+    }
+
+    $asegurada = true;
+}
+
 function asegurarForeignKey(PDO $pdo, array $definicion): void {
     $tabla = $definicion['tabla'];
     $columna = $definicion['columna'];
@@ -248,6 +266,7 @@ function obtenerRetirosCaja(PDO $pdo, ?string $desde = null, ?string $hasta = nu
 
 function getSocios($pdo, $search = '', string $orden = 'nombre', string $direccion = 'asc'): array {
     asegurarColumnaIdInternoSocios($pdo);
+    asegurarColumnaGrupoSocios($pdo);
 
     $sql = "SELECT * FROM socios WHERE activo = 1";
     $params = [];
@@ -275,6 +294,14 @@ function getSocios($pdo, $search = '', string $orden = 'nombre', string $direcci
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll();
+}
+
+
+
+function getGruposSocios(PDO $pdo): array {
+    asegurarColumnaGrupoSocios($pdo);
+    $stmt = $pdo->query("SELECT DISTINCT grupo FROM socios WHERE activo = 1 AND grupo IS NOT NULL AND TRIM(grupo) <> '' ORDER BY grupo");
+    return $stmt ? $stmt->fetchAll(PDO::FETCH_COLUMN) : [];
 }
 
 function normalizarReglaAfectacion($regla) {

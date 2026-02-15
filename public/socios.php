@@ -4,6 +4,7 @@ require_once __DIR__ . '/../includes/functions.php';
 
 $search = isset($_GET['q']) ? clean($_GET['q']) : '';
 $lista = getSocios($pdo, $search, 'id_socio', 'desc');
+$gruposSocios = getGruposSocios($pdo);
 $editId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $editData = null;
 if ($editId) {
@@ -42,6 +43,15 @@ $valorCuotaMensual = $periodicidadPago === 'quincenal' ? $valorCuota * 2 : $valo
                         <input type="text" name="numero_polla" class="form-control" maxlength="2" pattern="\d{2}" inputmode="numeric" autocomplete="off" placeholder="00" required value="<?php echo isset($editData['numero_polla']) ? str_pad($editData['numero_polla'], 2, '0', STR_PAD_LEFT) : ''; ?>" aria-describedby="numeroPollaHelp">
                         <div class="form-text" id="numeroPollaHelp">Usa un número entre 00 y 99.</div>
                         <div class="alert alert-warning d-flex align-items-center justify-content-between mt-2 d-none" id="numeroPollaAlert"></div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Grupo</label>
+                        <input type="text" name="grupo" class="form-control" list="gruposSociosList" maxlength="100" value="<?php echo $editData['grupo'] ?? ''; ?>" placeholder="Ej: Grupo A">
+                        <datalist id="gruposSociosList">
+                            <?php foreach($gruposSocios as $grupo): ?>
+                                <option value="<?php echo clean($grupo); ?>"></option>
+                            <?php endforeach; ?>
+                        </datalist>
                     </div>
                     <div class="mb-2">
                         <label class="form-label">Periodicidad pago <span class="text-danger">*</span></label>
@@ -85,6 +95,7 @@ $valorCuotaMensual = $periodicidadPago === 'quincenal' ? $valorCuota * 2 : $valo
                         <th>Nombre</th>
                         <th>Teléfono</th>
                         <th>Polla</th>
+                        <th>Grupo</th>
                         <th>Periodicidad</th>
                         <th>Valor cuota</th>
                         <th>Valor cuota mensual</th>
@@ -100,6 +111,7 @@ $valorCuotaMensual = $periodicidadPago === 'quincenal' ? $valorCuota * 2 : $valo
                             <td><?php echo clean($s['nombre_completo']); ?></td>
                             <td><?php echo clean($s['telefono']); ?></td>
                             <td><?php echo ($s['numero_polla'] !== null && $s['numero_polla'] !== '') ? str_pad(clean($s['numero_polla']), 2, '0', STR_PAD_LEFT) : ''; ?></td>
+                            <td><?php echo clean($s['grupo'] ?? ''); ?></td>
                             <td><?php echo clean($s['periodicidad_pago']); ?></td>
                             <td>$<?php echo number_format($s['valor_presupuestado'],0,',','.'); ?></td>
                             <td>$<?php echo number_format($s['periodicidad_pago']==='quincenal' ? $s['valor_presupuestado']*2 : $s['valor_presupuestado'],0,',','.'); ?></td>
