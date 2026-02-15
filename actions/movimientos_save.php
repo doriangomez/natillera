@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 checkAuth();
+asegurarColumnaGrupoSocios($pdo);
 
 $accion = $_POST['accion'] ?? 'guardar';
 $idMovimiento = isset($_POST['id_movimiento']) ? (int) $_POST['id_movimiento'] : 0;
@@ -53,6 +54,8 @@ $anio = isset($_POST['anio']) ? (int) $_POST['anio'] : null;
 $mes = isset($_POST['mes']) ? (int) $_POST['mes'] : null;
 $quincena = isset($_POST['quincena']) ? (int) $_POST['quincena'] : null;
 $idSocio = (isset($_POST['id_socio']) && $_POST['id_socio'] !== '') ? (int) $_POST['id_socio'] : null;
+$tipoDestino = $_POST['tipo_destino'] ?? 'socio';
+$grupo = trim($_POST['grupo'] ?? '');
 $idActividad = (int) $_POST['id_actividad'];
 $valor = (float) $_POST['valor'];
 $idPrestamo = isset($_POST['id_prestamo']) ? (int) $_POST['id_prestamo'] : null;
@@ -77,7 +80,6 @@ $camposObligatorios = [
     'anio' => $anio,
     'mes' => $mes,
     'quincena' => $quincena,
-    'socio' => $idSocio,
     'actividad' => $idActividad,
     'valor' => $valor,
 ];
@@ -87,6 +89,19 @@ foreach ($camposObligatorios as $campo => $dato) {
         header('Location: ../public/movimientos.php');
         exit;
     }
+}
+if (!in_array($tipoDestino, ['socio', 'grupo'], true)) {
+    $tipoDestino = 'socio';
+}
+if ($tipoDestino === 'socio' && !$idSocio) {
+    $_SESSION['error'] = 'Debe seleccionar un socio para registrar el movimiento.';
+    header('Location: ../public/movimientos.php');
+    exit;
+}
+if ($tipoDestino === 'grupo' && $grupo === '') {
+    $_SESSION['error'] = 'Debe seleccionar un grupo para registrar el movimiento por grupo.';
+    header('Location: ../public/movimientos.php');
+    exit;
 }
 if ($valor <= 0) {
     $_SESSION['error'] = 'El valor del movimiento debe ser mayor a cero.';
@@ -144,27 +159,66 @@ if ($esEgreso) {
 
 $stmt = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_prestamo, id_actividad, motivo, valor, medio_consignacion, id_medio_pago, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo)
 VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_prestamo, :id_actividad, :motivo, :valor, :medio, :medio_id, :ingreso, :egreso, :obs, :usuario, NOW(), :modulo)');
-$stmt->execute([
-    ':fecha' => $fecha,
-    ':anio' => $anio,
-    ':mes' => $mes,
-    ':quincena' => $quincena,
-    ':id_socio' => $idSocio,
-    ':id_prestamo' => $idPrestamo ?: null,
-    ':id_actividad' => $idActividad,
-    ':motivo' => $motivo,
-    ':valor' => $valor,
-    ':medio' => $medio,
-    ':medio_id' => $idMedio,
-    ':ingreso' => $esIngreso,
-    ':egreso' => $esEgreso,
-    ':obs' => $obs,
-    ':usuario' => $_SESSION['usuario'] ?? null,
-    ':modulo' => 'movimientos',
-]);
 
-actualizarSaldoSocio($pdo, $idSocio, $valor, $reglaSocio);
-actualizarSaldoNatillera($pdo, $valor, $reglaNatillera);
+$moduloMovimiento = $tipoDestino === 'grupo' ? 'movimientos_grupo' : 'movimientos';
+if ($tipoDestino === 'grupo') {
+    $stmtSociosGrupo = $pdo->prepare("SELECT id_socio FROM socios WHERE activo = 1 AND grupo = :grupo ORDER BY id_socio");
+    $stmtSociosGrupo->execute([':grupo' => $grupo]);
+    $sociosGrupo = $stmtSociosGrupo->fetchAll(PDO::FETCH_COLUMN);
+
+    if (empty($sociosGrupo)) {
+        $_SESSION['error'] = 'El grupo seleccionado no tiene socios activos.';
+        header('Location: ../public/movimientos.php');
+        exit;
+    }
+
+    foreach ($sociosGrupo as $idSocioGrupo) {
+        $stmt->execute([
+            ':fecha' => $fecha,
+            ':anio' => $anio,
+            ':mes' => $mes,
+            ':quincena' => $quincena,
+            ':id_socio' => (int) $idSocioGrupo,
+            ':id_prestamo' => $idPrestamo ?: null,
+            ':id_actividad' => $idActividad,
+            ':motivo' => $motivo,
+            ':valor' => $valor,
+            ':medio' => $medio,
+            ':medio_id' => $idMedio,
+            ':ingreso' => $esIngreso,
+            ':egreso' => $esEgreso,
+            ':obs' => $obs,
+            ':usuario' => $_SESSION['usuario'] ?? null,
+            ':modulo' => $moduloMovimiento,
+        ]);
+
+        actualizarSaldoSocio($pdo, (int) $idSocioGrupo, $valor, $reglaSocio);
+        actualizarSaldoNatillera($pdo, $valor, $reglaNatillera);
+    }
+} else {
+    $stmt->execute([
+        ':fecha' => $fecha,
+        ':anio' => $anio,
+        ':mes' => $mes,
+        ':quincena' => $quincena,
+        ':id_socio' => $idSocio,
+        ':id_prestamo' => $idPrestamo ?: null,
+        ':id_actividad' => $idActividad,
+        ':motivo' => $motivo,
+        ':valor' => $valor,
+        ':medio' => $medio,
+        ':medio_id' => $idMedio,
+        ':ingreso' => $esIngreso,
+        ':egreso' => $esEgreso,
+        ':obs' => $obs,
+        ':usuario' => $_SESSION['usuario'] ?? null,
+        ':modulo' => $moduloMovimiento,
+    ]);
+
+    actualizarSaldoSocio($pdo, $idSocio, $valor, $reglaSocio);
+    actualizarSaldoNatillera($pdo, $valor, $reglaNatillera);
+}
+
 recalcularSaldosDesdeMovimientos($pdo);
 
 header('Location: ../public/movimientos.php');
