@@ -63,6 +63,7 @@ $filtroSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
 $filtroActividad = isset($_GET['actividad']) ? (int) $_GET['actividad'] : 0;
 $filtroFechaIni = $_GET['desde'] ?? '';
 $filtroFechaFin = $_GET['hasta'] ?? '';
+$filtroResumen = $_GET['resumen'] ?? '';
 
 $where = [];
 $params = [];
@@ -73,6 +74,15 @@ if ($filtroFechaFin) { $where[] = 'm.fecha <= :ff'; $params[':ff'] = $filtroFech
 $params[':filtroSocioSeleccionado'] = $filtroSocio;
 
 $sqlWhere = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+$sqlWhereResumen = '';
+if ($filtroResumen === 'otras') {
+    $sqlWhereResumen = "WHERE valor_natillera > 0
+        AND es_polla = 0
+        AND es_pago_prestamo = 0
+        AND es_pago_interes = 0
+        AND NOT (es_prestamo = 0 AND es_pago_prestamo = 0 AND es_pago_interes = 0 AND es_polla = 0 AND es_gasto_general = 0)";
+}
 
 $movimientosStmt = $pdo->prepare("
     WITH mov_filtrado AS (
@@ -118,6 +128,7 @@ $movimientosStmt = $pdo->prepare("
         FROM mov_signado
     )
     SELECT * FROM calculado
+    $sqlWhereResumen
     ORDER BY id_movimiento DESC
 ");
 $movimientosStmt->execute($params);
@@ -131,6 +142,12 @@ $movimientos = $movimientosStmt->fetchAll();
         </div>
         <a class="btn btn-outline-primary btn-icon" href="../actions/export_csv.php?tipo=saldos"><span><i class="bi bi-download"></i> Exportar saldos</span></a>
     </div>
+    <?php if ($filtroResumen === 'otras'): ?>
+        <div class="alert alert-info py-2">
+            Mostrando únicamente movimientos clasificados como <strong>Otras actividades</strong>.
+            <a href="index.php" class="alert-link">Quitar filtro</a>
+        </div>
+    <?php endif; ?>
     <div class="row g-4">
         <div class="col-md-3">
             <div class="card h-100">
@@ -203,6 +220,7 @@ $movimientos = $movimientosStmt->fetchAll();
                 <div class="card-body">
                     <p class="text-muted mb-1">Ingresos complementarios</p>
                     <h2 class="display-6 mb-0">$<?php echo number_format($totalOtrasActividades, 0, ',', '.'); ?></h2>
+                    <a class="btn btn-link btn-sm px-0 mt-2" href="index.php?resumen=otras#tablaConsolidado">Ver detalle</a>
                 </div>
             </div>
         </div>
