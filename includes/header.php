@@ -96,6 +96,26 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             background: #1d2a44;
             color: #fff;
         }
+        .nav-submenu {
+            margin-left: 1.75rem;
+            margin-top: -0.1rem;
+            margin-bottom: 0.35rem;
+            border-left: 1px solid rgba(148, 163, 184, 0.35);
+            padding-left: 0.65rem;
+        }
+        .nav-link-submenu {
+            display: block;
+            color: #cbd5e1;
+            text-decoration: none;
+            padding: 0.45rem 0.6rem;
+            border-radius: 8px;
+            font-size: 0.92rem;
+            margin-bottom: 0.1rem;
+        }
+        .nav-link-submenu:hover, .nav-link-submenu.active {
+            background: #1d2a44;
+            color: #fff;
+        }
         .app-main {
             flex: 1;
             display: flex;
@@ -250,6 +270,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <a class="nav-link-sidebar<?php echo $currentPage === 'prestamos_matriz.php' ? ' active' : ''; ?>" href="prestamos_matriz.php"><i class="bi bi-table"></i><span>Matriz de préstamos</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'retiros_caja.php' ? ' active' : ''; ?>" href="retiros_caja.php"><i class="bi bi-safe2"></i><span>Retiros a caja</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'gastos.php' ? ' active' : ''; ?>" href="gastos.php"><i class="bi bi-receipt"></i><span>Gastos</span></a>
+            <a class="nav-link-sidebar<?php echo in_array($currentPage, ['liquidaciones.php', 'liquidacion_anticipada.php', 'liquidacion_definitiva.php'], true) ? ' active' : ''; ?>" href="liquidaciones.php"><i class="bi bi-calculator-fill"></i><span>Liquidaciones</span></a>
+            <div class="nav-submenu">
+                <a class="nav-link-submenu<?php echo $currentPage === 'liquidacion_anticipada.php' ? ' active' : ''; ?>" href="liquidacion_anticipada.php">Liquidación anticipada</a>
+                <a class="nav-link-submenu<?php echo $currentPage === 'liquidacion_definitiva.php' ? ' active' : ''; ?>" href="liquidacion_definitiva.php">Liquidación definitiva <small class="text-warning">(en construcción)</small></a>
+            </div>
             <a class="nav-link-sidebar<?php echo $currentPage === 'reportes.php' ? ' active' : ''; ?>" href="reportes.php"><i class="bi bi-file-earmark-bar-graph"></i><span>Reportes</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'estadisticas.php' ? ' active' : ''; ?>" href="estadisticas.php"><i class="bi bi-pie-chart"></i><span>Estadísticas</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'reglamento.php' ? ' active' : ''; ?>" href="reglamento.php"><i class="bi bi-journal-text"></i><span>Reglamento</span></a>
