@@ -78,12 +78,10 @@ $sqlWhere = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 $sqlWhereResumen = '';
 if ($filtroResumen === 'otras') {
     $sqlWhereResumen = "WHERE valor_natillera > 0
-        AND es_prestamo = 0
         AND es_polla = 0
-        AND es_gasto_general = 0
+        AND es_pago_prestamo = 0
         AND es_pago_interes = 0
-        AND NOT (es_pago_prestamo = 1)
-        AND NOT (es_pago_prestamo = 0 AND es_prestamo = 0 AND es_pago_interes = 0 AND es_polla = 0 AND es_gasto_general = 0)";
+        AND NOT (es_prestamo = 0 AND es_pago_prestamo = 0 AND es_pago_interes = 0 AND es_polla = 0 AND es_gasto_general = 0)";
 }
 
 $movimientosStmt = $pdo->prepare("
