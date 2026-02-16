@@ -88,7 +88,7 @@ $movimientosStmt = $pdo->prepare("
     WITH mov_filtrado AS (
         SELECT m.id_movimiento, m.fecha, m.valor, m.id_socio, m.id_actividad, m.modulo, m.observaciones,
                s.nombre_completo, a.nombre_actividad, a.afecta_saldo_socio, a.afecta_saldo_natillera,
-               a.es_prestamo, a.es_pago_prestamo, a.es_polla, a.es_gasto_general,
+               a.es_prestamo, a.es_pago_prestamo, a.es_pago_interes, a.es_polla, a.es_gasto_general,
                COALESCE(mp.nombre, m.medio_consignacion) AS medio_nombre
         FROM movimientos m
         LEFT JOIN socios s ON m.id_socio = s.id_socio
