@@ -105,6 +105,7 @@ function asegurarEsquemaRifas(PDO $pdo): void
         boletas_por_socio INT NOT NULL DEFAULT 1,
         metodo_distribucion VARCHAR(20) NOT NULL DEFAULT 'aleatoria',
         socios_json TEXT DEFAULT NULL,
+        asignaciones_json TEXT DEFAULT NULL,
         usuario_registro VARCHAR(50) DEFAULT NULL,
         fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uq_rifa_grupo_nombre (id_rifa, nombre),
@@ -116,6 +117,9 @@ function asegurarEsquemaRifas(PDO $pdo): void
     }
     if (!columnExists($pdo, 'rifas_grupos', 'socios_json')) {
         $pdo->exec("ALTER TABLE rifas_grupos ADD COLUMN socios_json TEXT DEFAULT NULL AFTER metodo_distribucion");
+    }
+    if (!columnExists($pdo, 'rifas_grupos', 'asignaciones_json')) {
+        $pdo->exec("ALTER TABLE rifas_grupos ADD COLUMN asignaciones_json TEXT DEFAULT NULL AFTER socios_json");
     }
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS rifas_grupos_socios (
@@ -400,16 +404,36 @@ function asignarBoletasAutomaticas(PDO $pdo, int $idRifa, ?string $usuario = nul
         }
 
         $boletasPorSocio = max(1, (int) ($grupo['boletas_por_socio'] ?? ($config['boletas_por_socio'] ?? 1)));
+        $manualPorSocio = array_fill_keys($idsSociosGrupo, 0);
+        foreach ($asignacionesNumero as $asig) {
+            $idSocioAsig = (int) ($asig['id_socio'] ?? 0);
+            if (isset($manualPorSocio[$idSocioAsig])) {
+                $manualPorSocio[$idSocioAsig]++;
+            }
+        }
+
         $asignacion = [];
-        $pendientes = count($restantes);
-        while ($pendientes > 0) {
-            foreach ($idsSociosGrupo as $idSocio) {
-                if ($pendientes <= 0) {
-                    break;
-                }
-                $tomar = min($boletasPorSocio, $pendientes);
-                $asignacion[$idSocio] = ($asignacion[$idSocio] ?? 0) + $tomar;
-                $pendientes -= $tomar;
+        foreach ($idsSociosGrupo as $idSocio) {
+            $faltan = max(0, $boletasPorSocio - (int) ($manualPorSocio[$idSocio] ?? 0));
+            if ($faltan > 0) {
+                $asignacion[$idSocio] = $faltan;
+            }
+        }
+
+        $totalFaltantes = array_sum($asignacion);
+        if ($totalFaltantes > count($restantes)) {
+            throw new RuntimeException('No hay números suficientes para completar el cupo de boletas por socio en el grupo.');
+        }
+
+        // Si sobran boletas después de completar cupos, se reparten de forma equilibrada.
+        $extras = count($restantes) - $totalFaltantes;
+        if ($extras > 0) {
+            $idx = 0;
+            while ($extras > 0) {
+                $idSocio = $idsSociosGrupo[$idx % count($idsSociosGrupo)];
+                $asignacion[$idSocio] = ($asignacion[$idSocio] ?? 0) + 1;
+                $extras--;
+                $idx++;
             }
         }
 
@@ -694,7 +718,7 @@ function crearGruposRifa(PDO $pdo, int $idRifa, array $data): array
         }
     }
 
-    $stmt = $pdo->prepare('INSERT INTO rifas_grupos (id_rifa, nombre, orden_grupo, boletas_por_socio, metodo_distribucion, socios_json, usuario_registro) VALUES (:id_rifa, :nombre, :orden, :boletas, :metodo, :socios_json, :usuario)');
+    $stmt = $pdo->prepare('INSERT INTO rifas_grupos (id_rifa, nombre, orden_grupo, boletas_por_socio, metodo_distribucion, socios_json, asignaciones_json, usuario_registro) VALUES (:id_rifa, :nombre, :orden, :boletas, :metodo, :socios_json, :asignaciones_json, :usuario)');
     $creados = [];
     foreach ($grupos as $i => $grupo) {
         $stmt->execute([
@@ -704,6 +728,7 @@ function crearGruposRifa(PDO $pdo, int $idRifa, array $data): array
             ':boletas' => $grupo['boletas_por_socio'],
             ':metodo' => $grupo['metodo_distribucion'],
             ':socios_json' => !empty($grupo['socios']) ? json_encode($grupo['socios']) : null,
+            ':asignaciones_json' => !empty($grupo['asignaciones']) ? json_encode($grupo['asignaciones']) : null,
             ':usuario' => $data['usuario_registro'] ?? null,
         ]);
         $creados[] = [
@@ -851,8 +876,13 @@ function generarImagenesBoletasRifa(PDO $pdo, int $idRifa, array $config = []): 
             imagestring($img, 5, $x, $y, (string) $boleta['numero'], $color);
         }
 
-        $grupoDir = $destino . '/Grupo_' . preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($boleta['nombre_grupo'] ?: 'General'));
-        $socioDir = $grupoDir . '/Socio_' . preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($boleta['nombre_completo'] ?: 'Sin_Asignar'));
+        $grupoSlug = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($boleta['nombre_grupo'] ?: 'General'));
+        $socioSlug = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($boleta['nombre_completo'] ?: 'Sin_Asignar'));
+        $idGrupo = (int) ($boleta['id_grupo'] ?? 0);
+        $idSocio = (int) ($boleta['id_socio'] ?? 0);
+
+        $grupoDir = $destino . '/Grupo_' . $idGrupo . '_' . $grupoSlug;
+        $socioDir = $grupoDir . '/Socio_' . $idSocio . '_' . $socioSlug;
         if (!is_dir($socioDir)) {
             mkdir($socioDir, 0775, true);
         }
@@ -951,12 +981,81 @@ function obtenerResumenBoletas(PDO $pdo, int $idRifa): array
 
 function exportarBoletasZip(int $idRifa): ?string
 {
+    return exportarBoletasZipFiltrado($idRifa, null, null);
+}
+
+function obtenerConfiguracionGruposRifa(PDO $pdo, int $idRifa): array
+{
+    $stmt = $pdo->prepare('SELECT * FROM rifas_grupos WHERE id_rifa = :id ORDER BY orden_grupo');
+    $stmt->execute([':id' => $idRifa]);
+    $grupos = [];
+    foreach ($stmt->fetchAll() as $grupo) {
+        $socios = json_decode((string) ($grupo['socios_json'] ?? ''), true);
+        $asignaciones = json_decode((string) ($grupo['asignaciones_json'] ?? ''), true);
+        $grupos[] = [
+            'id_grupo' => (int) $grupo['id_grupo'],
+            'nombre' => $grupo['nombre'],
+            'boletas_por_socio' => (int) $grupo['boletas_por_socio'],
+            'metodo_distribucion' => $grupo['metodo_distribucion'],
+            'socios' => is_array($socios) ? array_values(array_filter(array_map('intval', $socios), static fn($id) => $id > 0)) : [],
+            'asignaciones' => is_array($asignaciones) ? $asignaciones : [],
+        ];
+    }
+
+    return $grupos;
+}
+
+function reiniciarAsignacionesRifa(PDO $pdo, int $idRifa, ?string $usuario = null, bool $forzarConPagos = false): void
+{
+    $rifa = obtenerRifa($pdo, $idRifa);
+    if (!$rifa) {
+        throw new RuntimeException('La rifa no existe.');
+    }
+
+    $stmtPagos = $pdo->prepare('SELECT COUNT(*) FROM rifas_boletas WHERE id_rifa = :id AND estado = "pagada"');
+    $stmtPagos->execute([':id' => $idRifa]);
+    $pagadas = (int) $stmtPagos->fetchColumn();
+    if ($pagadas > 0 && !$forzarConPagos) {
+        throw new RuntimeException('La rifa tiene pagos registrados (' . $pagadas . '). Confirme para continuar con el reinicio.');
+    }
+
+    $grupos = obtenerConfiguracionGruposRifa($pdo, $idRifa);
+
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('DELETE FROM rifas_boletas_historial WHERE id_rifa = :id')->execute([':id' => $idRifa]);
+        $pdo->prepare('DELETE FROM movimientos WHERE modulo = "rifas" AND id_actividad IN (:ingreso, :premio)')->execute([
+            ':ingreso' => (int) $rifa['id_actividad_ingreso'],
+            ':premio' => (int) $rifa['id_actividad_premio'],
+        ]);
+        $pdo->prepare('UPDATE rifas_boletas SET id_socio = NULL, estado = "pendiente", fecha_pago = NULL, medio_pago = NULL, id_medio_pago = NULL, usuario_ultimo = :usuario WHERE id_rifa = :id')
+            ->execute([':id' => $idRifa, ':usuario' => $usuario]);
+        $pdo->prepare('UPDATE rifas SET estado = "abierta", numero_ganador = NULL, id_boleta_ganadora = NULL, premio_valor = NULL, premio_descripcion = NULL, fecha_cierre = NULL WHERE id_rifa = :id')
+            ->execute([':id' => $idRifa]);
+
+        asignarBoletasAutomaticas($pdo, $idRifa, $usuario, $rifa, $grupos);
+        generarImagenesBoletasRifa($pdo, $idRifa, $rifa);
+
+        recalcularSaldosDesdeMovimientos($pdo);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function exportarBoletasZipFiltrado(int $idRifa, ?int $idGrupo = null, ?int $idSocio = null): ?string
+{
     $dir = dirname(__DIR__) . '/public/uploads/rifas/' . $idRifa;
     if (!is_dir($dir)) {
         return null;
     }
 
-    $zipPath = $dir . '/boletas_rifa_' . $idRifa . '.zip';
+    $suffix = $idGrupo ? '_grupo_' . $idGrupo : '';
+    $suffix .= $idSocio ? '_socio_' . $idSocio : '';
+    $zipPath = $dir . '/boletas_rifa_' . $idRifa . $suffix . '.zip';
     $zip = new ZipArchive();
     if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
         return null;
@@ -969,6 +1068,20 @@ function exportarBoletasZip(int $idRifa): ?string
         }
         $real = $file->getPathname();
         $local = ltrim(str_replace($dir, '', $real), '/');
+        if ($idGrupo !== null || $idSocio !== null) {
+            $partes = explode('/', $local);
+            $grupoOk = $idGrupo === null;
+            $socioOk = $idSocio === null;
+            if (isset($partes[0]) && $idGrupo !== null && preg_match('/^Grupo_' . preg_quote((string) $idGrupo, '/') . '(_|$)/', $partes[0])) {
+                $grupoOk = true;
+            }
+            if (isset($partes[1]) && $idSocio !== null && preg_match('/^Socio_' . preg_quote((string) $idSocio, '/') . '(_|$)/', $partes[1])) {
+                $socioOk = true;
+            }
+            if (!$grupoOk || !$socioOk) {
+                continue;
+            }
+        }
         $zip->addFile($real, $local);
     }
 
