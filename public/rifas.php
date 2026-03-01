@@ -84,127 +84,165 @@ if ($rifaActual) {
                     </div>
                     <span class="badge bg-primary-subtle text-primary"><i class="bi bi-diagram-3 me-1"></i>Normal / Gemela</span>
                 </div>
-                <form method="POST" action="../actions/rifas_save.php" class="row g-2" enctype="multipart/form-data">
+                <form method="POST" action="../actions/rifas_save.php" class="row g-3" enctype="multipart/form-data" id="rifaWizardForm">
                     <input type="hidden" name="accion" value="crear_rifa">
-                    <div class="col-12">
-                        <label class="form-label">Nombre</label>
-                        <input type="text" name="nombre" class="form-control" required placeholder="Ej: Rifa abril 2025">
+                    <input type="hidden" name="tipo_rifa" id="tipo_rifa" value="">
+                    <input type="hidden" name="grupos_json" id="grupos_json" value="">
+                    <input type="hidden" name="manual_asignaciones_json" id="manual_asignaciones_json" value="[]">
+
+                    <div class="col-12" data-step="1">
+                        <label class="form-label fw-semibold">Paso 1 · Selecciona el tipo de rifa</label>
+                        <div class="d-flex gap-2 flex-wrap" id="tipoRifaOptions">
+                            <button type="button" class="btn btn-outline-primary" data-tipo="normal">¿Rifa Normal?</button>
+                            <button type="button" class="btn btn-outline-primary" data-tipo="gemela">¿Rifa Gemela?</button>
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Fecha inicio</label>
-                        <input type="date" name="fecha_inicio" class="form-control" required>
+
+                    <div class="col-12 d-none" data-step="2">
+                        <label class="form-label fw-semibold">Paso 2 · Configuración numérica</label>
+                        <div class="row g-2 border rounded p-2">
+                            <div class="col-md-4">
+                                <label class="form-label">Cifras</label>
+                                <input type="number" name="cifras_numero" id="cifras_numero" class="form-control" min="1" max="6" value="2" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Rango inicio</label>
+                                <input type="number" name="rango_inicio" id="rango_inicio" class="form-control" min="0" value="0" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Rango fin</label>
+                                <input type="number" name="rango_fin" id="rango_fin" class="form-control" min="0" value="99" required>
+                            </div>
+                            <div class="col-md-6 normal-only">
+                                <label class="form-label">Numeración</label>
+                                <select name="modo_numeracion" id="modo_numeracion" class="form-select">
+                                    <option value="aleatoria">Automática</option>
+                                    <option value="manual">Manual</option>
+                                    <option value="mixta">Mixta</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 normal-only">
+                                <label class="form-label">Boletas por socio</label>
+                                <input type="number" name="boletas_por_socio" class="form-control" min="1" value="1">
+                            </div>
+                            <div class="col-md-6 gemela-only d-none">
+                                <label class="form-label">Cantidad de grupos</label>
+                                <input type="number" name="cantidad_grupos" id="cantidad_grupos" class="form-control" min="1" max="20" value="2">
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Fecha fin</label>
-                        <input type="date" name="fecha_fin" class="form-control" required>
+
+                    <div class="col-12 d-none" data-step="3">
+                        <label class="form-label fw-semibold">Paso 3 · Asignación de socios</label>
+                        <div class="row g-2 border rounded p-2 normal-only" id="normalSociosWrap"></div>
+                        <div class="border rounded p-2 gemela-only d-none" id="gruposBuilder"></div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Valor por boleta</label>
-                        <input type="number" name="valor_boleta" class="form-control" min="1" step="0.01" value="10000" required>
+
+                    <div class="col-12 d-none" data-step="4">
+                        <label class="form-label fw-semibold">Paso 4 · Numeración manual</label>
+                        <div class="normal-only">
+                            <small class="text-muted d-block mb-2">Si seleccionas Manual o Mixta, agrega pares número + socio.</small>
+                            <div id="manualAsignacionesNormal"></div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="agregarAsignacionNormal">Agregar número manual</button>
+                            <input type="hidden" name="numeros_manuales" id="numeros_manuales" value="">
+                        </div>
+                        <div class="gemela-only d-none">
+                            <small class="text-muted d-block">Cada grupo puede repetir números respecto a otros grupos, pero no internamente.</small>
+                            <p class="mb-0 text-muted">Configura números manuales directamente en cada grupo.</p>
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Cantidad de boletas</label>
-                        <input type="number" name="cantidad_boletas" class="form-control" min="1" max="500" value="100" required>
+
+                    <div class="col-12 d-none" data-step="5">
+                        <label class="form-label fw-semibold">Paso 5 · Arte de boletas</label>
+                        <div class="row g-2 border rounded p-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Arte base (subida o ruta)</label>
+                                <input type="file" name="arte_base_file" class="form-control mb-2" accept=".png,.jpg,.jpeg,.gif">
+                                <input type="text" name="arte_base_path" class="form-control" placeholder="uploads/rifas/base.png">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">X</label>
+                                <input type="number" name="arte_numero_x" class="form-control" min="0" value="20">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Y</label>
+                                <input type="number" name="arte_numero_y" class="form-control" min="0" value="40">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Tamaño</label>
+                                <input type="number" name="arte_numero_size" class="form-control" min="8" max="144" value="28">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Color fuente</label>
+                                <input type="text" name="arte_numero_color" class="form-control" value="#000000">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Fuente TTF (opcional)</label>
+                                <input type="text" name="arte_font_path" class="form-control" placeholder="assets/fonts/Roboto-Regular.ttf">
+                            </div>
+                            <div class="col-12">
+                                <div class="alert alert-light mb-0 py-2">Vista previa ejemplo: <strong id="previewNumero">00</strong></div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Actividad ingreso</label>
-                        <select name="id_actividad_ingreso" class="form-select" required>
-                            <?php foreach ($actividadesIngreso as $act): ?>
-                                <option value="<?php echo (int) $act['id_actividad']; ?>"><?php echo clean($act['nombre_actividad']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
+
+                    <div class="col-12 d-none" data-step="6">
+                        <label class="form-label fw-semibold">Paso 6 · Confirmación y generación</label>
+                        <div class="row g-2 border rounded p-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Nombre</label>
+                                <input type="text" name="nombre" class="form-control" required placeholder="Ej: Rifa abril 2025">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Fecha inicio</label>
+                                <input type="date" name="fecha_inicio" class="form-control" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Fecha fin</label>
+                                <input type="date" name="fecha_fin" class="form-control" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Valor por boleta</label>
+                                <input type="number" name="valor_boleta" class="form-control" min="1" step="0.01" value="10000" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Cantidad de boletas</label>
+                                <input type="number" name="cantidad_boletas" class="form-control" min="1" max="500" value="100" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Distribución</label>
+                                <select name="modo_distribucion" class="form-select">
+                                    <option value="aleatoria">Aleatoria</option>
+                                    <option value="manual">Manual dirigida</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Actividad ingreso</label>
+                                <select name="id_actividad_ingreso" class="form-select" required>
+                                    <?php foreach ($actividadesIngreso as $act): ?>
+                                        <option value="<?php echo (int) $act['id_actividad']; ?>"><?php echo clean($act['nombre_actividad']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Actividad premio</label>
+                                <select name="id_actividad_premio" class="form-select" required>
+                                    <?php foreach ($actividadesPremio as $act): ?>
+                                        <option value="<?php echo (int) $act['id_actividad']; ?>"><?php echo clean($act['nombre_actividad']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Observaciones</label>
+                                <textarea name="observaciones" rows="2" class="form-control" placeholder="Notas generales"></textarea>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Actividad premio</label>
-                        <select name="id_actividad_premio" class="form-select" required>
-                            <?php foreach ($actividadesPremio as $act): ?>
-                                <option value="<?php echo (int) $act['id_actividad']; ?>"><?php echo clean($act['nombre_actividad']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Tipo de rifa</label>
-                        <select name="tipo_rifa" class="form-select">
-                            <option value="normal">Normal</option>
-                            <option value="gemela">Gemela</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Cantidad de grupos</label>
-                        <input type="number" name="cantidad_grupos" class="form-control" min="1" max="20" value="1" required>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Cifras</label>
-                        <input type="number" name="cifras_numero" class="form-control" min="1" max="6" value="2" required>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Rango inicio</label>
-                        <input type="number" name="rango_inicio" class="form-control" min="0" value="0" required>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Rango fin</label>
-                        <input type="number" name="rango_fin" class="form-control" min="0" value="99" required>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Numeración</label>
-                        <select name="modo_numeracion" class="form-select">
-                            <option value="secuencial">Secuencial</option>
-                            <option value="aleatoria">Aleatoria</option>
-                            <option value="manual">Manual</option>
-                            <option value="mixta">Mixta (manual + automática)</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Distribución de boletas</label>
-                        <select name="modo_distribucion" class="form-select">
-                            <option value="aleatoria">Aleatoria</option>
-                            <option value="manual">Manual</option>
-                            <option value="mixta">Mixta</option>
-                        </select>
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label">Números manuales (si aplica)</label>
-                        <input type="text" name="numeros_manuales" class="form-control" placeholder="Ej: 01, 05, 10, 22">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Boletas por socio</label>
-                        <input type="number" name="boletas_por_socio" class="form-control" min="1" value="1">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Grupos (JSON opcional)</label>
-                        <input type="text" name="grupos_json" class="form-control" placeholder='[{"nombre":"Grupo A","boletas_por_socio":4,"metodo_distribucion":"aleatoria","socios":[1,2]}]'>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Arte base (subida o ruta)</label>
-                        <input type="file" name="arte_base_file" class="form-control mb-2" accept=".png,.jpg,.jpeg,.gif">
-                        <input type="text" name="arte_base_path" class="form-control" placeholder="uploads/rifas/base.png">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">X</label>
-                        <input type="number" name="arte_numero_x" class="form-control" min="0">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Y</label>
-                        <input type="number" name="arte_numero_y" class="form-control" min="0">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Tamaño</label>
-                        <input type="number" name="arte_numero_size" class="form-control" min="8" max="144" value="28">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Color fuente</label>
-                        <input type="text" name="arte_numero_color" class="form-control" value="#000000">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Fuente TTF (opcional)</label>
-                        <input type="text" name="arte_font_path" class="form-control" placeholder="assets/fonts/Roboto-Regular.ttf">
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label">Observaciones</label>
-                        <textarea name="observaciones" rows="2" class="form-control" placeholder="Notas generales"></textarea>
-                    </div>
-                    <div class="col-12">
-                        <button class="btn btn-primary w-100"><i class="bi bi-plus-circle me-1"></i>Crear rifa</button>
+
+                    <div class="col-12 d-flex justify-content-between">
+                        <button type="button" class="btn btn-outline-secondary d-none" id="wizardPrev">Anterior</button>
+                        <button type="button" class="btn btn-primary" id="wizardNext">Continuar</button>
+                        <button class="btn btn-success d-none" id="wizardSubmit"><i class="bi bi-stars me-1"></i>Confirmar y generar</button>
                     </div>
                 </form>
             </div>
@@ -336,6 +374,15 @@ if ($rifaActual) {
                             </select>
                         </div>
                         <div class="col-12">
+                            <label class="form-label">Concepto de ingreso</label>
+                            <select name="id_actividad_movimiento" class="form-select">
+                                <option value="">Usar concepto configurado en la rifa</option>
+                                <?php foreach ($actividadesIngreso as $act): ?>
+                                    <option value="<?php echo (int) $act['id_actividad']; ?>"><?php echo clean($act['nombre_actividad']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-12">
                             <button class="btn btn-success w-100">Registrar pago</button>
                         </div>
                     </form>
@@ -378,6 +425,15 @@ if ($rifaActual) {
                                 <option value="">Seleccionar</option>
                                 <?php foreach ($mediosPago as $mp): ?>
                                     <option value="<?php echo (int) $mp['id']; ?>"><?php echo clean($mp['nombre']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Concepto de egreso (premio)</label>
+                            <select name="id_actividad_premio_mov" class="form-select">
+                                <option value="">Usar concepto configurado en la rifa</option>
+                                <?php foreach ($actividadesPremio as $act): ?>
+                                    <option value="<?php echo (int) $act['id_actividad']; ?>"><?php echo clean($act['nombre_actividad']); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -556,4 +612,163 @@ if ($rifaActual) {
         </div>
     </div>
 <?php endif; ?>
+<?php $sociosWizard = array_values(array_map(static fn($s) => ['id' => (int) $s['id_socio'], 'nombre' => $s['nombre_completo']], $socios)); ?>
+<script>
+(() => {
+  const form = document.getElementById('rifaWizardForm');
+  if (!form) return;
+  const socios = <?php echo json_encode($sociosWizard, JSON_UNESCAPED_UNICODE); ?>;
+  let currentStep = 1;
+  let tipo = '';
+  const steps = [...form.querySelectorAll('[data-step]')];
+  const prev = document.getElementById('wizardPrev');
+  const next = document.getElementById('wizardNext');
+  const submit = document.getElementById('wizardSubmit');
+  const tipoInput = document.getElementById('tipo_rifa');
+  const gruposWrap = document.getElementById('gruposBuilder');
+  const normalSociosWrap = document.getElementById('normalSociosWrap');
+
+  function renderSociosCheckbox(name, checked = true) {
+    return socios.map(s => `<label class="form-check col-md-4"><input class="form-check-input" type="checkbox" name="${name}" value="${s.id}" ${checked ? 'checked' : ''}><span class="form-check-label">${s.nombre}</span></label>`).join('');
+  }
+
+  function updateStep() {
+    steps.forEach(step => step.classList.toggle('d-none', Number(step.dataset.step) !== currentStep));
+    prev.classList.toggle('d-none', currentStep === 1);
+    next.classList.toggle('d-none', currentStep === 6);
+    submit.classList.toggle('d-none', currentStep !== 6);
+  }
+
+  function applyTipoUI() {
+    document.querySelectorAll('#tipoRifaOptions [data-tipo]').forEach(btn => {
+      btn.classList.toggle('btn-primary', btn.dataset.tipo === tipo);
+      btn.classList.toggle('btn-outline-primary', btn.dataset.tipo !== tipo);
+    });
+    form.querySelectorAll('.normal-only').forEach(el => el.classList.toggle('d-none', tipo !== 'normal'));
+    form.querySelectorAll('.gemela-only').forEach(el => el.classList.toggle('d-none', tipo !== 'gemela'));
+    tipoInput.value = tipo;
+  }
+
+  function addNormalManualRow(data = {}) {
+    const row = document.createElement('div');
+    row.className = 'row g-2 mb-2 manual-row';
+    row.innerHTML = `<div class="col-md-4"><input class="form-control" placeholder="Número" value="${data.numero || ''}"></div>
+      <div class="col-md-6"><select class="form-select"><option value="">Socio</option>${socios.map(s => `<option value="${s.id}" ${Number(data.id_socio)===s.id?'selected':''}>${s.nombre}</option>`).join('')}</select></div>
+      <div class="col-md-2"><button type="button" class="btn btn-outline-danger w-100">X</button></div>`;
+    row.querySelector('button').addEventListener('click', () => row.remove());
+    document.getElementById('manualAsignacionesNormal').appendChild(row);
+  }
+
+  function buildGroups() {
+    const cantidad = Number(document.getElementById('cantidad_grupos').value || 1);
+    gruposWrap.innerHTML = '';
+    for (let i=1;i<=cantidad;i++) {
+      const item = document.createElement('div');
+      item.className = 'border rounded p-2 mb-2 grupo-item';
+      item.dataset.index = i;
+      item.innerHTML = `<h6>Grupo ${i}</h6>
+        <div class="row g-2">
+          <div class="col-md-6"><label class="form-label">Nombre grupo</label><input class="form-control grupo-nombre" value="Grupo ${i}"></div>
+          <div class="col-md-3"><label class="form-label">Boletas por socio</label><input type="number" class="form-control grupo-boletas" min="1" value="1"></div>
+          <div class="col-md-3"><label class="form-label">Método</label><select class="form-select grupo-metodo"><option value="aleatoria">Automática</option><option value="manual">Manual</option><option value="mixta">Mixta</option></select></div>
+          <div class="col-12"><label class="form-label">Socios del grupo</label><div class="row">${renderSociosCheckbox('socios_grupo_'+i)}</div></div>
+          <div class="col-12"><label class="form-label">Asignaciones manuales (número + socio)</label><div class="manual-grupo"></div><button type="button" class="btn btn-sm btn-outline-secondary add-manual-grupo">Agregar</button></div>
+        </div>`;
+      item.querySelector('.add-manual-grupo').addEventListener('click', () => {
+        const row = document.createElement('div');
+        row.className = 'row g-2 mt-1 manual-group-row';
+        row.innerHTML = `<div class="col-md-4"><input class="form-control manual-numero" placeholder="Número"></div>
+          <div class="col-md-6"><select class="form-select manual-socio"><option value="">Socio</option>${socios.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('')}</select></div>
+          <div class="col-md-2"><button type="button" class="btn btn-outline-danger w-100">X</button></div>`;
+        row.querySelector('button').addEventListener('click', () => row.remove());
+        item.querySelector('.manual-grupo').appendChild(row);
+      });
+      gruposWrap.appendChild(item);
+    }
+  }
+
+  function collectAndValidate() {
+    const inicio = Number(document.getElementById('rango_inicio').value || 0);
+    const fin = Number(document.getElementById('rango_fin').value || 0);
+    const cantidad = Number(form.querySelector('[name="cantidad_boletas"]').value || 0);
+    if (!tipo) throw new Error('Debes seleccionar tipo de rifa.');
+    if (fin < inicio) throw new Error('El rango numérico es inválido.');
+
+    if (tipo === 'normal') {
+      const selected = [...normalSociosWrap.querySelectorAll('input[type="checkbox"]:checked')].map(el => Number(el.value));
+      if (!selected.length) throw new Error('No se puede crear rifa sin asignar socios.');
+      const manual = [];
+      const nums = new Set();
+      document.querySelectorAll('#manualAsignacionesNormal .manual-row').forEach(r => {
+        const numero = r.querySelector('input').value.trim();
+        const idSocio = Number(r.querySelector('select').value || 0);
+        if (!numero) return;
+        const n = Number(numero);
+        if (!Number.isInteger(n) || n < inicio || n > fin) throw new Error('Hay números manuales fuera de rango.');
+        if (nums.has(n)) throw new Error('Hay números manuales repetidos.');
+        if (!selected.includes(idSocio)) throw new Error('Cada número manual debe tener un socio válido.');
+        nums.add(n);
+        manual.push({ numero: String(n), id_socio: idSocio });
+      });
+      if (manual.length > cantidad) throw new Error('Los manuales no pueden superar el total permitido.');
+      document.getElementById('manual_asignaciones_json').value = JSON.stringify(manual);
+      document.getElementById('numeros_manuales').value = manual.map(m => m.numero).join(',');
+      document.getElementById('grupos_json').value = JSON.stringify([{ nombre:'Grupo 1', boletas_por_socio:Number(form.querySelector('[name="boletas_por_socio"]').value||1), metodo_distribucion:form.querySelector('[name="modo_distribucion"]').value||'aleatoria', socios:selected, asignaciones:manual }]);
+    } else {
+      const grupos = [];
+      document.querySelectorAll('.grupo-item').forEach((g, idx) => {
+        const sociosGrupo = [...g.querySelectorAll('input[type="checkbox"]:checked')].map(el => Number(el.value));
+        if (!sociosGrupo.length) throw new Error(`El grupo ${idx+1} no tiene socios asignados.`);
+        const manual = [];
+        const nums = new Set();
+        g.querySelectorAll('.manual-group-row').forEach(row => {
+          const numero = row.querySelector('.manual-numero').value.trim();
+          const idSocio = Number(row.querySelector('.manual-socio').value || 0);
+          if (!numero) return;
+          const n = Number(numero);
+          if (!Number.isInteger(n) || n < inicio || n > fin) throw new Error(`Número fuera de rango en grupo ${idx+1}.`);
+          if (nums.has(n)) throw new Error(`Número duplicado dentro del grupo ${idx+1}.`);
+          if (!sociosGrupo.includes(idSocio)) throw new Error(`El socio manual del grupo ${idx+1} debe pertenecer al grupo.`);
+          nums.add(n);
+          manual.push({ numero: String(n), id_socio: idSocio });
+        });
+        if (manual.length > cantidad) throw new Error(`Los manuales del grupo ${idx+1} superan el total permitido.`);
+        grupos.push({ nombre:g.querySelector('.grupo-nombre').value.trim() || `Grupo ${idx+1}`, boletas_por_socio:Number(g.querySelector('.grupo-boletas').value||1), metodo_distribucion:g.querySelector('.grupo-metodo').value || 'aleatoria', socios:sociosGrupo, asignaciones:manual });
+      });
+      document.getElementById('grupos_json').value = JSON.stringify(grupos);
+      document.getElementById('manual_asignaciones_json').value = '[]';
+      document.getElementById('numeros_manuales').value = '';
+    }
+  }
+
+  document.querySelectorAll('#tipoRifaOptions [data-tipo]').forEach(btn => btn.addEventListener('click', () => {
+    tipo = btn.dataset.tipo;
+    applyTipoUI();
+    normalSociosWrap.innerHTML = `<label class="form-label">Socios participantes</label><div class="row">${renderSociosCheckbox('socios_normal')}</div>`;
+    buildGroups();
+  }));
+
+  document.getElementById('agregarAsignacionNormal').addEventListener('click', () => addNormalManualRow());
+  document.getElementById('cantidad_grupos').addEventListener('change', buildGroups);
+  document.getElementById('cifras_numero').addEventListener('change', (e) => {
+    const cifras = Number(e.target.value || 2);
+    document.getElementById('previewNumero').textContent = String(0).padStart(cifras, '0');
+  });
+
+  prev.addEventListener('click', () => { if (currentStep > 1) { currentStep--; updateStep(); }});
+  next.addEventListener('click', () => {
+    if (!tipo && currentStep === 1) return alert('Selecciona si la rifa es normal o gemela.');
+    if (currentStep < 6) { currentStep++; updateStep(); }
+  });
+  form.addEventListener('submit', (e) => {
+    try {
+      collectAndValidate();
+    } catch (err) {
+      e.preventDefault();
+      alert(err.message);
+    }
+  });
+  updateStep();
+})();
+</script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
