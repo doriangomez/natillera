@@ -27,7 +27,7 @@ try {
 
     $socios = getSocios($pdo);
     $mediosPago = getMediosPago($pdo);
-    $actividadesRifa = getActividades($pdo, false, true, false);
+    $actividadesRifa = getActividades($pdo, false, false, false);
     $actividadesIngreso = array_filter($actividadesRifa, fn($a) => (int) ($a['es_ingreso'] ?? 0) === 1);
     $actividadesPremio = array_filter($actividadesRifa, fn($a) => (int) ($a['es_ingreso'] ?? 0) === 0);
     $rifas = obtenerRifas($pdo);
@@ -169,31 +169,42 @@ if ($rifaActual) {
                         <div class="row g-2 border rounded p-2">
                             <div class="col-md-6">
                                 <label class="form-label">Arte base (subida o ruta)</label>
-                                <input type="file" name="arte_base_file" class="form-control mb-2" accept=".png,.jpg,.jpeg,.gif">
-                                <input type="text" name="arte_base_path" class="form-control" placeholder="uploads/rifas/base.png">
+                                <input type="file" name="arte_base_file" id="arte_base_file" class="form-control mb-2" accept=".png,.jpg,.jpeg,.gif">
+                                <input type="text" name="arte_base_path" id="arte_base_path" class="form-control" placeholder="uploads/rifas/base.png">
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">X</label>
-                                <input type="number" name="arte_numero_x" class="form-control" min="0" value="20">
+                                <input type="number" name="arte_numero_x" id="arte_numero_x" class="form-control" min="0" value="20" required>
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">Y</label>
-                                <input type="number" name="arte_numero_y" class="form-control" min="0" value="40">
+                                <input type="number" name="arte_numero_y" id="arte_numero_y" class="form-control" min="0" value="40" required>
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">Tamaño</label>
-                                <input type="number" name="arte_numero_size" class="form-control" min="8" max="144" value="28">
+                                <input type="number" name="arte_numero_size" id="arte_numero_size" class="form-control" min="8" max="144" value="28" required>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Color fuente</label>
-                                <input type="text" name="arte_numero_color" class="form-control" value="#000000">
+                                <input type="color" name="arte_numero_color" id="arte_numero_color" class="form-control form-control-color" value="#000000">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Control visual de tamaño</label>
+                                <input type="range" id="arte_numero_size_slider" class="form-range" min="8" max="144" value="28">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Fuente TTF (opcional)</label>
                                 <input type="text" name="arte_font_path" class="form-control" placeholder="assets/fonts/Roboto-Regular.ttf">
                             </div>
                             <div class="col-12">
-                                <div class="alert alert-light mb-0 py-2">Vista previa ejemplo: <strong id="previewNumero">00</strong></div>
+                                <div class="alert alert-light mb-0 py-2">Vista previa ejemplo: <strong id="previewNumero">00</strong>. Arrastra el número para posicionarlo.</div>
+                            </div>
+                            <div class="col-12">
+                                <div id="arteEditor" class="border rounded position-relative overflow-hidden bg-light" style="min-height: 280px;">
+                                    <img id="artePreviewImage" alt="Arte base" class="w-100 h-100 object-fit-contain d-none" style="max-height: 400px;">
+                                    <div id="arteDragText" class="position-absolute fw-bold" style="left:20px; top:40px; font-size:28px; color:#000000; cursor:move; user-select:none;">00</div>
+                                </div>
+                                <small class="text-muted">También puedes ajustar los campos X, Y, tamaño y color manualmente.</small>
                             </div>
                         </div>
                     </div>
@@ -252,6 +263,7 @@ if ($rifaActual) {
                     </div>
 
                     <div class="col-12 d-flex justify-content-between">
+                        <div id="wizardValidationMessage" class="text-danger small fw-semibold"></div>
                         <button type="button" class="btn btn-outline-secondary d-none" id="wizardPrev">Anterior</button>
                         <button type="button" class="btn btn-primary" id="wizardNext">Continuar</button>
                         <button class="btn btn-success d-none" id="wizardSubmit"><i class="bi bi-stars me-1"></i>Confirmar y generar</button>
@@ -640,6 +652,19 @@ if ($rifaActual) {
   const gruposWrap = document.getElementById('gruposBuilder');
   const normalSociosWrap = document.getElementById('normalSociosWrap');
   const manualGemelaWrap = document.getElementById('manualGemelaWrap');
+  const validationMessage = document.getElementById('wizardValidationMessage');
+
+  const numeroPreview = document.getElementById('previewNumero');
+  const arteEditor = document.getElementById('arteEditor');
+  const artePreviewImage = document.getElementById('artePreviewImage');
+  const arteDragText = document.getElementById('arteDragText');
+  const arteFileInput = document.getElementById('arte_base_file');
+  const artePathInput = document.getElementById('arte_base_path');
+  const arteXInput = document.getElementById('arte_numero_x');
+  const arteYInput = document.getElementById('arte_numero_y');
+  const arteSizeInput = document.getElementById('arte_numero_size');
+  const arteSizeSlider = document.getElementById('arte_numero_size_slider');
+  const arteColorInput = document.getElementById('arte_numero_color');
 
   const gemelaState = {
     included: new Set(socios.map(s => s.id)),
@@ -647,6 +672,27 @@ if ($rifaActual) {
     methodA: 'aleatoria',
     methodB: 'aleatoria'
   };
+
+  function clearDependentByTipo() {
+    gemelaState.included = new Set(socios.map(s => s.id));
+    gemelaState.groupA = new Set();
+    gemelaState.methodA = 'aleatoria';
+    gemelaState.methodB = 'aleatoria';
+    form.querySelector('#metodo_grupo_a').value = 'aleatoria';
+    form.querySelector('#metodo_grupo_b').value = 'aleatoria';
+    document.getElementById('manualAsignacionesNormal').innerHTML = '';
+    manualGemelaWrap.innerHTML = '';
+    document.getElementById('manual_asignaciones_json').value = '[]';
+    document.getElementById('numeros_manuales').value = '';
+    document.getElementById('grupos_json').value = '';
+  }
+
+  function resetManualAssignments() {
+    document.getElementById('manualAsignacionesNormal').innerHTML = '';
+    document.getElementById('manual_asignaciones_json').value = '[]';
+    document.getElementById('numeros_manuales').value = '';
+    if (tipo === 'gemela') buildGemela();
+  }
 
   function renderSociosCheckbox(name, checked = true) {
     return socios.map(s => `<label class="form-check col-md-4"><input class="form-check-input" type="checkbox" name="${name}" value="${s.id}" ${checked ? 'checked' : ''}><span class="form-check-label">${s.nombre}</span></label>`).join('');
@@ -660,6 +706,27 @@ if ($rifaActual) {
       <div class="col-md-2"><button type="button" class="btn btn-outline-danger w-100">X</button></div>`;
     row.querySelector('button').addEventListener('click', () => row.remove());
     container.appendChild(row);
+  }
+
+  function groupsManualUI(groupA, groupB) {
+    manualGemelaWrap.innerHTML = '';
+    const block = (id, label, sociosGrupo, method) => {
+      const box = document.createElement('div');
+      box.className = 'border rounded p-2 mb-2';
+      box.innerHTML = `<div class="d-flex justify-content-between align-items-center"><h6 class="mb-0">${label}</h6><span class="badge bg-light text-dark">Método: ${method}</span></div>
+      <div class="manual-zone mt-2"></div>
+      <button type="button" class="btn btn-sm btn-outline-secondary mt-2 add-manual">Agregar número manual</button>`;
+      const zone = box.querySelector('.manual-zone');
+      box.querySelector('.add-manual').addEventListener('click', () => addManualRow(zone, sociosGrupo));
+      if (method === 'aleatoria') {
+        box.querySelector('.add-manual').classList.add('d-none');
+        zone.innerHTML = '<small class="text-muted">Numeración automática.</small>';
+      }
+      box.dataset.groupId = id;
+      manualGemelaWrap.appendChild(box);
+    };
+    block('A', 'Grupo A', groupA, gemelaState.methodA);
+    block('B', 'Grupo B', groupB, gemelaState.methodB);
   }
 
   function buildGemela() {
@@ -760,32 +827,30 @@ if ($rifaActual) {
     renderGroupLists();
   }
 
-  function groupsManualUI(groupA, groupB) {
-    manualGemelaWrap.innerHTML = '';
-    const block = (id, label, sociosGrupo, method) => {
-      const box = document.createElement('div');
-      box.className = 'border rounded p-2 mb-2';
-      box.innerHTML = `<div class="d-flex justify-content-between align-items-center"><h6 class="mb-0">${label}</h6><span class="badge bg-light text-dark">Método: ${method}</span></div>
-      <div class="manual-zone mt-2"></div>
-      <button type="button" class="btn btn-sm btn-outline-secondary mt-2 add-manual">Agregar número manual</button>`;
-      const zone = box.querySelector('.manual-zone');
-      box.querySelector('.add-manual').addEventListener('click', () => addManualRow(zone, sociosGrupo));
-      if (method === 'aleatoria') {
-        box.querySelector('.add-manual').classList.add('d-none');
-        zone.innerHTML = '<small class="text-muted">Numeración automática.</small>';
-      }
-      box.dataset.groupId = id;
-      manualGemelaWrap.appendChild(box);
-    };
-    block('A', 'Grupo A', groupA, gemelaState.methodA);
-    block('B', 'Grupo B', groupB, gemelaState.methodB);
+  function syncArteInputsFromDrag() {
+    const left = Math.max(0, Math.round(parseFloat(arteDragText.style.left) || 0));
+    const top = Math.max(0, Math.round(parseFloat(arteDragText.style.top) || 0));
+    arteXInput.value = left;
+    arteYInput.value = top;
   }
 
-  function updateStep() {
-    steps.forEach(step => step.classList.toggle('d-none', Number(step.dataset.step) !== currentStep));
-    prev.classList.toggle('d-none', currentStep === 1);
-    next.classList.toggle('d-none', currentStep === 6);
-    submit.classList.toggle('d-none', currentStep !== 6);
+  function applyArtePreview() {
+    const size = Number(arteSizeInput.value || 28);
+    arteDragText.style.fontSize = `${size}px`;
+    arteDragText.style.color = arteColorInput.value || '#000000';
+    arteDragText.style.left = `${Math.max(0, Number(arteXInput.value || 0))}px`;
+    arteDragText.style.top = `${Math.max(0, Number(arteYInput.value || 0))}px`;
+    arteSizeSlider.value = String(size);
+  }
+
+  function loadArtePreviewFromFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      artePreviewImage.src = String(reader.result || '');
+      artePreviewImage.classList.remove('d-none');
+    };
+    reader.readAsDataURL(file);
   }
 
   function applyTipoUI() {
@@ -797,6 +862,73 @@ if ($rifaActual) {
     form.querySelectorAll('.gemela-only').forEach(el => el.classList.toggle('d-none', tipo !== 'gemela'));
     tipoInput.value = tipo;
     document.getElementById('cantidad_grupos').value = tipo === 'gemela' ? '2' : '1';
+  }
+
+  function validateCurrentStep() {
+    const inicio = Number(document.getElementById('rango_inicio').value || 0);
+    const fin = Number(document.getElementById('rango_fin').value || 0);
+    const cifras = Number(document.getElementById('cifras_numero').value || 0);
+    const cantidad = Number(form.querySelector('[name="cantidad_boletas"]').value || 0);
+
+    if (currentStep === 1 && !tipo) return 'Debes seleccionar tipo de rifa.';
+    if (currentStep === 2) {
+      if (cifras < 1 || cifras > 6) return 'La cantidad de cifras debe estar entre 1 y 6.';
+      if (fin < inicio) return 'El rango numérico es inválido.';
+      const totalRango = (fin - inicio) + 1;
+      if (cantidad <= 0) return 'La cantidad de boletas debe ser mayor a cero.';
+      if (cantidad > totalRango) return 'La cantidad de boletas no puede superar el total del rango.';
+    }
+    if (currentStep === 3) {
+      if (tipo === 'normal') {
+        const selected = [...normalSociosWrap.querySelectorAll('input[type="checkbox"]:checked')];
+        if (!selected.length) return 'Debes seleccionar al menos un socio.';
+      }
+      if (tipo === 'gemela') {
+        const groupA = socios.filter(s => gemelaState.included.has(s.id) && gemelaState.groupA.has(s.id));
+        const groupB = socios.filter(s => gemelaState.included.has(s.id) && !gemelaState.groupA.has(s.id));
+        if (!groupA.length || !groupB.length) return 'Debe existir al menos un socio en Grupo A y Grupo B.';
+      }
+    }
+    if (currentStep === 4) {
+      const globalManual = new Set();
+      if (tipo === 'normal') {
+        for (const r of document.querySelectorAll('#manualAsignacionesNormal .manual-row')) {
+          const numero = r.querySelector('input').value.trim();
+          if (!numero) continue;
+          const n = Number(numero);
+          if (!Number.isInteger(n) || n < inicio || n > fin) return 'Hay números manuales fuera de rango.';
+          if (globalManual.has(n)) return 'Hay números manuales repetidos.';
+          globalManual.add(n);
+        }
+      }
+      if (tipo === 'gemela') {
+        for (const box of manualGemelaWrap.querySelectorAll('[data-group-id]')) {
+          const groupNums = new Set();
+          for (const row of box.querySelectorAll('.manual-group-row')) {
+            const numero = row.querySelector('.manual-numero').value.trim();
+            if (!numero) continue;
+            const n = Number(numero);
+            if (!Number.isInteger(n) || n < inicio || n > fin) return `Número fuera de rango en grupo ${box.dataset.groupId}.`;
+            if (groupNums.has(n)) return `Número duplicado dentro del grupo ${box.dataset.groupId}.`;
+            groupNums.add(n);
+          }
+        }
+      }
+    }
+    if (currentStep === 5) {
+      const hasArte = Boolean((artePathInput.value || '').trim()) || (arteFileInput.files && arteFileInput.files.length > 0);
+      if (!hasArte) return 'Debes cargar un arte base para continuar.';
+      if (!arteXInput.value || !arteYInput.value) return 'Debes definir una posición para el número.';
+    }
+    return '';
+  }
+
+  function updateStepValidationState() {
+    const msg = validateCurrentStep();
+    validationMessage.textContent = msg;
+    next.disabled = Boolean(msg);
+    submit.disabled = Boolean(validateCurrentStep());
+    return !msg;
   }
 
   function collectAndValidate() {
@@ -831,7 +963,7 @@ if ($rifaActual) {
 
     const groupA = socios.filter(s => gemelaState.included.has(s.id) && gemelaState.groupA.has(s.id));
     const groupB = socios.filter(s => gemelaState.included.has(s.id) && !gemelaState.groupA.has(s.id));
-    if (!groupA.length && !groupB.length) throw new Error('No se puede continuar si no hay socios asignados.');
+    if (!groupA.length || !groupB.length) throw new Error('Debe existir al menos un socio por grupo.');
 
     const parseManual = (groupId, sociosGrupo) => {
       const box = manualGemelaWrap.querySelector(`[data-group-id="${groupId}"]`);
@@ -857,8 +989,8 @@ if ($rifaActual) {
     const manualB = parseManual('B', groupB);
 
     const grupos = [];
-    if (groupA.length) grupos.push({ nombre:'Grupo A', boletas_por_socio:1, metodo_distribucion:gemelaState.methodA, socios:groupA.map(s=>s.id), asignaciones:manualA });
-    if (groupB.length) grupos.push({ nombre:'Grupo B', boletas_por_socio:1, metodo_distribucion:gemelaState.methodB, socios:groupB.map(s=>s.id), asignaciones:manualB });
+    grupos.push({ nombre:'Grupo A', boletas_por_socio:1, metodo_distribucion:gemelaState.methodA, socios:groupA.map(s=>s.id), asignaciones:manualA });
+    grupos.push({ nombre:'Grupo B', boletas_por_socio:1, metodo_distribucion:gemelaState.methodB, socios:groupB.map(s=>s.id), asignaciones:manualB });
     document.getElementById('grupos_json').value = JSON.stringify(grupos);
     document.getElementById('manual_asignaciones_json').value = '[]';
     document.getElementById('numeros_manuales').value = '';
@@ -866,42 +998,147 @@ if ($rifaActual) {
 
   document.querySelectorAll('#tipoRifaOptions [data-tipo]').forEach(btn => btn.addEventListener('click', () => {
     tipo = btn.dataset.tipo;
+    clearDependentByTipo();
     applyTipoUI();
     normalSociosWrap.innerHTML = `<label class="form-label">Socios participantes</label><div class="row">${renderSociosCheckbox('socios_normal')}</div>`;
     buildGemela();
+    updateStepValidationState();
   }));
 
-  document.getElementById('metodo_grupo_a')?.addEventListener('change', (e) => { gemelaState.methodA = e.target.value; buildGemela(); });
-  document.getElementById('metodo_grupo_b')?.addEventListener('change', (e) => { gemelaState.methodB = e.target.value; buildGemela(); });
+  document.getElementById('metodo_grupo_a')?.addEventListener('change', (e) => { gemelaState.methodA = e.target.value; resetManualAssignments(); updateStepValidationState(); });
+  document.getElementById('metodo_grupo_b')?.addEventListener('change', (e) => { gemelaState.methodB = e.target.value; resetManualAssignments(); updateStepValidationState(); });
 
   document.getElementById('agregarAsignacionNormal').addEventListener('click', () => {
+    const selected = [...normalSociosWrap.querySelectorAll('input[type="checkbox"]:checked')].map(el => Number(el.value));
+    const sociosDisponibles = socios.filter(s => selected.includes(s.id));
     const row = document.createElement('div');
     row.className = 'row g-2 mb-2 manual-row';
     row.innerHTML = `<div class="col-md-4"><input class="form-control" placeholder="Número"></div>
-      <div class="col-md-6"><select class="form-select"><option value="">Socio</option>${socios.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('')}</select></div>
+      <div class="col-md-6"><select class="form-select"><option value="">Socio</option>${sociosDisponibles.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('')}</select></div>
       <div class="col-md-2"><button type="button" class="btn btn-outline-danger w-100">X</button></div>`;
-    row.querySelector('button').addEventListener('click', () => row.remove());
+    row.querySelector('button').addEventListener('click', () => { row.remove(); updateStepValidationState(); });
     document.getElementById('manualAsignacionesNormal').appendChild(row);
+    updateStepValidationState();
+  });
+
+  normalSociosWrap.addEventListener('change', (e) => {
+    if (e.target.matches('input[type="checkbox"]')) {
+      resetManualAssignments();
+      updateStepValidationState();
+    }
+  });
+
+  ['rango_inicio','rango_fin','cantidad_boletas'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', () => {
+      resetManualAssignments();
+      updateStepValidationState();
+    });
   });
 
   document.getElementById('cifras_numero').addEventListener('change', (e) => {
     const cifras = Number(e.target.value || 2);
-    document.getElementById('previewNumero').textContent = String(0).padStart(cifras, '0');
+    const ejemplo = String(0).padStart(cifras, '0');
+    numeroPreview.textContent = ejemplo;
+    arteDragText.textContent = ejemplo;
+    updateStepValidationState();
   });
 
-  prev.addEventListener('click', () => { if (currentStep > 1) { currentStep--; updateStep(); }});
-  next.addEventListener('click', () => {
-    if (!tipo && currentStep === 1) return alert('Selecciona si la rifa es normal o gemela.');
-    if (currentStep < 6) { currentStep++; updateStep(); }
+  if (arteEditor && arteDragText) {
+    let dragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    arteDragText.addEventListener('mousedown', (e) => {
+      dragging = true;
+      const rect = arteDragText.getBoundingClientRect();
+      offsetX = e.clientX - rect.left;
+      offsetY = e.clientY - rect.top;
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const rect = arteEditor.getBoundingClientRect();
+      const maxX = Math.max(0, rect.width - arteDragText.offsetWidth);
+      const maxY = Math.max(0, rect.height - arteDragText.offsetHeight);
+      const x = Math.min(Math.max(0, e.clientX - rect.left - offsetX), maxX);
+      const y = Math.min(Math.max(0, e.clientY - rect.top - offsetY), maxY);
+      arteDragText.style.left = `${Math.round(x)}px`;
+      arteDragText.style.top = `${Math.round(y)}px`;
+      syncArteInputsFromDrag();
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      updateStepValidationState();
+    });
+  }
+
+  arteFileInput?.addEventListener('change', () => {
+    const file = arteFileInput.files?.[0];
+    loadArtePreviewFromFile(file);
+    updateStepValidationState();
   });
+
+  artePathInput?.addEventListener('input', () => {
+    const path = (artePathInput.value || '').trim();
+    if (path !== '') {
+      artePreviewImage.src = path;
+      artePreviewImage.classList.remove('d-none');
+    }
+    updateStepValidationState();
+  });
+
+  arteXInput?.addEventListener('input', () => { applyArtePreview(); updateStepValidationState(); });
+  arteYInput?.addEventListener('input', () => { applyArtePreview(); updateStepValidationState(); });
+  arteSizeInput?.addEventListener('input', () => { applyArtePreview(); updateStepValidationState(); });
+  arteColorInput?.addEventListener('input', () => { applyArtePreview(); updateStepValidationState(); });
+  arteSizeSlider?.addEventListener('input', () => {
+    arteSizeInput.value = arteSizeSlider.value;
+    applyArtePreview();
+    updateStepValidationState();
+  });
+
+  prev.addEventListener('click', () => {
+    if (currentStep > 1) {
+      currentStep--;
+      updateStep();
+    }
+  });
+
+  function updateStep() {
+    steps.forEach(step => step.classList.toggle('d-none', Number(step.dataset.step) !== currentStep));
+    prev.classList.toggle('d-none', currentStep === 1);
+    next.classList.toggle('d-none', currentStep === 6);
+    submit.classList.toggle('d-none', currentStep !== 6);
+    updateStepValidationState();
+  }
+
+  next.addEventListener('click', () => {
+    const msg = validateCurrentStep();
+    if (msg) {
+      validationMessage.textContent = msg;
+      return;
+    }
+    if (currentStep < 6) {
+      currentStep++;
+      updateStep();
+    }
+  });
+
   form.addEventListener('submit', (e) => {
     try {
+      const msg = validateCurrentStep();
+      if (msg) throw new Error(msg);
       collectAndValidate();
     } catch (err) {
       e.preventDefault();
       alert(err.message);
     }
   });
+
+  applyArtePreview();
   updateStep();
 })();
 </script>
