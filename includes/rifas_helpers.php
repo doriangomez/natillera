@@ -4,20 +4,37 @@ require_once __DIR__ . '/functions.php';
 
 function columnExists(PDO $pdo, string $tabla, string $columna): bool
 {
-    $stmt = $pdo->prepare('SHOW COLUMNS FROM `' . $tabla . '` LIKE :columna');
-    $stmt->execute([':columna' => $columna]);
-    return $stmt->rowCount() > 0;
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tabla)) {
+        return false;
+    }
+
+    $sql = 'SHOW COLUMNS FROM `' . $tabla . '` LIKE ' . $pdo->quote($columna);
+    $stmt = $pdo->query($sql);
+    return $stmt ? $stmt->rowCount() > 0 : false;
 }
 
 function indexExists(PDO $pdo, string $tabla, string $index): bool
 {
-    $stmt = $pdo->prepare('SHOW INDEX FROM `' . $tabla . '` WHERE Key_name = :idx');
-    $stmt->execute([':idx' => $index]);
-    return $stmt->rowCount() > 0;
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tabla)) {
+        return false;
+    }
+
+    $sql = 'SHOW INDEX FROM `' . $tabla . '` WHERE Key_name = ' . $pdo->quote($index);
+    $stmt = $pdo->query($sql);
+    return $stmt ? $stmt->rowCount() > 0 : false;
+}
+
+
+function tableExists(PDO $pdo, string $tabla): bool
+{
+    $sql = 'SHOW TABLES LIKE ' . $pdo->quote($tabla);
+    $stmt = $pdo->query($sql);
+    return $stmt ? $stmt->rowCount() > 0 : false;
 }
 
 function asegurarEsquemaRifas(PDO $pdo): void
 {
+    try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS rifas (
         id_rifa INT AUTO_INCREMENT PRIMARY KEY,
         nombre VARCHAR(150) NOT NULL,
@@ -185,6 +202,10 @@ function asegurarEsquemaRifas(PDO $pdo): void
         'col_referencia' => 'id_grupo',
         'nombre' => 'fk_boleta_grupo',
     ]);
+    } catch (Throwable $e) {
+        error_log('Rifas esquema: ' . $e->getMessage());
+    }
+
 }
 
 function sincronizarActividadesRifa(PDO $pdo): array
@@ -611,6 +632,10 @@ function construirNumerosRifa(int $cantidad, array $config = []): array
 
 function obtenerGruposRifa(PDO $pdo, int $idRifa): array
 {
+    if (!tableExists($pdo, 'rifas_grupos')) {
+        return [];
+    }
+
     $stmt = $pdo->prepare('SELECT g.*, COUNT(b.id_boleta) AS total_boletas, SUM(CASE WHEN b.estado = "pagada" THEN 1 ELSE 0 END) AS boletas_pagadas, COALESCE(SUM(CASE WHEN b.estado = "pagada" THEN b.valor ELSE 0 END), 0) AS recaudo FROM rifas_grupos g LEFT JOIN rifas_boletas b ON b.id_grupo = g.id_grupo WHERE g.id_rifa = :id GROUP BY g.id_grupo ORDER BY g.orden_grupo');
     $stmt->execute([':id' => $idRifa]);
     return $stmt->fetchAll();
@@ -618,6 +643,10 @@ function obtenerGruposRifa(PDO $pdo, int $idRifa): array
 
 function obtenerResumenSociosRifa(PDO $pdo, int $idRifa): array
 {
+    if (!tableExists($pdo, 'rifas_boletas')) {
+        return [];
+    }
+
     $stmt = $pdo->prepare('SELECT s.id_socio, s.nombre_completo, COUNT(b.id_boleta) AS boletas, SUM(CASE WHEN b.estado = "pagada" THEN 1 ELSE 0 END) AS pagadas, SUM(CASE WHEN b.estado IN ("pendiente", "asignada") THEN 1 ELSE 0 END) AS pendientes, COALESCE(SUM(CASE WHEN b.estado = "pagada" THEN b.valor ELSE 0 END),0) AS total_pagado FROM rifas_boletas b JOIN socios s ON s.id_socio = b.id_socio WHERE b.id_rifa = :id GROUP BY s.id_socio, s.nombre_completo ORDER BY s.nombre_completo');
     $stmt->execute([':id' => $idRifa]);
     return $stmt->fetchAll();
