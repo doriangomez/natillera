@@ -346,109 +346,124 @@ function asignarBoletasAutomaticas(PDO $pdo, int $idRifa, ?string $usuario = nul
         $sociosMap[(int) $socio['id_socio']] = $socio;
     }
 
+    $erroresPorGrupo = [];
+
     foreach ($grupos as $grupo) {
+        $nombreGrupo = (string) ($grupo['nombre'] ?? ('ID ' . (string) ($grupo['id_grupo'] ?? 'N/A')));
         $idGrupo = $grupo['id_grupo'] ?? null;
-        $stmtBoletas = $pdo->prepare('SELECT * FROM rifas_boletas WHERE id_rifa = :id AND ((:grupo IS NULL AND id_grupo IS NULL) OR id_grupo = :grupo) ORDER BY numero');
-        $stmtBoletas->execute([':id' => $idRifa, ':grupo' => $idGrupo]);
-        $boletas = $stmtBoletas->fetchAll();
-        if (empty($boletas)) {
-            continue;
-        }
-
-        $boletasPorNumero = [];
-        foreach ($boletas as $boleta) {
-            $boletasPorNumero[(string) $boleta['numero']] = $boleta;
-        }
-
-        $metodo = $grupo['metodo_distribucion'] ?? ($config['modo_distribucion'] ?? 'aleatoria');
-        $idsSociosGrupo = $grupo['socios'] ?? array_keys($sociosMap);
-        $idsSociosGrupo = array_values(array_filter(array_map('intval', $idsSociosGrupo), static fn($id) => $id > 0 && isset($sociosMap[$id])));
-        if (empty($idsSociosGrupo)) {
-            throw new RuntimeException('No se puede crear rifa sin asignar socios en el grupo configurado.');
-        }
-
-        $stmtUpd = $pdo->prepare('UPDATE rifas_boletas SET id_socio = :socio, estado = "asignada", usuario_ultimo = :usuario WHERE id_boleta = :id');
-
-        $manualAsignadas = [];
-        $manualNumeros = [];
-        $manualPorSocio = array_fill_keys($idsSociosGrupo, 0);
-        $asignacionesNumero = is_array($grupo['asignaciones'] ?? null) ? $grupo['asignaciones'] : [];
-        foreach ($asignacionesNumero as $asig) {
-            if (!isset($asig['numero']) || !isset($asig['id_socio'])) {
+        try {
+            $stmtBoletas = $pdo->prepare('SELECT * FROM rifas_boletas WHERE id_rifa = :id AND ((:grupo IS NULL AND id_grupo IS NULL) OR id_grupo = :grupo) ORDER BY numero');
+            $stmtBoletas->execute([':id' => $idRifa, ':grupo' => $idGrupo]);
+            $boletas = $stmtBoletas->fetchAll();
+            if (empty($boletas)) {
                 continue;
             }
-            $numero = (string) $asig['numero'];
-            $idSocio = (int) $asig['id_socio'];
-            if (!isset($boletasPorNumero[$numero])) {
-                throw new RuntimeException('Asignación manual inválida: número no disponible en el grupo.');
-            }
-            if (!in_array($idSocio, $idsSociosGrupo, true)) {
-                throw new RuntimeException('Asignación manual inválida: el socio no pertenece al grupo.');
-            }
-            if (isset($manualNumeros[$numero])) {
-                throw new RuntimeException('No se permiten números manuales duplicados dentro del mismo grupo.');
-            }
-            $manualNumeros[$numero] = true;
-            $boleta = $boletasPorNumero[$numero];
-            $stmtUpd->execute([
-                ':socio' => $idSocio,
-                ':usuario' => $usuario,
-                ':id' => $boleta['id_boleta'],
-            ]);
-            registrarHistorialBoleta($pdo, (int) $boleta['id_boleta'], $idRifa, $boleta['numero'], 'asignacion', 'Asignación manual a ' . $sociosMap[$idSocio]['nombre_completo'], $usuario);
-            $manualAsignadas[(int) $boleta['id_boleta']] = true;
-            $manualPorSocio[$idSocio] = ($manualPorSocio[$idSocio] ?? 0) + 1;
-        }
 
-        $restantes = array_values(array_filter($boletas, static fn($b) => !isset($manualAsignadas[(int) $b['id_boleta']])));
-        if ($metodo === 'aleatoria' || $metodo === 'mixta' || $metodo === 'manual') {
-            shuffle($restantes);
-        }
-
-        $boletasPorSocio = max(1, (int) ($grupo['boletas_por_socio'] ?? ($config['boletas_por_socio'] ?? 1)));
-
-        $asignacion = [];
-        foreach ($idsSociosGrupo as $idSocio) {
-            $faltan = max(0, $boletasPorSocio - (int) ($manualPorSocio[$idSocio] ?? 0));
-            if ($faltan > 0) {
-                $asignacion[$idSocio] = $faltan;
+            $boletasPorNumero = [];
+            foreach ($boletas as $boleta) {
+                $boletasPorNumero[(string) $boleta['numero']] = $boleta;
             }
-        }
 
-        $totalFaltantes = array_sum($asignacion);
-        if ($totalFaltantes > count($restantes)) {
-            throw new RuntimeException('No hay números suficientes para completar el cupo de boletas por socio en el grupo.');
-        }
-
-        // Si sobran boletas después de completar cupos, se reparten de forma equilibrada
-        // solo entre quienes aún tienen faltantes.
-        $extras = count($restantes) - $totalFaltantes;
-        if ($extras > 0) {
-            $sociosConFaltantes = array_values(array_keys(array_filter($asignacion, static fn($faltan) => $faltan > 0)));
-            if (empty($sociosConFaltantes)) {
-                $sociosConFaltantes = $idsSociosGrupo;
+            $idsSociosGrupo = $grupo['socios'] ?? array_keys($sociosMap);
+            $idsSociosGrupo = array_values(array_filter(array_map('intval', $idsSociosGrupo), static fn($id) => $id > 0 && isset($sociosMap[$id])));
+            if (empty($idsSociosGrupo)) {
+                throw new RuntimeException('No se puede crear rifa sin asignar socios en el grupo configurado.');
             }
-            $idx = 0;
-            while ($extras > 0) {
-                $idSocio = $sociosConFaltantes[$idx % count($sociosConFaltantes)];
-                $asignacion[$idSocio] = ($asignacion[$idSocio] ?? 0) + 1;
-                $extras--;
-                $idx++;
-            }
-        }
 
-        $i = 0;
-        foreach ($asignacion as $idSocio => $cantidad) {
-            for ($j = 0; $j < $cantidad && isset($restantes[$i]); $j++, $i++) {
-                $boleta = $restantes[$i];
+            $stmtUpd = $pdo->prepare('UPDATE rifas_boletas SET id_socio = :socio, estado = "asignada", usuario_ultimo = :usuario WHERE id_boleta = :id');
+
+            $manualAsignadas = [];
+            $manualNumeros = [];
+            $manualPorSocio = array_fill_keys($idsSociosGrupo, 0);
+            $asignacionesNumero = is_array($grupo['asignaciones'] ?? null) ? $grupo['asignaciones'] : [];
+            foreach ($asignacionesNumero as $asig) {
+                if (!isset($asig['numero']) || !isset($asig['id_socio'])) {
+                    continue;
+                }
+                $numero = (string) $asig['numero'];
+                $idSocio = (int) ($asig['id_socio'] ?? 0);
+
+                if (!isset($boletasPorNumero[$numero])) {
+                    $numeroNormalizado = str_pad((string) ((int) $numero), max(1, strlen((string) $boletas[0]['numero'])), '0', STR_PAD_LEFT);
+                    $numero = $numeroNormalizado;
+                }
+
+                if (!isset($boletasPorNumero[$numero])) {
+                    throw new RuntimeException('Asignación manual inválida: número no disponible en el grupo.');
+                }
+                if (!in_array($idSocio, $idsSociosGrupo, true)) {
+                    throw new RuntimeException('Asignación manual inválida: el socio no pertenece al grupo.');
+                }
+                if (isset($manualNumeros[$numero])) {
+                    throw new RuntimeException('No se permiten números manuales duplicados dentro del mismo grupo.');
+                }
+
+                $manualNumeros[$numero] = true;
+                $boleta = $boletasPorNumero[$numero];
                 $stmtUpd->execute([
                     ':socio' => $idSocio,
                     ':usuario' => $usuario,
                     ':id' => $boleta['id_boleta'],
                 ]);
-                registrarHistorialBoleta($pdo, (int) $boleta['id_boleta'], $idRifa, $boleta['numero'], 'asignacion', 'Asignación automática a ' . $sociosMap[$idSocio]['nombre_completo'], $usuario);
+                registrarHistorialBoleta($pdo, (int) $boleta['id_boleta'], $idRifa, $boleta['numero'], 'asignacion', 'Asignación manual a ' . $sociosMap[$idSocio]['nombre_completo'], $usuario);
+                $manualAsignadas[(int) $boleta['id_boleta']] = true;
+                $manualPorSocio[$idSocio] = ($manualPorSocio[$idSocio] ?? 0) + 1;
             }
+
+            $boletasPorSocio = max(1, (int) ($grupo['boletas_por_socio'] ?? ($config['boletas_por_socio'] ?? 1)));
+            $totalEsperadoGrupo = count($idsSociosGrupo) * $boletasPorSocio;
+            if (count($boletas) < $totalEsperadoGrupo) {
+                throw new RuntimeException('No hay boletas suficientes para completar el cupo esperado del grupo.');
+            }
+
+            foreach ($manualPorSocio as $idSocio => $manualesSocio) {
+                if ($manualesSocio > $boletasPorSocio) {
+                    throw new RuntimeException('Un socio tiene más manuales que su cupo de boletas.');
+                }
+            }
+
+            $restantes = array_values(array_filter($boletas, static fn($b) => !isset($manualAsignadas[(int) $b['id_boleta']])));
+            shuffle($restantes);
+
+            $asignacion = [];
+            foreach ($idsSociosGrupo as $idSocio) {
+                $faltan = max(0, $boletasPorSocio - (int) ($manualPorSocio[$idSocio] ?? 0));
+                if ($faltan > 0) {
+                    $asignacion[$idSocio] = $faltan;
+                }
+            }
+
+            $totalFaltantes = array_sum($asignacion);
+            if ($totalFaltantes > count($restantes)) {
+                throw new RuntimeException('No hay números disponibles suficientes para completar los faltantes del grupo.');
+            }
+
+            $i = 0;
+            foreach ($asignacion as $idSocio => $cantidad) {
+                for ($j = 0; $j < $cantidad && isset($restantes[$i]); $j++, $i++) {
+                    $boleta = $restantes[$i];
+                    $stmtUpd->execute([
+                        ':socio' => $idSocio,
+                        ':usuario' => $usuario,
+                        ':id' => $boleta['id_boleta'],
+                    ]);
+                    registrarHistorialBoleta($pdo, (int) $boleta['id_boleta'], $idRifa, $boleta['numero'], 'asignacion', 'Asignación automática a ' . $sociosMap[$idSocio]['nombre_completo'], $usuario);
+                }
+            }
+
+            $stmtValida = $pdo->prepare('SELECT COUNT(*) FROM rifas_boletas WHERE id_rifa = :id_rifa AND ((:grupo IS NULL AND id_grupo IS NULL) OR id_grupo = :grupo) AND id_socio IS NOT NULL');
+            $stmtValida->execute([':id_rifa' => $idRifa, ':grupo' => $idGrupo]);
+            $totalAsignadoGrupo = (int) $stmtValida->fetchColumn();
+            if ($totalAsignadoGrupo !== $totalEsperadoGrupo) {
+                throw new RuntimeException('La distribución quedó incompleta: asignadas ' . $totalAsignadoGrupo . ' de ' . $totalEsperadoGrupo . ' boletas esperadas.');
+            }
+        } catch (Throwable $e) {
+            $erroresPorGrupo[] = $nombreGrupo . ': ' . $e->getMessage();
         }
+    }
+
+    if (!empty($erroresPorGrupo)) {
+        throw new RuntimeException('Se detectaron errores en la distribución por grupos: ' . implode(' | ', $erroresPorGrupo));
     }
 }
 
