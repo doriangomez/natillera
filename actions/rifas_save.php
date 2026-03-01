@@ -13,6 +13,24 @@ try {
         $cifrasNumero = max(1, (int) ($_POST['cifras_numero'] ?? 2));
         $rangoInicio = max(0, (int) ($_POST['rango_inicio'] ?? 0));
         $rangoFin = (int) ($_POST['rango_fin'] ?? ((10 ** $cifrasNumero) - 1));
+
+        $arteBasePath = clean($_POST['arte_base_path'] ?? '');
+        if (!empty($_FILES['arte_base_file']['tmp_name']) && is_uploaded_file($_FILES['arte_base_file']['tmp_name'])) {
+            $dir = dirname(__DIR__) . '/public/uploads/rifas/base';
+            if (!is_dir($dir)) {
+                mkdir($dir, 0775, true);
+            }
+            $ext = strtolower(pathinfo($_FILES['arte_base_file']['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, ['png', 'jpg', 'jpeg', 'gif'], true)) {
+                throw new RuntimeException('El arte base debe ser una imagen PNG/JPG/GIF.');
+            }
+            $nombre = 'base_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+            $destino = $dir . '/' . $nombre;
+            if (!move_uploaded_file($_FILES['arte_base_file']['tmp_name'], $destino)) {
+                throw new RuntimeException('No se pudo guardar el arte base cargado.');
+            }
+            $arteBasePath = 'uploads/rifas/base/' . $nombre;
+        }
         $datos = [
             'nombre' => clean($_POST['nombre'] ?? ''),
             'fecha_inicio' => $_POST['fecha_inicio'] ?? '',
@@ -32,11 +50,12 @@ try {
             'modo_distribucion' => clean($_POST['modo_distribucion'] ?? 'aleatoria'),
             'boletas_por_socio' => max(1, (int) ($_POST['boletas_por_socio'] ?? 1)),
             'grupos_json' => $_POST['grupos_json'] ?? '',
-            'arte_base_path' => clean($_POST['arte_base_path'] ?? ''),
+            'arte_base_path' => $arteBasePath,
             'arte_numero_x' => ($_POST['arte_numero_x'] ?? '') !== '' ? (int) $_POST['arte_numero_x'] : null,
             'arte_numero_y' => ($_POST['arte_numero_y'] ?? '') !== '' ? (int) $_POST['arte_numero_y'] : null,
             'arte_numero_size' => ($_POST['arte_numero_size'] ?? '') !== '' ? (int) $_POST['arte_numero_size'] : null,
             'arte_numero_color' => clean($_POST['arte_numero_color'] ?? ''),
+            'arte_font_path' => clean($_POST['arte_font_path'] ?? ''),
             'usuario_registro' => $usuario,
         ];
 
@@ -98,6 +117,7 @@ try {
             $pdo,
             $idRifa,
             clean($_POST['numero_ganador'] ?? ''),
+            ($_POST['id_grupo_ganador'] ?? '') !== '' ? (int) $_POST['id_grupo_ganador'] : null,
             (float) ($_POST['valor_premio'] ?? 0),
             $_POST['fecha_pago'] ?? date('Y-m-d'),
             clean($_POST['medio'] ?? ''),
@@ -105,6 +125,21 @@ try {
             $usuario
         );
         $_SESSION['exito'] = 'Premio registrado y rifa cerrada.';
+    }
+
+
+    if ($accion === 'descargar_boletas_zip') {
+        $idRifa = (int) ($_POST['id_rifa'] ?? 0);
+        $rutaZip = exportarBoletasZip($idRifa);
+        if (!$rutaZip || !is_file($rutaZip)) {
+            throw new RuntimeException('No hay imágenes generadas para exportar en ZIP.');
+        }
+
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="' . basename($rutaZip) . '"');
+        header('Content-Length: ' . filesize($rutaZip));
+        readfile($rutaZip);
+        exit;
     }
 
     if ($accion === 'eliminar_rifa') {
