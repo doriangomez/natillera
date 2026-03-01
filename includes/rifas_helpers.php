@@ -182,6 +182,18 @@ function asegurarEsquemaRifas(PDO $pdo): void
         $pdo->exec('ALTER TABLE rifas_boletas ADD COLUMN forma_pago VARCHAR(50) DEFAULT NULL AFTER fecha_pago');
     }
 
+    if (!indexExists($pdo, 'rifas_boletas', 'idx_rifa')) {
+        $pdo->exec('CREATE INDEX idx_rifa ON rifas_boletas (id_rifa)');
+    }
+
+    if (!indexExists($pdo, 'rifas_boletas', 'uq_rifa_grupo_numero')) {
+        $pdo->exec('CREATE UNIQUE INDEX uq_rifa_grupo_numero ON rifas_boletas (id_rifa, id_grupo, numero)');
+    }
+
+    if (indexExists($pdo, 'rifas_boletas', 'uq_rifa_numero')) {
+        $pdo->exec('ALTER TABLE rifas_boletas DROP INDEX uq_rifa_numero');
+    }
+
     eliminarIndicesUnicosLegadosRifasBoletas($pdo);
 
     $pdo->exec('UPDATE rifas_boletas b JOIN (SELECT rg.id_rifa, MIN(rg.id_grupo) AS id_grupo_default FROM rifas_grupos rg GROUP BY rg.id_rifa) gd ON gd.id_rifa = b.id_rifa SET b.id_grupo = gd.id_grupo_default WHERE b.id_grupo IS NULL');
@@ -191,10 +203,6 @@ function asegurarEsquemaRifas(PDO $pdo): void
     $colIdGrupo = $stmtIdGrupo ? $stmtIdGrupo->fetch() : null;
     if (is_array($colIdGrupo) && strtoupper((string) ($colIdGrupo['Null'] ?? 'YES')) === 'YES') {
         $pdo->exec('ALTER TABLE rifas_boletas MODIFY COLUMN id_grupo INT NOT NULL');
-    }
-
-    if (!indexExists($pdo, 'rifas_boletas', 'uq_rifa_grupo_numero')) {
-        $pdo->exec('CREATE UNIQUE INDEX uq_rifa_grupo_numero ON rifas_boletas (id_rifa, id_grupo, numero)');
     }
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS rifas_boletas_historial (
