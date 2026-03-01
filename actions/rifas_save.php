@@ -73,10 +73,10 @@ try {
         $actividadIngreso = getActividad($pdo, $datos['id_actividad_ingreso']);
         $actividadPremio = getActividad($pdo, $datos['id_actividad_premio']);
 
-        if (!$actividadIngreso || (int) ($actividadIngreso['es_ingreso'] ?? 0) !== 1 || (int) ($actividadIngreso['activo'] ?? 0) !== 1) {
+        if (!$actividadIngreso || !actividadValidaParaCausacion($actividadIngreso)) {
             throw new RuntimeException('Debe seleccionar una actividad de ingreso válida.');
         }
-        if (!$actividadPremio || (int) ($actividadPremio['es_ingreso'] ?? 1) !== 0 || (int) ($actividadPremio['activo'] ?? 0) !== 1) {
+        if (!$actividadPremio || !actividadValidaParaPremioRifa($actividadPremio)) {
             throw new RuntimeException('Debe seleccionar una actividad de egreso/premio válida.');
         }
 

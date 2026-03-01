@@ -76,6 +76,7 @@ $medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
                         <select name="actividad_pago_cuota" class="form-select">
                             <option value="0">Selecciona un concepto del maestro de actividades</option>
                             <?php foreach ($actividades as $a): ?>
+                                <?php if (!actividadValidaParaCausacion($a)) { continue; } ?>
                                 <option value="<?php echo (int) $a['id_actividad']; ?>" <?php echo ((int) ($config['actividad_pago_cuota'] ?? 0) === (int) $a['id_actividad']) ? 'selected' : ''; ?>>
                                     <?php echo clean($a['nombre_actividad']); ?>
                                 </option>
