@@ -178,7 +178,9 @@ try {
 
     if ($accion === 'descargar_boletas_zip') {
         $idRifa = (int) ($_POST['id_rifa'] ?? 0);
-        $rutaZip = exportarBoletasZip($idRifa);
+        $idGrupo = ($_POST['id_grupo'] ?? '') !== '' ? (int) $_POST['id_grupo'] : null;
+        $idSocio = ($_POST['id_socio'] ?? '') !== '' ? (int) $_POST['id_socio'] : null;
+        $rutaZip = exportarBoletasZipFiltrado($idRifa, $idGrupo, $idSocio);
         if (!$rutaZip || !is_file($rutaZip)) {
             throw new RuntimeException('No hay imágenes generadas para exportar en ZIP.');
         }
@@ -188,6 +190,13 @@ try {
         header('Content-Length: ' . filesize($rutaZip));
         readfile($rutaZip);
         exit;
+    }
+
+    if ($accion === 'reiniciar_asignaciones') {
+        $idRifa = (int) ($_POST['id_rifa'] ?? 0);
+        $forzar = (int) ($_POST['forzar_con_pagos'] ?? 0) === 1;
+        reiniciarAsignacionesRifa($pdo, $idRifa, $usuario, $forzar);
+        $_SESSION['exito'] = 'Asignaciones reiniciadas y regeneradas correctamente.';
     }
 
     if ($accion === 'eliminar_rifa') {
