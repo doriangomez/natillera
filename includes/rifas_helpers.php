@@ -24,6 +24,30 @@ function indexExists(PDO $pdo, string $tabla, string $index): bool
     return $stmt ? $stmt->rowCount() > 0 : false;
 }
 
+function eliminarIndicesUnicosLegadosRifasBoletas(PDO $pdo): void
+{
+    $sql = 'SELECT INDEX_NAME, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS columnas
+'
+        . 'FROM information_schema.STATISTICS
+'
+        . 'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = "rifas_boletas" AND NON_UNIQUE = 0
+'
+        . 'GROUP BY INDEX_NAME';
+
+    $stmt = $pdo->query($sql);
+    if (!$stmt) {
+        return;
+    }
+
+    foreach ($stmt->fetchAll() as $index) {
+        $nombre = (string) ($index['INDEX_NAME'] ?? '');
+        $columnas = strtolower((string) ($index['columnas'] ?? ''));
+        if ($nombre !== 'PRIMARY' && $columnas === 'id_rifa,numero') {
+            $pdo->exec('ALTER TABLE rifas_boletas DROP INDEX `' . str_replace('`', '``', $nombre) . '`');
+        }
+    }
+}
+
 
 function tableExists(PDO $pdo, string $tabla): bool
 {
@@ -158,9 +182,7 @@ function asegurarEsquemaRifas(PDO $pdo): void
         $pdo->exec('ALTER TABLE rifas_boletas ADD COLUMN forma_pago VARCHAR(50) DEFAULT NULL AFTER fecha_pago');
     }
 
-    if (indexExists($pdo, 'rifas_boletas', 'uq_rifa_numero')) {
-        $pdo->exec('ALTER TABLE rifas_boletas DROP INDEX uq_rifa_numero');
-    }
+    eliminarIndicesUnicosLegadosRifasBoletas($pdo);
     if (!indexExists($pdo, 'rifas_boletas', 'uq_rifa_grupo_numero')) {
         $pdo->exec('CREATE UNIQUE INDEX uq_rifa_grupo_numero ON rifas_boletas (id_rifa, id_grupo, numero)');
     }
