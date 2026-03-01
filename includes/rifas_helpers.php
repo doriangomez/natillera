@@ -506,8 +506,6 @@ function eliminarRifa(PDO $pdo, int $idRifa): void
         $pdo->prepare('DELETE FROM rifas WHERE id_rifa = :id')
             ->execute([':id' => $idRifa]);
 
-        recalcularSaldosDesdeMovimientos($pdo);
-
         $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
@@ -515,6 +513,8 @@ function eliminarRifa(PDO $pdo, int $idRifa): void
         }
         throw $e;
     }
+
+    recalcularSaldosDesdeMovimientos($pdo);
 }
 
 function obtenerRifa(PDO $pdo, int $idRifa): ?array
@@ -1036,7 +1036,6 @@ function reiniciarAsignacionesRifa(PDO $pdo, int $idRifa, ?string $usuario = nul
         asignarBoletasAutomaticas($pdo, $idRifa, $usuario, $rifa, $grupos);
         generarImagenesBoletasRifa($pdo, $idRifa, $rifa);
 
-        recalcularSaldosDesdeMovimientos($pdo);
         $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
@@ -1044,6 +1043,8 @@ function reiniciarAsignacionesRifa(PDO $pdo, int $idRifa, ?string $usuario = nul
         }
         throw $e;
     }
+
+    recalcularSaldosDesdeMovimientos($pdo);
 }
 
 function exportarBoletasZipFiltrado(int $idRifa, ?int $idGrupo = null, ?int $idSocio = null): ?string
