@@ -15,8 +15,12 @@ $boletas = [];
 $resumen = [];
 $gruposRifa = [];
 $resumenSocios = [];
-$utilidadRifa = ['total_vendido' => 0, 'total_recaudado' => 0, 'premio_entregado' => 0, 'utilidad_neta' => 0];
+$utilidadRifa = ['total_proyectado' => 0, 'total_vendido' => 0, 'total_recaudado' => 0, 'premio_entregado' => 0, 'utilidad_neta' => 0];
 $informeRifa = ['movimientos' => [], 'totales' => ['ingresos' => 0, 'egresos' => 0]];
+
+$filtroGrupo = isset($_GET['grupo']) ? (int) $_GET['grupo'] : 0;
+$filtroSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
+$filtroEstado = isset($_GET['estado']) ? clean($_GET['estado']) : '';
 
 try {
     asegurarEsquemaRifas($pdo);
@@ -30,10 +34,18 @@ try {
     $idRifaSeleccionada = isset($_GET['id_rifa']) ? (int) $_GET['id_rifa'] : ((int) ($rifas[0]['id_rifa'] ?? 0));
     $rifaActual = $idRifaSeleccionada ? obtenerRifa($pdo, $idRifaSeleccionada) : null;
     $boletas = $rifaActual ? obtenerBoletasRifa($pdo, $idRifaSeleccionada) : [];
+    if ($rifaActual) {
+        $boletas = array_values(array_filter($boletas, static function ($b) use ($filtroGrupo, $filtroSocio, $filtroEstado) {
+            if ($filtroGrupo > 0 && (int) ($b['id_grupo'] ?? 0) !== $filtroGrupo) return false;
+            if ($filtroSocio > 0 && (int) ($b['id_socio'] ?? 0) !== $filtroSocio) return false;
+            if ($filtroEstado !== '' && ($b['estado'] ?? '') !== $filtroEstado) return false;
+            return true;
+        }));
+    }
     $resumen = $rifaActual ? obtenerResumenBoletas($pdo, $idRifaSeleccionada) : [];
     $gruposRifa = $rifaActual ? obtenerGruposRifa($pdo, $idRifaSeleccionada) : [];
     $resumenSocios = $rifaActual ? obtenerResumenSociosRifa($pdo, $idRifaSeleccionada) : [];
-    $utilidadRifa = $rifaActual ? obtenerUtilidadRifa($pdo, $idRifaSeleccionada) : ['total_vendido' => 0, 'total_recaudado' => 0, 'premio_entregado' => 0, 'utilidad_neta' => 0];
+    $utilidadRifa = $rifaActual ? obtenerUtilidadRifa($pdo, $idRifaSeleccionada) : ['total_proyectado' => 0, 'total_vendido' => 0, 'total_recaudado' => 0, 'premio_entregado' => 0, 'utilidad_neta' => 0];
 } catch (Throwable $e) {
     $errorCarga = 'No se pudo cargar el módulo de rifas. Detalle técnico: ' . $e->getMessage();
 }
@@ -72,7 +84,7 @@ if ($rifaActual) {
                     </div>
                     <span class="badge bg-primary-subtle text-primary"><i class="bi bi-diagram-3 me-1"></i>Normal / Gemela</span>
                 </div>
-                <form method="POST" action="../actions/rifas_save.php" class="row g-2">
+                <form method="POST" action="../actions/rifas_save.php" class="row g-2" enctype="multipart/form-data">
                     <input type="hidden" name="accion" value="crear_rifa">
                     <div class="col-12">
                         <label class="form-label">Nombre</label>
@@ -139,6 +151,7 @@ if ($rifaActual) {
                             <option value="secuencial">Secuencial</option>
                             <option value="aleatoria">Aleatoria</option>
                             <option value="manual">Manual</option>
+                            <option value="mixta">Mixta (manual + automática)</option>
                         </select>
                     </div>
                     <div class="col-md-6">
@@ -159,10 +172,11 @@ if ($rifaActual) {
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Grupos (JSON opcional)</label>
-                        <input type="text" name="grupos_json" class="form-control" placeholder='[{"nombre":"Grupo A","boletas_por_socio":4}]'>
+                        <input type="text" name="grupos_json" class="form-control" placeholder='[{"nombre":"Grupo A","boletas_por_socio":4,"metodo_distribucion":"aleatoria","socios":[1,2]}]'>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Arte base (ruta)</label>
+                        <label class="form-label">Arte base (subida o ruta)</label>
+                        <input type="file" name="arte_base_file" class="form-control mb-2" accept=".png,.jpg,.jpeg,.gif">
                         <input type="text" name="arte_base_path" class="form-control" placeholder="uploads/rifas/base.png">
                     </div>
                     <div class="col-md-2">
@@ -180,6 +194,10 @@ if ($rifaActual) {
                     <div class="col-md-6">
                         <label class="form-label">Color fuente</label>
                         <input type="text" name="arte_numero_color" class="form-control" value="#000000">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Fuente TTF (opcional)</label>
+                        <input type="text" name="arte_font_path" class="form-control" placeholder="assets/fonts/Roboto-Regular.ttf">
                     </div>
                     <div class="col-12">
                         <label class="form-label">Observaciones</label>
@@ -242,6 +260,12 @@ if ($rifaActual) {
             <span class="badge bg-success-subtle text-success">Pagadas: <?php echo $resumen['pagada']['cantidad'] ?? 0; ?></span>
             <span class="badge bg-warning-subtle text-warning">Pendientes: <?php echo $resumen['pendiente']['cantidad'] ?? 0; ?></span>
             <span class="badge bg-secondary-subtle text-secondary">Total: <?php echo $rifaActual['cantidad_boletas']; ?></span>
+
+            <form method="POST" action="../actions/rifas_save.php">
+                <input type="hidden" name="accion" value="descargar_boletas_zip">
+                <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                <button class="btn btn-outline-secondary btn-sm"><i class="bi bi-file-earmark-zip me-1"></i>Descargar ZIP boletas</button>
+            </form>
             <form method="POST" action="../actions/rifas_save.php" onsubmit="return confirm('¿Seguro que deseas eliminar esta rifa? Esta acción también removerá boletas y movimientos relacionados.');">
                 <input type="hidden" name="accion" value="eliminar_rifa">
                 <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
@@ -328,6 +352,15 @@ if ($rifaActual) {
                             <input type="text" name="numero_ganador" class="form-control" maxlength="3" required placeholder="Ej: 33">
                         </div>
                         <div class="col-12">
+                            <label class="form-label">Grupo ganador (obligatorio si hay números repetidos entre grupos)</label>
+                            <select name="id_grupo_ganador" class="form-select">
+                                <option value="">Automático</option>
+                                <?php foreach ($gruposRifa as $grupo): ?>
+                                    <option value="<?php echo (int) $grupo['id_grupo']; ?>"><?php echo clean($grupo['nombre']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-12">
                             <label class="form-label">Valor del premio</label>
                             <input type="number" name="valor_premio" class="form-control" min="1" step="0.01" required>
                         </div>
@@ -365,27 +398,55 @@ if ($rifaActual) {
                         </div>
                         <span class="badge bg-info-subtle text-info">Valor unitario: $<?php echo number_format($rifaActual['valor_boleta'],0,',','.'); ?></span>
                     </div>
+                    <form method="GET" class="row g-2 mb-3">
+                        <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                        <div class="col-md-4">
+                            <select name="grupo" class="form-select form-select-sm">
+                                <option value="0">Todos los grupos</option>
+                                <?php foreach ($gruposRifa as $grupo): ?>
+                                    <option value="<?php echo (int) $grupo['id_grupo']; ?>" <?php echo $filtroGrupo === (int) $grupo['id_grupo'] ? 'selected' : ''; ?>><?php echo clean($grupo['nombre']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <select name="socio" class="form-select form-select-sm">
+                                <option value="0">Todos los socios</option>
+                                <?php foreach ($socios as $s): ?>
+                                    <option value="<?php echo (int) $s['id_socio']; ?>" <?php echo $filtroSocio === (int) $s['id_socio'] ? 'selected' : ''; ?>><?php echo clean($s['nombre_completo']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select name="estado" class="form-select form-select-sm">
+                                <option value="">Todos los estados</option>
+                                <?php foreach (['asignada','pagada','pendiente','anulada'] as $estado): ?>
+                                    <option value="<?php echo $estado; ?>" <?php echo $filtroEstado === $estado ? 'selected' : ''; ?>><?php echo ucfirst($estado); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-1"><button class="btn btn-sm btn-outline-secondary w-100">OK</button></div>
+                    </form>
                     <div class="table-responsive" style="max-height: 520px;">
                         <table class="table table-sm table-bordered align-middle">
-                            <thead class="table-light"><tr><th>Número</th><th>Socio</th><th>Estado</th><th>Valor</th><th>Fecha pago</th></tr></thead>
+                            <thead class="table-light"><tr><th>Grupo</th><th>Número</th><th>Socio</th><th>Estado</th><th>Valor</th><th>Fecha pago</th></tr></thead>
                             <tbody>
                                 <?php foreach ($boletas as $boleta): ?>
                                     <tr>
+                                        <td><?php echo clean($boleta['nombre_grupo'] ?? 'General'); ?></td>
                                         <td class="fw-semibold">#<?php echo clean($boleta['numero']); ?></td>
                                         <td><?php echo clean($boleta['nombre_completo'] ?? '—'); ?></td>
                                         <td>
-                                            <?php if ($boleta['estado'] === 'pagada'): ?>
-                                                <span class="badge bg-success-subtle text-success">Pagada</span>
-                                            <?php else: ?>
-                                                <span class="badge bg-warning-subtle text-warning">Pendiente</span>
-                                            <?php endif; ?>
+                                            <?php if ($boleta['estado'] === 'pagada'): ?><span class="badge bg-success-subtle text-success">Pagada</span><?php endif; ?>
+                                            <?php if ($boleta['estado'] === 'asignada'): ?><span class="badge bg-primary-subtle text-primary">Asignada</span><?php endif; ?>
+                                            <?php if ($boleta['estado'] === 'pendiente'): ?><span class="badge bg-warning-subtle text-warning">Pendiente</span><?php endif; ?>
+                                            <?php if ($boleta['estado'] === 'anulada'): ?><span class="badge bg-dark-subtle text-dark">Anulada</span><?php endif; ?>
                                         </td>
                                         <td>$<?php echo number_format($boleta['valor'],0,',','.'); ?></td>
                                         <td><?php echo $boleta['fecha_pago'] ? clean(date('Y-m-d', strtotime($boleta['fecha_pago']))) : '—'; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                                 <?php if (empty($boletas)): ?>
-                                    <tr><td colspan="5" class="text-center text-muted">Aún no se han generado boletas.</td></tr>
+                                    <tr><td colspan="6" class="text-center text-muted">Aún no se han generado boletas.</td></tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -423,6 +484,7 @@ if ($rifaActual) {
                 <div class="card-body">
                     <h6 class="mb-3">Utilidad final</h6>
                     <div class="d-flex flex-column gap-2">
+                        <div class="d-flex justify-content-between"><span>Total proyectado</span><strong>$<?php echo number_format($utilidadRifa['total_proyectado'] ?? 0, 0, ',', '.'); ?></strong></div>
                         <div class="d-flex justify-content-between"><span>Total vendido</span><strong>$<?php echo number_format($utilidadRifa['total_vendido'], 0, ',', '.'); ?></strong></div>
                         <div class="d-flex justify-content-between"><span>Total recaudado</span><strong>$<?php echo number_format($utilidadRifa['total_recaudado'], 0, ',', '.'); ?></strong></div>
                         <div class="d-flex justify-content-between"><span>Premio entregado</span><strong>$<?php echo number_format($utilidadRifa['premio_entregado'], 0, ',', '.'); ?></strong></div>
