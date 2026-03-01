@@ -6,6 +6,17 @@ checkAuth();
 $accion = $_POST['accion'] ?? '';
 $usuario = $_SESSION['usuario'] ?? null;
 
+
+function rifaDebeExistir(PDO $pdo, int $idRifa, string $accion): void
+{
+    if ($idRifa <= 0) {
+        throw new RuntimeException('Debe seleccionar una rifa válida para ' . $accion . '.');
+    }
+    if (!obtenerRifa($pdo, $idRifa)) {
+        throw new RuntimeException('La rifa seleccionada ya no existe. Actualiza la vista y vuelve a intentarlo.');
+    }
+}
+
 try {
     asegurarEsquemaRifas($pdo);
 
@@ -131,6 +142,7 @@ try {
 
     if ($accion === 'reasignar_boleta') {
         $idRifa = (int) ($_POST['id_rifa'] ?? 0);
+        rifaDebeExistir($pdo, $idRifa, 'reasignar boleta');
         reAsignarBoleta(
             $pdo,
             $idRifa,
@@ -145,6 +157,7 @@ try {
 
     if ($accion === 'pagar_boleta') {
         $idRifa = (int) ($_POST['id_rifa'] ?? 0);
+        rifaDebeExistir($pdo, $idRifa, 'registrar pago');
         registrarPagoBoleta(
             $pdo,
             $idRifa,
@@ -160,6 +173,7 @@ try {
 
     if ($accion === 'registrar_premio') {
         $idRifa = (int) ($_POST['id_rifa'] ?? 0);
+        rifaDebeExistir($pdo, $idRifa, 'registrar premio');
         registrarPremioRifa(
             $pdo,
             $idRifa,
@@ -178,6 +192,7 @@ try {
 
     if ($accion === 'descargar_boletas_zip') {
         $idRifa = (int) ($_POST['id_rifa'] ?? 0);
+        rifaDebeExistir($pdo, $idRifa, 'descargar boletas');
         $idGrupo = ($_POST['id_grupo'] ?? '') !== '' ? (int) $_POST['id_grupo'] : null;
         $idSocio = ($_POST['id_socio'] ?? '') !== '' ? (int) $_POST['id_socio'] : null;
         $rutaZip = exportarBoletasZipFiltrado($idRifa, $idGrupo, $idSocio);
@@ -194,6 +209,7 @@ try {
 
     if ($accion === 'reiniciar_asignaciones') {
         $idRifa = (int) ($_POST['id_rifa'] ?? 0);
+        rifaDebeExistir($pdo, $idRifa, 'reasignar asignaciones');
         $forzar = (int) ($_POST['forzar_con_pagos'] ?? 0) === 1;
         reiniciarAsignacionesRifa($pdo, $idRifa, $usuario, $forzar);
         $_SESSION['exito'] = 'Asignaciones reiniciadas y regeneradas correctamente.';
@@ -205,6 +221,7 @@ try {
         }
 
         $idRifa = (int) ($_POST['id_rifa'] ?? 0);
+        rifaDebeExistir($pdo, $idRifa, 'eliminar rifa');
         eliminarRifa($pdo, $idRifa);
         $_SESSION['exito'] = 'Rifa eliminada correctamente, incluyendo movimientos asociados.';
     }
@@ -212,5 +229,11 @@ try {
     $_SESSION['error'] = $e->getMessage();
 }
 
-header('Location: ../public/rifas.php');
+if ($accion === 'eliminar_rifa') {
+    header('Location: ../public/rifas.php?deleted=1');
+} else {
+    $idRifaRedirect = isset($_POST['id_rifa']) ? (int) ($_POST['id_rifa'] ?? 0) : 0;
+    $qs = $idRifaRedirect > 0 ? ('?id_rifa=' . $idRifaRedirect) : '';
+    header('Location: ../public/rifas.php' . $qs);
+}
 exit;
