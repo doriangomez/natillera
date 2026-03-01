@@ -1,22 +1,42 @@
 <?php
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/rifas_helpers.php';
-asegurarEsquemaRifas($pdo);
 
-$socios = getSocios($pdo);
-$mediosPago = getMediosPago($pdo);
-$actividadesRifa = getActividades($pdo, false, true, false);
-$actividadesIngreso = array_filter($actividadesRifa, fn($a) => (int) ($a['es_ingreso'] ?? 0) === 1);
-$actividadesPremio = array_filter($actividadesRifa, fn($a) => (int) ($a['es_ingreso'] ?? 0) === 0);
-$rifas = obtenerRifas($pdo);
-$idRifaSeleccionada = isset($_GET['id_rifa']) ? (int) $_GET['id_rifa'] : ((int) ($rifas[0]['id_rifa'] ?? 0));
-$rifaActual = $idRifaSeleccionada ? obtenerRifa($pdo, $idRifaSeleccionada) : null;
-$boletas = $rifaActual ? obtenerBoletasRifa($pdo, $idRifaSeleccionada) : [];
-$resumen = $rifaActual ? obtenerResumenBoletas($pdo, $idRifaSeleccionada) : [];
-$gruposRifa = $rifaActual ? obtenerGruposRifa($pdo, $idRifaSeleccionada) : [];
-$resumenSocios = $rifaActual ? obtenerResumenSociosRifa($pdo, $idRifaSeleccionada) : [];
-$utilidadRifa = $rifaActual ? obtenerUtilidadRifa($pdo, $idRifaSeleccionada) : ['total_vendido' => 0, 'total_recaudado' => 0, 'premio_entregado' => 0, 'utilidad_neta' => 0];
+$errorCarga = null;
+$socios = [];
+$mediosPago = [];
+$actividadesRifa = [];
+$actividadesIngreso = [];
+$actividadesPremio = [];
+$rifas = [];
+$idRifaSeleccionada = 0;
+$rifaActual = null;
+$boletas = [];
+$resumen = [];
+$gruposRifa = [];
+$resumenSocios = [];
+$utilidadRifa = ['total_vendido' => 0, 'total_recaudado' => 0, 'premio_entregado' => 0, 'utilidad_neta' => 0];
 $informeRifa = ['movimientos' => [], 'totales' => ['ingresos' => 0, 'egresos' => 0]];
+
+try {
+    asegurarEsquemaRifas($pdo);
+
+    $socios = getSocios($pdo);
+    $mediosPago = getMediosPago($pdo);
+    $actividadesRifa = getActividades($pdo, false, true, false);
+    $actividadesIngreso = array_filter($actividadesRifa, fn($a) => (int) ($a['es_ingreso'] ?? 0) === 1);
+    $actividadesPremio = array_filter($actividadesRifa, fn($a) => (int) ($a['es_ingreso'] ?? 0) === 0);
+    $rifas = obtenerRifas($pdo);
+    $idRifaSeleccionada = isset($_GET['id_rifa']) ? (int) $_GET['id_rifa'] : ((int) ($rifas[0]['id_rifa'] ?? 0));
+    $rifaActual = $idRifaSeleccionada ? obtenerRifa($pdo, $idRifaSeleccionada) : null;
+    $boletas = $rifaActual ? obtenerBoletasRifa($pdo, $idRifaSeleccionada) : [];
+    $resumen = $rifaActual ? obtenerResumenBoletas($pdo, $idRifaSeleccionada) : [];
+    $gruposRifa = $rifaActual ? obtenerGruposRifa($pdo, $idRifaSeleccionada) : [];
+    $resumenSocios = $rifaActual ? obtenerResumenSociosRifa($pdo, $idRifaSeleccionada) : [];
+    $utilidadRifa = $rifaActual ? obtenerUtilidadRifa($pdo, $idRifaSeleccionada) : ['total_vendido' => 0, 'total_recaudado' => 0, 'premio_entregado' => 0, 'utilidad_neta' => 0];
+} catch (Throwable $e) {
+    $errorCarga = 'No se pudo cargar el módulo de rifas. Detalle técnico: ' . $e->getMessage();
+}
 
 if ($rifaActual) {
     if (!function_exists('obtenerInformeMovimientosRifa')) {
@@ -37,6 +57,9 @@ if ($rifaActual) {
 <?php endif; ?>
 <?php if (!empty($_SESSION['exito'])): ?>
     <div class="alert alert-success"><?php echo clean($_SESSION['exito']); unset($_SESSION['exito']); ?></div>
+<?php endif; ?>
+<?php if ($errorCarga): ?>
+    <div class="alert alert-danger"><?php echo clean($errorCarga); ?></div>
 <?php endif; ?>
 <div class="row g-3">
     <div class="col-lg-5">
