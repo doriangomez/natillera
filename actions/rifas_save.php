@@ -14,6 +14,17 @@ try {
         $rangoInicio = max(0, (int) ($_POST['rango_inicio'] ?? 0));
         $rangoFin = (int) ($_POST['rango_fin'] ?? ((10 ** $cifrasNumero) - 1));
 
+        $manualAsignaciones = json_decode((string) ($_POST['manual_asignaciones_json'] ?? '[]'), true);
+        if (!is_array($manualAsignaciones)) {
+            $manualAsignaciones = [];
+        }
+
+        $gruposWizard = $_POST['grupos_json'] ?? '';
+        $gruposParsed = json_decode((string) $gruposWizard, true);
+        if ($gruposWizard !== '' && !is_array($gruposParsed)) {
+            throw new RuntimeException('La configuración de grupos es inválida.');
+        }
+
         $arteBasePath = clean($_POST['arte_base_path'] ?? '');
         if (!empty($_FILES['arte_base_file']['tmp_name']) && is_uploaded_file($_FILES['arte_base_file']['tmp_name'])) {
             $dir = dirname(__DIR__) . '/public/uploads/rifas/base';
@@ -79,6 +90,19 @@ try {
             throw new RuntimeException('El valor y la cantidad de boletas deben ser mayores a cero.');
         }
 
+        if ($datos['tipo_rifa'] === 'normal') {
+            $sociosNormal = [];
+            if (is_array($gruposParsed) && isset($gruposParsed[0]['socios']) && is_array($gruposParsed[0]['socios'])) {
+                $sociosNormal = array_values(array_filter(array_map('intval', $gruposParsed[0]['socios']), static fn($id) => $id > 0));
+            }
+            if (empty($sociosNormal)) {
+                throw new RuntimeException('No se puede crear rifa sin asignar socios.');
+            }
+        }
+
+        $datos['manual_asignaciones'] = $manualAsignaciones;
+        $datos['grupos_json'] = $gruposWizard;
+
         crearRifa($pdo, $datos);
         $_SESSION['exito'] = 'Rifa creada y boletas distribuidas automáticamente.';
     }
@@ -106,7 +130,8 @@ try {
             $_POST['fecha_pago'] ?? date('Y-m-d'),
             clean($_POST['medio'] ?? ''),
             ($_POST['id_medio_pago'] ?? '') !== '' ? (int) $_POST['id_medio_pago'] : null,
-            $usuario
+            $usuario,
+            ($_POST['id_actividad_movimiento'] ?? '') !== '' ? (int) $_POST['id_actividad_movimiento'] : null
         );
         $_SESSION['exito'] = 'Pago registrado y contabilizado correctamente.';
     }
@@ -122,7 +147,8 @@ try {
             $_POST['fecha_pago'] ?? date('Y-m-d'),
             clean($_POST['medio'] ?? ''),
             ($_POST['id_medio_pago'] ?? '') !== '' ? (int) $_POST['id_medio_pago'] : null,
-            $usuario
+            $usuario,
+            ($_POST['id_actividad_premio_mov'] ?? '') !== '' ? (int) $_POST['id_actividad_premio_mov'] : null
         );
         $_SESSION['exito'] = 'Premio registrado y rifa cerrada.';
     }
