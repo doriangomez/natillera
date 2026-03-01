@@ -17,6 +17,8 @@ $gruposRifa = [];
 $resumenSocios = [];
 $utilidadRifa = ['total_proyectado' => 0, 'total_vendido' => 0, 'total_recaudado' => 0, 'premio_entregado' => 0, 'utilidad_neta' => 0];
 $informeRifa = ['movimientos' => [], 'totales' => ['ingresos' => 0, 'egresos' => 0]];
+$grupoManualSeleccionado = isset($_GET['grupo_manual']) ? (int) $_GET['grupo_manual'] : 0;
+$numerosManual = [];
 
 $filtroGrupo = isset($_GET['grupo']) ? (int) $_GET['grupo'] : 0;
 $filtroSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
@@ -52,6 +54,12 @@ try {
     }
     $resumen = $rifaActual ? obtenerResumenBoletas($pdo, $idRifaSeleccionada) : [];
     $gruposRifa = $rifaActual ? obtenerGruposRifa($pdo, $idRifaSeleccionada) : [];
+    if ($rifaActual) {
+        if ($grupoManualSeleccionado <= 0 && !empty($gruposRifa)) {
+            $grupoManualSeleccionado = (int) ($gruposRifa[0]['id_grupo'] ?? 0);
+        }
+        $numerosManual = obtenerOpcionesNumeroRifa($pdo, $idRifaSeleccionada, $grupoManualSeleccionado > 0 ? $grupoManualSeleccionado : null);
+    }
     $resumenSocios = $rifaActual ? obtenerResumenSociosRifa($pdo, $idRifaSeleccionada) : [];
     $utilidadRifa = $rifaActual ? obtenerUtilidadRifa($pdo, $idRifaSeleccionada) : ['total_proyectado' => 0, 'total_vendido' => 0, 'total_recaudado' => 0, 'premio_entregado' => 0, 'utilidad_neta' => 0];
 } catch (Throwable $e) {
@@ -349,16 +357,11 @@ if ($rifaActual) {
                 <input type="hidden" name="id_socio" value="<?php echo $filtroSocio > 0 ? (int) $filtroSocio : ''; ?>">
                 <button class="btn btn-outline-secondary btn-sm"><i class="bi bi-file-earmark-zip me-1"></i>Descargar ZIP (filtro actual)</button>
             </form>
-            <form method="POST" action="../actions/rifas_save.php" onsubmit="return confirm('Se eliminarán todas las asignaciones socio↔número, pagos y premio registrado de esta rifa. Los números base se conservarán. ¿Deseas continuar?');">
-                <input type="hidden" name="accion" value="reiniciar_asignaciones">
+            <form method="POST" action="../actions/rifas_save.php" onsubmit="return confirm('Se eliminarán todas las boletas de la rifa (excepto pagadas). ¿Deseas continuar?');">
+                <input type="hidden" name="accion" value="eliminar_boletas">
                 <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
-                <input type="hidden" name="forzar_con_pagos" value="1">
-                <button class="btn btn-outline-warning btn-sm"><i class="bi bi-eraser me-1"></i>Limpiar asignaciones</button>
-            </form>
-            <form method="POST" action="../actions/rifas_save.php" onsubmit="return confirm('Se volverán a asignar manual y aleatoriamente las boletas pendientes para todos los grupos. ¿Deseas continuar?');">
-                <input type="hidden" name="accion" value="regenerar_asignaciones">
-                <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
-                <button class="btn btn-outline-info btn-sm"><i class="bi bi-stars me-1"></i>Regenerar asignaciones</button>
+                <input type="hidden" name="eliminar_todo" value="1">
+                <button class="btn btn-outline-warning btn-sm"><i class="bi bi-eraser me-1"></i>Eliminar todas las boletas</button>
             </form>
             <form method="POST" action="../actions/rifas_save.php" onsubmit="return confirm('¿Seguro que deseas eliminar esta rifa? Esta acción también removerá boletas y movimientos relacionados.');">
                 <input type="hidden" name="accion" value="eliminar_rifa">
@@ -371,42 +374,79 @@ if ($rifaActual) {
         <div class="col-lg-4">
             <div class="card mb-3">
                 <div class="card-body">
-                    <h6 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-pencil-square text-primary"></i><span>Ajuste manual de boleta</span></h6>
-                    <form method="POST" action="../actions/rifas_save.php" class="row g-2">
-                        <input type="hidden" name="accion" value="reasignar_boleta">
+                    <h6 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-pencil-square text-primary"></i><span>Asignación manual de boleta</span></h6>
+                    <form method="GET" action="rifas.php" class="row g-2 mb-3">
                         <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
                         <div class="col-12">
                             <label class="form-label">Grupo</label>
-                            <select name="id_grupo" class="form-select">
-                                <option value="">Detectar automáticamente</option>
+                            <select name="grupo_manual" class="form-select" onchange="this.form.submit()">
                                 <?php foreach ($gruposRifa as $grupo): ?>
-                                    <option value="<?php echo (int) $grupo['id_grupo']; ?>"><?php echo clean($grupo['nombre']); ?></option>
+                                    <option value="<?php echo (int) $grupo['id_grupo']; ?>" <?php echo $grupoManualSeleccionado === (int) $grupo['id_grupo'] ? 'selected' : ''; ?>><?php echo clean($grupo['nombre']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </form>
+                    <form method="POST" action="../actions/rifas_save.php" class="row g-2">
+                        <input type="hidden" name="accion" value="crear_boleta_manual">
+                        <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                        <div class="col-12">
+                            <label class="form-label">Grupo</label>
+                            <select name="id_grupo" class="form-select" required>
+                                <?php foreach ($gruposRifa as $grupo): ?>
+                                    <option value="<?php echo (int) $grupo['id_grupo']; ?>" <?php echo $grupoManualSeleccionado === (int) $grupo['id_grupo'] ? 'selected' : ''; ?>><?php echo clean($grupo['nombre']); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Boleta actual</label>
-                            <input type="text" name="numero_actual" class="form-control" maxlength="3" required placeholder="Ej: 05">
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">Nuevo número</label>
-                            <input type="text" name="numero_nuevo" class="form-control" maxlength="3" required placeholder="Ej: 25">
-                        </div>
-                        <div class="col-12">
                             <label class="form-label">Socio</label>
-                            <select name="id_socio" class="form-select">
-                                <option value="">Mantener asignado</option>
+                            <select name="id_socio" class="form-select" required>
+                                <option value="">Seleccionar</option>
                                 <?php foreach ($socios as $s): ?>
                                     <option value="<?php echo (int) $s['id_socio']; ?>"><?php echo clean($s['nombre_completo']); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Motivo</label>
-                            <input type="text" name="motivo" class="form-control" placeholder="Motivo del ajuste">
+                            <label class="form-label">Número</label>
+                            <select name="numero" class="form-select" required>
+                                <option value="">Seleccionar</option>
+                                <?php foreach ($numerosManual as $op): ?>
+                                    <?php if (!(bool) ($op['asignado'] ?? false)): ?>
+                                        <option value="<?php echo clean((string) $op['numero']); ?>"><?php echo clean((string) $op['numero']); ?></option>
+                                    <?php else: ?>
+                                        <option value="" disabled><?php echo clean((string) $op['numero']); ?> · Ya asignado</option>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
                         <div class="col-12">
-                            <button class="btn btn-outline-primary w-100">Guardar cambio</button>
+                            <button class="btn btn-outline-primary w-100">Crear boleta</button>
+                        </div>
+                    </form>
+                    <hr>
+                    <form method="POST" action="../actions/rifas_save.php" class="row g-2" onsubmit="return confirm('Se eliminarán boletas según filtros (no permite pagadas). ¿Deseas continuar?');">
+                        <input type="hidden" name="accion" value="eliminar_boletas">
+                        <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                        <div class="col-12">
+                            <label class="form-label">Eliminar por grupo (opcional)</label>
+                            <select name="id_grupo" class="form-select">
+                                <option value="">No filtrar</option>
+                                <?php foreach ($gruposRifa as $grupo): ?>
+                                    <option value="<?php echo (int) $grupo['id_grupo']; ?>"><?php echo clean($grupo['nombre']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Eliminar por socio (opcional)</label>
+                            <select name="id_socio" class="form-select">
+                                <option value="">No filtrar</option>
+                                <?php foreach ($socios as $s): ?>
+                                    <option value="<?php echo (int) $s['id_socio']; ?>"><?php echo clean($s['nombre_completo']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <button class="btn btn-outline-danger w-100">Eliminar boletas filtradas</button>
                         </div>
                     </form>
                 </div>

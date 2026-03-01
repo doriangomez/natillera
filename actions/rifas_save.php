@@ -69,7 +69,7 @@ try {
             'rango_fin' => max($rangoInicio, $rangoFin),
             'modo_numeracion' => clean($_POST['modo_numeracion'] ?? 'secuencial'),
             'numeros_manuales' => clean($_POST['numeros_manuales'] ?? ''),
-            'modo_distribucion' => clean($_POST['modo_distribucion'] ?? 'aleatoria'),
+            'modo_distribucion' => 'manual',
             'boletas_por_socio' => max(1, (int) ($_POST['boletas_por_socio'] ?? 1)),
             'grupos_json' => $_POST['grupos_json'] ?? '',
             'arte_base_path' => $arteBasePath,
@@ -113,31 +113,39 @@ try {
             throw new RuntimeException('La cantidad de boletas no puede superar los números disponibles en el rango.');
         }
 
-        if ($datos['tipo_rifa'] === 'normal') {
-            $sociosNormal = [];
-            if (is_array($gruposParsed) && isset($gruposParsed[0]['socios']) && is_array($gruposParsed[0]['socios'])) {
-                $sociosNormal = array_values(array_filter(array_map('intval', $gruposParsed[0]['socios']), static fn($id) => $id > 0));
-            }
-            if (empty($sociosNormal)) {
-                throw new RuntimeException('No se puede crear rifa sin asignar socios.');
-            }
-        } elseif ($datos['tipo_rifa'] === 'gemela') {
-            if (!is_array($gruposParsed) || count($gruposParsed) < 2) {
-                throw new RuntimeException('La rifa gemela debe tener al menos dos grupos configurados.');
-            }
-            foreach ($gruposParsed as $grupo) {
-                $sociosGrupo = is_array($grupo['socios'] ?? null) ? array_values(array_filter(array_map('intval', $grupo['socios']), static fn($id) => $id > 0)) : [];
-                if (empty($sociosGrupo)) {
-                    throw new RuntimeException('Cada grupo de la rifa gemela debe tener socios asignados.');
-                }
-            }
-        }
 
         $datos['manual_asignaciones'] = $manualAsignaciones;
         $datos['grupos_json'] = $gruposWizard;
 
         crearRifa($pdo, $datos);
-        $_SESSION['exito'] = 'Rifa creada y boletas distribuidas automáticamente.';
+        $_SESSION['exito'] = 'Rifa creada. Ahora puedes registrar boletas manualmente.';
+    }
+
+
+
+    if ($accion === 'crear_boleta_manual') {
+        $idRifa = (int) ($_POST['id_rifa'] ?? 0);
+        rifaDebeExistir($pdo, $idRifa, 'crear boleta manual');
+        $idGrupo = (int) ($_POST['id_grupo'] ?? 0);
+        $idSocio = (int) ($_POST['id_socio'] ?? 0);
+        $numero = clean($_POST['numero'] ?? '');
+        if ($idGrupo <= 0 || $idSocio <= 0 || $numero === '') {
+            throw new RuntimeException('Debe seleccionar grupo, socio y número para crear la boleta manual.');
+        }
+        crearBoletaManual($pdo, $idRifa, $idGrupo, $idSocio, $numero, $usuario);
+        $_SESSION['exito'] = 'Boleta manual creada correctamente.';
+    }
+
+    if ($accion === 'eliminar_boletas') {
+        $idRifa = (int) ($_POST['id_rifa'] ?? 0);
+        rifaDebeExistir($pdo, $idRifa, 'eliminar boletas');
+        $idGrupo = ($_POST['id_grupo'] ?? '') !== '' ? (int) $_POST['id_grupo'] : null;
+        $idSocio = ($_POST['id_socio'] ?? '') !== '' ? (int) $_POST['id_socio'] : null;
+        if (($idGrupo ?? 0) <= 0 && ($idSocio ?? 0) <= 0 && (int) ($_POST['eliminar_todo'] ?? 0) !== 1) {
+            throw new RuntimeException('Seleccione eliminar todo o filtre por grupo/socio para continuar.');
+        }
+        $eliminadas = eliminarBoletasRifa($pdo, $idRifa, $idGrupo, $idSocio);
+        $_SESSION['exito'] = 'Boletas eliminadas: ' . $eliminadas . '.';
     }
 
     if ($accion === 'reasignar_boleta') {
@@ -210,6 +218,7 @@ try {
     }
 
     if ($accion === 'reiniciar_asignaciones') {
+        throw new RuntimeException('La regeneración automática fue deshabilitada. Use la eliminación manual de boletas.');
         $idRifa = (int) ($_POST['id_rifa'] ?? 0);
         rifaDebeExistir($pdo, $idRifa, 'reasignar asignaciones');
         $forzar = (int) ($_POST['forzar_con_pagos'] ?? 0) === 1;
@@ -218,6 +227,7 @@ try {
     }
 
     if ($accion === 'regenerar_asignaciones') {
+        throw new RuntimeException('La regeneración automática fue deshabilitada. Registre boletas manualmente.');
         $idRifa = (int) ($_POST['id_rifa'] ?? 0);
         rifaDebeExistir($pdo, $idRifa, 'regenerar asignaciones');
         regenerarAsignacionesRifa($pdo, $idRifa, $usuario);
