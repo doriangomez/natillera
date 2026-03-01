@@ -277,40 +277,49 @@ function crearRifa(PDO $pdo, array $data): int
 {
     asegurarEsquemaRifas($pdo);
 
-    $stmt = $pdo->prepare('INSERT INTO rifas (nombre, fecha_inicio, fecha_fin, valor_boleta, cantidad_boletas, observaciones, id_actividad_ingreso, id_actividad_premio, usuario_registro, tipo_rifa, cantidad_grupos, cifras_numero, rango_inicio, rango_fin, modo_numeracion, modo_distribucion, arte_base_path, arte_numero_x, arte_numero_y, arte_numero_size, arte_numero_color, arte_font_path)
-        VALUES (:nombre, :inicio, :fin, :valor, :cantidad, :obs, :act_ingreso, :act_premio, :usuario, :tipo, :grupos, :cifras, :rango_inicio, :rango_fin, :modo_num, :modo_dist, :arte_path, :arte_x, :arte_y, :arte_size, :arte_color, :arte_font_path)');
-    $stmt->execute([
-        ':nombre' => $data['nombre'],
-        ':inicio' => $data['fecha_inicio'],
-        ':fin' => $data['fecha_fin'],
-        ':valor' => $data['valor_boleta'],
-        ':cantidad' => $data['cantidad_boletas'],
-        ':obs' => $data['observaciones'],
-        ':act_ingreso' => $data['id_actividad_ingreso'],
-        ':act_premio' => $data['id_actividad_premio'],
-        ':usuario' => $data['usuario_registro'] ?? null,
-        ':tipo' => $data['tipo_rifa'] ?? 'normal',
-        ':grupos' => (int) ($data['cantidad_grupos'] ?? 1),
-        ':cifras' => (int) ($data['cifras_numero'] ?? 2),
-        ':rango_inicio' => (int) ($data['rango_inicio'] ?? 0),
-        ':rango_fin' => (int) ($data['rango_fin'] ?? ((10 ** ((int) ($data['cifras_numero'] ?? 2))) - 1)),
-        ':modo_num' => $data['modo_numeracion'] ?? 'secuencial',
-        ':modo_dist' => $data['modo_distribucion'] ?? 'aleatoria',
-        ':arte_path' => $data['arte_base_path'] ?? null,
-        ':arte_x' => $data['arte_numero_x'] ?? null,
-        ':arte_y' => $data['arte_numero_y'] ?? null,
-        ':arte_size' => $data['arte_numero_size'] ?? null,
-        ':arte_color' => $data['arte_numero_color'] ?? null,
-        ':arte_font_path' => $data['arte_font_path'] ?? null,
-    ]);
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare('INSERT INTO rifas (nombre, fecha_inicio, fecha_fin, valor_boleta, cantidad_boletas, observaciones, id_actividad_ingreso, id_actividad_premio, usuario_registro, tipo_rifa, cantidad_grupos, cifras_numero, rango_inicio, rango_fin, modo_numeracion, modo_distribucion, arte_base_path, arte_numero_x, arte_numero_y, arte_numero_size, arte_numero_color, arte_font_path)
+            VALUES (:nombre, :inicio, :fin, :valor, :cantidad, :obs, :act_ingreso, :act_premio, :usuario, :tipo, :grupos, :cifras, :rango_inicio, :rango_fin, :modo_num, :modo_dist, :arte_path, :arte_x, :arte_y, :arte_size, :arte_color, :arte_font_path)');
+        $stmt->execute([
+            ':nombre' => $data['nombre'],
+            ':inicio' => $data['fecha_inicio'],
+            ':fin' => $data['fecha_fin'],
+            ':valor' => $data['valor_boleta'],
+            ':cantidad' => $data['cantidad_boletas'],
+            ':obs' => $data['observaciones'],
+            ':act_ingreso' => $data['id_actividad_ingreso'],
+            ':act_premio' => $data['id_actividad_premio'],
+            ':usuario' => $data['usuario_registro'] ?? null,
+            ':tipo' => $data['tipo_rifa'] ?? 'normal',
+            ':grupos' => (int) ($data['cantidad_grupos'] ?? 1),
+            ':cifras' => (int) ($data['cifras_numero'] ?? 2),
+            ':rango_inicio' => (int) ($data['rango_inicio'] ?? 0),
+            ':rango_fin' => (int) ($data['rango_fin'] ?? ((10 ** ((int) ($data['cifras_numero'] ?? 2))) - 1)),
+            ':modo_num' => $data['modo_numeracion'] ?? 'secuencial',
+            ':modo_dist' => $data['modo_distribucion'] ?? 'aleatoria',
+            ':arte_path' => $data['arte_base_path'] ?? null,
+            ':arte_x' => $data['arte_numero_x'] ?? null,
+            ':arte_y' => $data['arte_numero_y'] ?? null,
+            ':arte_size' => $data['arte_numero_size'] ?? null,
+            ':arte_color' => $data['arte_numero_color'] ?? null,
+            ':arte_font_path' => $data['arte_font_path'] ?? null,
+        ]);
 
-    $idRifa = (int) $pdo->lastInsertId();
-    $grupos = crearGruposRifa($pdo, $idRifa, $data);
-    generarBoletasRifa($pdo, $idRifa, (int) $data['cantidad_boletas'], (float) $data['valor_boleta'], $data, $grupos);
-    asignarBoletasAutomaticas($pdo, $idRifa, $data['usuario_registro'] ?? null, $data, $grupos);
-    generarImagenesBoletasRifa($pdo, $idRifa, $data);
+        $idRifa = (int) $pdo->lastInsertId();
+        $grupos = crearGruposRifa($pdo, $idRifa, $data);
+        generarBoletasRifa($pdo, $idRifa, (int) $data['cantidad_boletas'], (float) $data['valor_boleta'], $data, $grupos);
+        procesarGeneracionBoletasEnFases($pdo, $idRifa, $data, $grupos, $data['usuario_registro'] ?? null);
+        generarImagenesBoletasRifa($pdo, $idRifa, $data);
 
-    return $idRifa;
+        $pdo->commit();
+        return $idRifa;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
 }
 
 function generarBoletasRifa(PDO $pdo, int $idRifa, int $cantidad, float $valor, array $config = [], array $grupos = []): void
@@ -335,6 +344,23 @@ function generarBoletasRifa(PDO $pdo, int $idRifa, int $cantidad, float $valor, 
 }
 
 function asignarBoletasAutomaticas(PDO $pdo, int $idRifa, ?string $usuario = null, array $config = [], array $grupos = []): void
+{
+    procesarGeneracionBoletasEnFases($pdo, $idRifa, $config, $grupos, $usuario);
+}
+
+function procesarGeneracionBoletasEnFases(PDO $pdo, int $idRifa, array $config, array $grupos, ?string $usuario = null): void
+{
+    // Fase 1: creación de boletas base por grupo (sin asignar).
+    // Esta fase se ejecuta previamente al llamar generarBoletasRifa().
+
+    // Fase 2: asignación manual con validaciones atómicas por grupo.
+    asignarBoletasManualesPorGrupo($pdo, $idRifa, $config, $grupos, $usuario);
+
+    // Fase 3: asignación aleatoria para completar cupos por grupo.
+    asignarBoletasAleatoriasPorGrupo($pdo, $idRifa, $config, $grupos, $usuario);
+}
+
+function asignarBoletasManualesPorGrupo(PDO $pdo, int $idRifa, array $config, array $grupos, ?string $usuario = null): void
 {
     $socios = getSocios($pdo);
     if (empty($socios)) {
@@ -410,10 +436,62 @@ function asignarBoletasAutomaticas(PDO $pdo, int $idRifa, ?string $usuario = nul
                 $manualPorSocio[$idSocio] = ($manualPorSocio[$idSocio] ?? 0) + 1;
             }
 
+        } catch (Throwable $e) {
+            $erroresPorGrupo[] = $nombreGrupo . ': ' . $e->getMessage();
+        }
+    }
+
+    if (!empty($erroresPorGrupo)) {
+        throw new RuntimeException('Fase 2 (asignación manual) falló: ' . implode(' | ', $erroresPorGrupo));
+    }
+}
+
+function asignarBoletasAleatoriasPorGrupo(PDO $pdo, int $idRifa, array $config, array $grupos, ?string $usuario = null): void
+{
+    $socios = getSocios($pdo);
+    if (empty($socios)) {
+        return;
+    }
+
+    $sociosMap = [];
+    foreach ($socios as $socio) {
+        $sociosMap[(int) $socio['id_socio']] = $socio;
+    }
+
+    $erroresPorGrupo = [];
+    foreach ($grupos as $grupo) {
+        $nombreGrupo = (string) ($grupo['nombre'] ?? ('ID ' . (string) ($grupo['id_grupo'] ?? 'N/A')));
+        $idGrupo = $grupo['id_grupo'] ?? null;
+        try {
+            $stmtBoletas = $pdo->prepare('SELECT * FROM rifas_boletas WHERE id_rifa = :id AND ((:grupo IS NULL AND id_grupo IS NULL) OR id_grupo = :grupo) ORDER BY numero');
+            $stmtBoletas->execute([':id' => $idRifa, ':grupo' => $idGrupo]);
+            $boletas = $stmtBoletas->fetchAll();
+            if (empty($boletas)) {
+                continue;
+            }
+
+            $idsSociosGrupo = $grupo['socios'] ?? array_keys($sociosMap);
+            $idsSociosGrupo = array_values(array_filter(array_map('intval', $idsSociosGrupo), static fn($id) => $id > 0 && isset($sociosMap[$id])));
+            if (empty($idsSociosGrupo)) {
+                throw new RuntimeException('No se puede crear rifa sin asignar socios en el grupo configurado.');
+            }
+
             $boletasPorSocio = max(1, (int) ($grupo['boletas_por_socio'] ?? ($config['boletas_por_socio'] ?? 1)));
             $totalEsperadoGrupo = count($idsSociosGrupo) * $boletasPorSocio;
             if (count($boletas) < $totalEsperadoGrupo) {
                 throw new RuntimeException('No hay boletas suficientes para completar el cupo esperado del grupo.');
+            }
+
+            $stmtUpd = $pdo->prepare('UPDATE rifas_boletas SET id_socio = :socio, estado = "asignada", usuario_ultimo = :usuario WHERE id_boleta = :id');
+
+            $stmtManuales = $pdo->prepare('SELECT id_socio, COUNT(*) AS total FROM rifas_boletas WHERE id_rifa = :id_rifa AND ((:grupo IS NULL AND id_grupo IS NULL) OR id_grupo = :grupo) AND id_socio IS NOT NULL GROUP BY id_socio');
+            $stmtManuales->execute([':id_rifa' => $idRifa, ':grupo' => $idGrupo]);
+            $manualPorSocio = array_fill_keys($idsSociosGrupo, 0);
+            foreach ($stmtManuales->fetchAll() as $filaManual) {
+                $idSocioManual = (int) $filaManual['id_socio'];
+                if (isset($manualPorSocio[$idSocioManual])) {
+                    $manualPorSocio[$idSocioManual] = (int) $filaManual['total'];
+                }
             }
 
             foreach ($manualPorSocio as $idSocio => $manualesSocio) {
@@ -422,7 +500,7 @@ function asignarBoletasAutomaticas(PDO $pdo, int $idRifa, ?string $usuario = nul
                 }
             }
 
-            $restantes = array_values(array_filter($boletas, static fn($b) => !isset($manualAsignadas[(int) $b['id_boleta']])));
+            $restantes = array_values(array_filter($boletas, static fn($b) => (int) ($b['id_socio'] ?? 0) <= 0));
             shuffle($restantes);
 
             $asignacion = [];
@@ -463,7 +541,7 @@ function asignarBoletasAutomaticas(PDO $pdo, int $idRifa, ?string $usuario = nul
     }
 
     if (!empty($erroresPorGrupo)) {
-        throw new RuntimeException('Se detectaron errores en la distribución por grupos: ' . implode(' | ', $erroresPorGrupo));
+        throw new RuntimeException('Fase 3 (asignación aleatoria) falló: ' . implode(' | ', $erroresPorGrupo));
     }
 }
 
