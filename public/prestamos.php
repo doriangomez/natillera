@@ -365,8 +365,9 @@ $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS |
                     <label class="form-label">Concepto del pago</label>
                     <select name="id_actividad" class="form-select" id="actividadPago" required>
                         <?php foreach($actividades as $a): ?>
-                            <?php if($a['es_pago_prestamo'] || $a['es_pago_interes']) : ?>
-                                <option value="<?php echo $a['id_actividad']; ?>" data-tipo="<?php echo $a['es_pago_interes'] ? 'interes' : 'capital'; ?>">
+                            <?php if (actividadValidaParaCausacion($a)) : ?>
+                                <?php $naturalezaActividad = obtenerNaturalezaActividad($a); ?>
+                                <option value="<?php echo $a['id_actividad']; ?>" data-tipo="<?php echo $naturalezaActividad === 'pago_interes' ? 'interes' : 'capital'; ?>">
                                     <?php echo clean($a['nombre_actividad']); ?>
                                 </option>
                             <?php endif; ?>

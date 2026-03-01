@@ -503,6 +503,39 @@ function getActividades($pdo, $soloPolla = false, $incluirInactivas = false, $so
     return $pdo->query($sql)->fetchAll();
 }
 
+function obtenerNaturalezaActividad(array $actividad): string {
+    if (!empty($actividad['es_prestamo'])) {
+        return 'prestamo';
+    }
+    if (!empty($actividad['es_pago_prestamo'])) {
+        return 'pago_prestamo';
+    }
+    if (!empty($actividad['es_pago_interes'])) {
+        return 'pago_interes';
+    }
+    if (!empty($actividad['es_interes_causado'])) {
+        return 'interes_causado';
+    }
+    if (!empty($actividad['es_ingreso'])) {
+        return 'ingreso';
+    }
+
+    return 'egreso';
+}
+
+function actividadValidaParaCausacion(array $actividad): bool {
+    return (int) ($actividad['activo'] ?? 0) === 1
+        && obtenerNaturalezaActividad($actividad) === 'ingreso';
+}
+
+function actividadValidaParaPremioRifa(array $actividad): bool {
+    if ((int) ($actividad['activo'] ?? 0) !== 1) {
+        return false;
+    }
+
+    return in_array(obtenerNaturalezaActividad($actividad), ['egreso'], true);
+}
+
 function getMediosPago($pdo, $incluirInactivos = false) {
     $sql = "SELECT * FROM medios_pago";
     if (!$incluirInactivos) {

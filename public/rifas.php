@@ -28,8 +28,8 @@ try {
     $socios = getSocios($pdo);
     $mediosPago = getMediosPago($pdo);
     $actividadesRifa = getActividades($pdo, false, false, false);
-    $actividadesIngreso = array_filter($actividadesRifa, fn($a) => (int) ($a['es_ingreso'] ?? 0) === 1);
-    $actividadesPremio = array_filter($actividadesRifa, fn($a) => (int) ($a['es_ingreso'] ?? 0) === 0);
+    $actividadesIngreso = array_values(array_filter($actividadesRifa, 'actividadValidaParaCausacion'));
+    $actividadesPremio = array_values(array_filter($actividadesRifa, 'actividadValidaParaPremioRifa'));
     $rifas = obtenerRifas($pdo);
     $idRifaSeleccionada = isset($_GET['id_rifa']) ? (int) $_GET['id_rifa'] : ((int) ($rifas[0]['id_rifa'] ?? 0));
     $rifaActual = $idRifaSeleccionada ? obtenerRifa($pdo, $idRifaSeleccionada) : null;
