@@ -126,7 +126,7 @@ if ($rifaActual) {
                                 <label class="form-label">Boletas por socio</label>
                                 <input type="number" name="boletas_por_socio" class="form-control" min="1" value="1">
                             </div>
-                            <div class="col-md-6 gemela-only d-none">
+                            <div class="col-md-3 gemela-only d-none">
                                 <label class="form-label">Numeración Grupo A</label>
                                 <select id="metodo_grupo_a" class="form-select">
                                     <option value="aleatoria">Automática</option>
@@ -134,13 +134,21 @@ if ($rifaActual) {
                                     <option value="mixta">Mixta</option>
                                 </select>
                             </div>
-                            <div class="col-md-6 gemela-only d-none">
+                            <div class="col-md-3 gemela-only d-none">
+                                <label class="form-label">Boletas/socio A</label>
+                                <input type="number" id="boletas_grupo_a" class="form-control" min="1" value="1">
+                            </div>
+                            <div class="col-md-3 gemela-only d-none">
                                 <label class="form-label">Numeración Grupo B</label>
                                 <select id="metodo_grupo_b" class="form-select">
                                     <option value="aleatoria">Automática</option>
                                     <option value="manual">Manual</option>
                                     <option value="mixta">Mixta</option>
                                 </select>
+                            </div>
+                            <div class="col-md-3 gemela-only d-none">
+                                <label class="form-label">Boletas/socio B</label>
+                                <input type="number" id="boletas_grupo_b" class="form-control" min="1" value="1">
                             </div>
                         </div>
                     </div>
@@ -323,10 +331,18 @@ if ($rifaActual) {
             <span class="badge bg-warning-subtle text-warning">Pendientes: <?php echo $resumen['pendiente']['cantidad'] ?? 0; ?></span>
             <span class="badge bg-secondary-subtle text-secondary">Total: <?php echo $rifaActual['cantidad_boletas']; ?></span>
 
-            <form method="POST" action="../actions/rifas_save.php">
+            <form method="POST" action="../actions/rifas_save.php" class="d-flex gap-2">
                 <input type="hidden" name="accion" value="descargar_boletas_zip">
                 <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
-                <button class="btn btn-outline-secondary btn-sm"><i class="bi bi-file-earmark-zip me-1"></i>Descargar ZIP boletas</button>
+                <input type="hidden" name="id_grupo" value="<?php echo $filtroGrupo > 0 ? (int) $filtroGrupo : ''; ?>">
+                <input type="hidden" name="id_socio" value="<?php echo $filtroSocio > 0 ? (int) $filtroSocio : ''; ?>">
+                <button class="btn btn-outline-secondary btn-sm"><i class="bi bi-file-earmark-zip me-1"></i>Descargar ZIP (filtro actual)</button>
+            </form>
+            <form method="POST" action="../actions/rifas_save.php" onsubmit="return confirm('Se eliminarán todas las asignaciones socio↔número, pagos y premio registrado de esta rifa para reconstruirla. ¿Deseas continuar?');">
+                <input type="hidden" name="accion" value="reiniciar_asignaciones">
+                <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                <input type="hidden" name="forzar_con_pagos" value="1">
+                <button class="btn btn-outline-warning btn-sm"><i class="bi bi-arrow-counterclockwise me-1"></i>Reiniciar asignaciones</button>
             </form>
             <form method="POST" action="../actions/rifas_save.php" onsubmit="return confirm('¿Seguro que deseas eliminar esta rifa? Esta acción también removerá boletas y movimientos relacionados.');">
                 <input type="hidden" name="accion" value="eliminar_rifa">
@@ -670,7 +686,9 @@ if ($rifaActual) {
     included: new Set(socios.map(s => s.id)),
     groupA: new Set(),
     methodA: 'aleatoria',
-    methodB: 'aleatoria'
+    methodB: 'aleatoria',
+    boletasA: 1,
+    boletasB: 1,
   };
 
   function clearDependentByTipo() {
@@ -678,8 +696,12 @@ if ($rifaActual) {
     gemelaState.groupA = new Set();
     gemelaState.methodA = 'aleatoria';
     gemelaState.methodB = 'aleatoria';
+    gemelaState.boletasA = 1;
+    gemelaState.boletasB = 1;
     form.querySelector('#metodo_grupo_a').value = 'aleatoria';
     form.querySelector('#metodo_grupo_b').value = 'aleatoria';
+    if (form.querySelector('#boletas_grupo_a')) form.querySelector('#boletas_grupo_a').value = '1';
+    if (form.querySelector('#boletas_grupo_b')) form.querySelector('#boletas_grupo_b').value = '1';
     document.getElementById('manualAsignacionesNormal').innerHTML = '';
     manualGemelaWrap.innerHTML = '';
     document.getElementById('manual_asignaciones_json').value = '[]';
@@ -984,8 +1006,8 @@ if ($rifaActual) {
     const manualB = parseManual('B', groupB);
 
     const grupos = [];
-    grupos.push({ nombre:'Grupo A', boletas_por_socio:1, metodo_distribucion:gemelaState.methodA, socios:groupA.map(s=>s.id), asignaciones:manualA });
-    grupos.push({ nombre:'Grupo B', boletas_por_socio:1, metodo_distribucion:gemelaState.methodB, socios:groupB.map(s=>s.id), asignaciones:manualB });
+    grupos.push({ nombre:'Grupo A', boletas_por_socio:gemelaState.boletasA, metodo_distribucion:gemelaState.methodA, socios:groupA.map(s=>s.id), asignaciones:manualA });
+    grupos.push({ nombre:'Grupo B', boletas_por_socio:gemelaState.boletasB, metodo_distribucion:gemelaState.methodB, socios:groupB.map(s=>s.id), asignaciones:manualB });
     document.getElementById('grupos_json').value = JSON.stringify(grupos);
     document.getElementById('manual_asignaciones_json').value = '[]';
     document.getElementById('numeros_manuales').value = '';
@@ -1002,6 +1024,8 @@ if ($rifaActual) {
 
   document.getElementById('metodo_grupo_a')?.addEventListener('change', (e) => { gemelaState.methodA = e.target.value; resetManualAssignments(); updateStepValidationState(); });
   document.getElementById('metodo_grupo_b')?.addEventListener('change', (e) => { gemelaState.methodB = e.target.value; resetManualAssignments(); updateStepValidationState(); });
+  document.getElementById('boletas_grupo_a')?.addEventListener('change', (e) => { gemelaState.boletasA = Math.max(1, Number(e.target.value || 1)); updateStepValidationState(); });
+  document.getElementById('boletas_grupo_b')?.addEventListener('change', (e) => { gemelaState.boletasB = Math.max(1, Number(e.target.value || 1)); updateStepValidationState(); });
 
   document.getElementById('agregarAsignacionNormal').addEventListener('click', () => {
     const selected = [...normalSociosWrap.querySelectorAll('input[type="checkbox"]:checked')].map(el => Number(el.value));
