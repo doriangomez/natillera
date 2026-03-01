@@ -1,6 +1,21 @@
 <?php
 require_once __DIR__ . '/functions.php';
 
+
+function columnExists(PDO $pdo, string $tabla, string $columna): bool
+{
+    $stmt = $pdo->prepare('SHOW COLUMNS FROM `' . $tabla . '` LIKE :columna');
+    $stmt->execute([':columna' => $columna]);
+    return $stmt->rowCount() > 0;
+}
+
+function indexExists(PDO $pdo, string $tabla, string $index): bool
+{
+    $stmt = $pdo->prepare('SHOW INDEX FROM `' . $tabla . '` WHERE Key_name = :idx');
+    $stmt->execute([':idx' => $index]);
+    return $stmt->rowCount() > 0;
+}
+
 function asegurarEsquemaRifas(PDO $pdo): void
 {
     $pdo->exec("CREATE TABLE IF NOT EXISTS rifas (
@@ -16,25 +31,107 @@ function asegurarEsquemaRifas(PDO $pdo): void
         estado VARCHAR(20) DEFAULT 'abierta',
         usuario_registro VARCHAR(50) DEFAULT NULL,
         fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+        tipo_rifa VARCHAR(20) NOT NULL DEFAULT 'normal',
+        cantidad_grupos INT NOT NULL DEFAULT 1,
+        cifras_numero INT NOT NULL DEFAULT 2,
+        rango_inicio INT NOT NULL DEFAULT 0,
+        rango_fin INT NOT NULL DEFAULT 99,
+        modo_numeracion VARCHAR(20) NOT NULL DEFAULT 'secuencial',
+        modo_distribucion VARCHAR(20) NOT NULL DEFAULT 'aleatoria',
+        arte_base_path VARCHAR(255) DEFAULT NULL,
+        arte_numero_x INT DEFAULT NULL,
+        arte_numero_y INT DEFAULT NULL,
+        arte_numero_size INT DEFAULT NULL,
+        arte_numero_color VARCHAR(20) DEFAULT NULL,
+        numero_ganador VARCHAR(20) DEFAULT NULL,
+        id_boleta_ganadora INT DEFAULT NULL,
+        premio_valor DECIMAL(12,2) DEFAULT NULL,
+        premio_descripcion VARCHAR(255) DEFAULT NULL,
+        fecha_cierre DATETIME DEFAULT NULL,
         CONSTRAINT fk_rifa_actividad_ingreso FOREIGN KEY (id_actividad_ingreso) REFERENCES actividades_maestro(id_actividad) ON DELETE RESTRICT ON UPDATE CASCADE,
         CONSTRAINT fk_rifa_actividad_premio FOREIGN KEY (id_actividad_premio) REFERENCES actividades_maestro(id_actividad) ON DELETE RESTRICT ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $columnasRifa = [
+        'tipo_rifa' => "ALTER TABLE rifas ADD COLUMN tipo_rifa VARCHAR(20) NOT NULL DEFAULT 'normal'",
+        'cantidad_grupos' => 'ALTER TABLE rifas ADD COLUMN cantidad_grupos INT NOT NULL DEFAULT 1',
+        'cifras_numero' => 'ALTER TABLE rifas ADD COLUMN cifras_numero INT NOT NULL DEFAULT 2',
+        'rango_inicio' => 'ALTER TABLE rifas ADD COLUMN rango_inicio INT NOT NULL DEFAULT 0',
+        'rango_fin' => 'ALTER TABLE rifas ADD COLUMN rango_fin INT NOT NULL DEFAULT 99',
+        'modo_numeracion' => "ALTER TABLE rifas ADD COLUMN modo_numeracion VARCHAR(20) NOT NULL DEFAULT 'secuencial'",
+        'modo_distribucion' => "ALTER TABLE rifas ADD COLUMN modo_distribucion VARCHAR(20) NOT NULL DEFAULT 'aleatoria'",
+        'arte_base_path' => 'ALTER TABLE rifas ADD COLUMN arte_base_path VARCHAR(255) DEFAULT NULL',
+        'arte_numero_x' => 'ALTER TABLE rifas ADD COLUMN arte_numero_x INT DEFAULT NULL',
+        'arte_numero_y' => 'ALTER TABLE rifas ADD COLUMN arte_numero_y INT DEFAULT NULL',
+        'arte_numero_size' => 'ALTER TABLE rifas ADD COLUMN arte_numero_size INT DEFAULT NULL',
+        'arte_numero_color' => 'ALTER TABLE rifas ADD COLUMN arte_numero_color VARCHAR(20) DEFAULT NULL',
+        'numero_ganador' => 'ALTER TABLE rifas ADD COLUMN numero_ganador VARCHAR(20) DEFAULT NULL',
+        'id_boleta_ganadora' => 'ALTER TABLE rifas ADD COLUMN id_boleta_ganadora INT DEFAULT NULL',
+        'premio_valor' => 'ALTER TABLE rifas ADD COLUMN premio_valor DECIMAL(12,2) DEFAULT NULL',
+        'premio_descripcion' => 'ALTER TABLE rifas ADD COLUMN premio_descripcion VARCHAR(255) DEFAULT NULL',
+        'fecha_cierre' => 'ALTER TABLE rifas ADD COLUMN fecha_cierre DATETIME DEFAULT NULL',
+    ];
+
+    foreach ($columnasRifa as $columna => $sql) {
+        if (!columnExists($pdo, 'rifas', $columna)) {
+            $pdo->exec($sql);
+        }
+    }
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS rifas_grupos (
+        id_grupo INT AUTO_INCREMENT PRIMARY KEY,
+        id_rifa INT NOT NULL,
+        nombre VARCHAR(100) NOT NULL,
+        orden_grupo INT NOT NULL DEFAULT 1,
+        boletas_por_socio INT NOT NULL DEFAULT 1,
+        usuario_registro VARCHAR(50) DEFAULT NULL,
+        fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_rifa_grupo_nombre (id_rifa, nombre),
+        CONSTRAINT fk_grupo_rifa FOREIGN KEY (id_rifa) REFERENCES rifas(id_rifa) ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS rifas_grupos_socios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        id_grupo INT NOT NULL,
+        id_socio INT NOT NULL,
+        boletas_asignadas INT NOT NULL DEFAULT 0,
+        UNIQUE KEY uq_grupo_socio (id_grupo, id_socio),
+        CONSTRAINT fk_grupo_socio_grupo FOREIGN KEY (id_grupo) REFERENCES rifas_grupos(id_grupo) ON DELETE CASCADE ON UPDATE CASCADE,
+        CONSTRAINT fk_grupo_socio_socio FOREIGN KEY (id_socio) REFERENCES socios(id_socio) ON DELETE CASCADE ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS rifas_boletas (
         id_boleta INT AUTO_INCREMENT PRIMARY KEY,
         id_rifa INT NOT NULL,
+        id_grupo INT DEFAULT NULL,
         numero VARCHAR(5) NOT NULL,
         id_socio INT DEFAULT NULL,
         estado VARCHAR(20) DEFAULT 'pendiente',
         valor DECIMAL(12,2) NOT NULL DEFAULT 0,
         fecha_asignacion DATETIME DEFAULT CURRENT_TIMESTAMP,
         fecha_pago DATETIME DEFAULT NULL,
+        forma_pago VARCHAR(50) DEFAULT NULL,
         observaciones TEXT,
         usuario_ultimo VARCHAR(50) DEFAULT NULL,
-        UNIQUE KEY uq_rifa_numero (id_rifa, numero),
+        UNIQUE KEY uq_rifa_grupo_numero (id_rifa, id_grupo, numero),
         CONSTRAINT fk_boleta_rifa FOREIGN KEY (id_rifa) REFERENCES rifas(id_rifa) ON DELETE CASCADE ON UPDATE CASCADE,
-        CONSTRAINT fk_boleta_socio FOREIGN KEY (id_socio) REFERENCES socios(id_socio) ON DELETE SET NULL ON UPDATE CASCADE
+        CONSTRAINT fk_boleta_socio FOREIGN KEY (id_socio) REFERENCES socios(id_socio) ON DELETE SET NULL ON UPDATE CASCADE,
+        CONSTRAINT fk_boleta_grupo FOREIGN KEY (id_grupo) REFERENCES rifas_grupos(id_grupo) ON DELETE SET NULL ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    if (!columnExists($pdo, 'rifas_boletas', 'id_grupo')) {
+        $pdo->exec('ALTER TABLE rifas_boletas ADD COLUMN id_grupo INT DEFAULT NULL AFTER id_rifa');
+    }
+    if (!columnExists($pdo, 'rifas_boletas', 'forma_pago')) {
+        $pdo->exec('ALTER TABLE rifas_boletas ADD COLUMN forma_pago VARCHAR(50) DEFAULT NULL AFTER fecha_pago');
+    }
+
+    if (indexExists($pdo, 'rifas_boletas', 'uq_rifa_numero')) {
+        $pdo->exec('ALTER TABLE rifas_boletas DROP INDEX uq_rifa_numero');
+    }
+    if (!indexExists($pdo, 'rifas_boletas', 'uq_rifa_grupo_numero')) {
+        $pdo->exec('CREATE UNIQUE INDEX uq_rifa_grupo_numero ON rifas_boletas (id_rifa, id_grupo, numero)');
+    }
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS rifas_boletas_historial (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -71,6 +168,22 @@ function asegurarEsquemaRifas(PDO $pdo): void
         'referencia' => 'rifas',
         'col_referencia' => 'id_rifa',
         'nombre' => 'fk_historial_rifa',
+    ]);
+
+    asegurarForeignKey($pdo, [
+        'tabla' => 'rifas_grupos',
+        'columna' => 'id_rifa',
+        'referencia' => 'rifas',
+        'col_referencia' => 'id_rifa',
+        'nombre' => 'fk_grupo_rifa',
+    ]);
+
+    asegurarForeignKey($pdo, [
+        'tabla' => 'rifas_boletas',
+        'columna' => 'id_grupo',
+        'referencia' => 'rifas_grupos',
+        'col_referencia' => 'id_grupo',
+        'nombre' => 'fk_boleta_grupo',
     ]);
 }
 
@@ -128,8 +241,8 @@ function crearRifa(PDO $pdo, array $data): int
 {
     asegurarEsquemaRifas($pdo);
 
-    $stmt = $pdo->prepare('INSERT INTO rifas (nombre, fecha_inicio, fecha_fin, valor_boleta, cantidad_boletas, observaciones, id_actividad_ingreso, id_actividad_premio, usuario_registro)
-        VALUES (:nombre, :inicio, :fin, :valor, :cantidad, :obs, :act_ingreso, :act_premio, :usuario)');
+    $stmt = $pdo->prepare('INSERT INTO rifas (nombre, fecha_inicio, fecha_fin, valor_boleta, cantidad_boletas, observaciones, id_actividad_ingreso, id_actividad_premio, usuario_registro, tipo_rifa, cantidad_grupos, cifras_numero, rango_inicio, rango_fin, modo_numeracion, modo_distribucion, arte_base_path, arte_numero_x, arte_numero_y, arte_numero_size, arte_numero_color)
+        VALUES (:nombre, :inicio, :fin, :valor, :cantidad, :obs, :act_ingreso, :act_premio, :usuario, :tipo, :grupos, :cifras, :rango_inicio, :rango_fin, :modo_num, :modo_dist, :arte_path, :arte_x, :arte_y, :arte_size, :arte_color)');
     $stmt->execute([
         ':nombre' => $data['nombre'],
         ':inicio' => $data['fecha_inicio'],
@@ -140,51 +253,70 @@ function crearRifa(PDO $pdo, array $data): int
         ':act_ingreso' => $data['id_actividad_ingreso'],
         ':act_premio' => $data['id_actividad_premio'],
         ':usuario' => $data['usuario_registro'] ?? null,
+        ':tipo' => $data['tipo_rifa'] ?? 'normal',
+        ':grupos' => (int) ($data['cantidad_grupos'] ?? 1),
+        ':cifras' => (int) ($data['cifras_numero'] ?? 2),
+        ':rango_inicio' => (int) ($data['rango_inicio'] ?? 0),
+        ':rango_fin' => (int) ($data['rango_fin'] ?? ((10 ** ((int) ($data['cifras_numero'] ?? 2))) - 1)),
+        ':modo_num' => $data['modo_numeracion'] ?? 'secuencial',
+        ':modo_dist' => $data['modo_distribucion'] ?? 'aleatoria',
+        ':arte_path' => $data['arte_base_path'] ?? null,
+        ':arte_x' => $data['arte_numero_x'] ?? null,
+        ':arte_y' => $data['arte_numero_y'] ?? null,
+        ':arte_size' => $data['arte_numero_size'] ?? null,
+        ':arte_color' => $data['arte_numero_color'] ?? null,
     ]);
 
     $idRifa = (int) $pdo->lastInsertId();
-    generarBoletasRifa($pdo, $idRifa, (int) $data['cantidad_boletas'], (float) $data['valor_boleta']);
-    asignarBoletasAutomaticas($pdo, $idRifa, $data['usuario_registro'] ?? null);
+    $grupos = crearGruposRifa($pdo, $idRifa, $data);
+    generarBoletasRifa($pdo, $idRifa, (int) $data['cantidad_boletas'], (float) $data['valor_boleta'], $data, $grupos);
+    asignarBoletasAutomaticas($pdo, $idRifa, $data['usuario_registro'] ?? null, $data, $grupos);
 
     return $idRifa;
 }
 
-function generarBoletasRifa(PDO $pdo, int $idRifa, int $cantidad, float $valor): void
+function generarBoletasRifa(PDO $pdo, int $idRifa, int $cantidad, float $valor, array $config = [], array $grupos = []): void
 {
-    $numeros = [];
-    for ($i = 0; $i < $cantidad; $i++) {
-        $numeros[] = str_pad((string) $i, 2, '0', STR_PAD_LEFT);
+    $numeros = construirNumerosRifa($cantidad, $config);
+    if (empty($grupos)) {
+        $grupos = [['id_grupo' => null]];
     }
 
-    $stmt = $pdo->prepare('INSERT INTO rifas_boletas (id_rifa, numero, valor, usuario_ultimo) VALUES (:id_rifa, :numero, :valor, :usuario)');
-    foreach ($numeros as $numero) {
-        $stmt->execute([
-            ':id_rifa' => $idRifa,
-            ':numero' => $numero,
-            ':valor' => $valor,
-            ':usuario' => $_SESSION['usuario'] ?? null,
-        ]);
+    $stmt = $pdo->prepare('INSERT INTO rifas_boletas (id_rifa, id_grupo, numero, valor, usuario_ultimo) VALUES (:id_rifa, :id_grupo, :numero, :valor, :usuario)');
+    foreach ($grupos as $grupo) {
+        foreach ($numeros as $numero) {
+            $stmt->execute([
+                ':id_rifa' => $idRifa,
+                ':id_grupo' => $grupo['id_grupo'],
+                ':numero' => $numero,
+                ':valor' => $valor,
+                ':usuario' => $_SESSION['usuario'] ?? null,
+            ]);
+        }
     }
 }
 
-function asignarBoletasAutomaticas(PDO $pdo, int $idRifa, ?string $usuario = null): void
+function asignarBoletasAutomaticas(PDO $pdo, int $idRifa, ?string $usuario = null, array $config = [], array $grupos = []): void
 {
     $socios = getSocios($pdo);
     if (empty($socios)) {
         return;
     }
 
-    $boletas = $pdo->prepare('SELECT * FROM rifas_boletas WHERE id_rifa = :id ORDER BY numero');
+    $boletas = $pdo->prepare('SELECT * FROM rifas_boletas WHERE id_rifa = :id ORDER BY id_grupo, numero');
     $boletas->execute([':id' => $idRifa]);
     $boletas = $boletas->fetchAll();
 
-    shuffle($boletas);
+    $modoDistribucion = $config['modo_distribucion'] ?? 'aleatoria';
+    if ($modoDistribucion === 'aleatoria' || $modoDistribucion === 'mixta') {
+        shuffle($boletas);
+    }
     $indexSocio = 0;
     $totalSocios = count($socios);
 
     foreach ($boletas as $boleta) {
         $socio = $socios[$indexSocio % $totalSocios];
-        $stmtUpd = $pdo->prepare('UPDATE rifas_boletas SET id_socio = :socio, usuario_ultimo = :usuario WHERE id_boleta = :id');
+        $stmtUpd = $pdo->prepare('UPDATE rifas_boletas SET id_socio = :socio, estado = "asignada", usuario_ultimo = :usuario WHERE id_boleta = :id');
         $stmtUpd->execute([
             ':socio' => $socio['id_socio'],
             ':usuario' => $usuario,
@@ -364,9 +496,10 @@ function registrarPagoBoleta(PDO $pdo, int $idRifa, string $numero, string $fech
 
     crearMovimientoRifa($pdo, (int) $boleta['id_actividad_ingreso'], (int) $boleta['id_socio'], (float) $boleta['valor'], $fechaPago, $medio, $idMedio, 'rifas', 'Recaudo de boleta ' . $numero);
 
-    $stmtUpd = $pdo->prepare('UPDATE rifas_boletas SET estado = "pagada", fecha_pago = :fecha, usuario_ultimo = :usuario WHERE id_boleta = :id');
+    $stmtUpd = $pdo->prepare('UPDATE rifas_boletas SET estado = "pagada", fecha_pago = :fecha, forma_pago = :forma_pago, usuario_ultimo = :usuario WHERE id_boleta = :id');
     $stmtUpd->execute([
         ':fecha' => $fechaPago,
+        ':forma_pago' => $medio,
         ':usuario' => $usuario,
         ':id' => $boleta['id_boleta'],
     ]);
@@ -377,7 +510,7 @@ function registrarPagoBoleta(PDO $pdo, int $idRifa, string $numero, string $fech
 
 function registrarPremioRifa(PDO $pdo, int $idRifa, string $numeroGanador, float $valorPremio, string $fecha, string $medio, ?int $idMedio, ?string $usuario): void
 {
-    $stmt = $pdo->prepare('SELECT b.*, r.id_actividad_premio FROM rifas_boletas b JOIN rifas r ON r.id_rifa = b.id_rifa WHERE b.id_rifa = :id AND b.numero = :numero');
+    $stmt = $pdo->prepare('SELECT b.*, r.id_actividad_premio FROM rifas_boletas b JOIN rifas r ON r.id_rifa = b.id_rifa WHERE b.id_rifa = :id AND b.numero = :numero ORDER BY b.id_grupo LIMIT 1');
     $stmt->execute([':id' => $idRifa, ':numero' => $numeroGanador]);
     $boleta = $stmt->fetch();
     if (!$boleta) {
@@ -390,9 +523,122 @@ function registrarPremioRifa(PDO $pdo, int $idRifa, string $numeroGanador, float
     crearMovimientoRifa($pdo, (int) $boleta['id_actividad_premio'], (int) $boleta['id_socio'], $valorPremio, $fecha, $medio, $idMedio, 'rifas', 'Premio rifa ' . $idRifa);
 
     registrarHistorialBoleta($pdo, (int) $boleta['id_boleta'], $idRifa, $numeroGanador, 'premio', 'Pago de premio', $usuario);
-    $pdo->prepare('UPDATE rifas SET estado = "cerrada" WHERE id_rifa = :id')
-        ->execute([':id' => $idRifa]);
+    $pdo->prepare('UPDATE rifas SET estado = "cerrada", numero_ganador = :numero, id_boleta_ganadora = :boleta, premio_valor = :valor, fecha_cierre = NOW() WHERE id_rifa = :id')
+        ->execute([':id' => $idRifa, ':numero' => $numeroGanador, ':boleta' => $boleta['id_boleta'], ':valor' => $valorPremio]);
     recalcularSaldosDesdeMovimientos($pdo);
+}
+
+function crearGruposRifa(PDO $pdo, int $idRifa, array $data): array
+{
+    $cantidadGrupos = max(1, (int) ($data['cantidad_grupos'] ?? 1));
+    $gruposTexto = trim((string) ($data['grupos_json'] ?? ''));
+    $grupos = [];
+
+    if ($gruposTexto !== '') {
+        $decoded = json_decode($gruposTexto, true);
+        if (is_array($decoded)) {
+            foreach ($decoded as $idx => $grupo) {
+                if (!is_array($grupo)) {
+                    continue;
+                }
+                $grupos[] = [
+                    'nombre' => trim((string) ($grupo['nombre'] ?? ('Grupo ' . ($idx + 1)))),
+                    'boletas_por_socio' => max(1, (int) ($grupo['boletas_por_socio'] ?? 1)),
+                ];
+            }
+        }
+    }
+
+    if (empty($grupos)) {
+        for ($i = 1; $i <= $cantidadGrupos; $i++) {
+            $grupos[] = ['nombre' => 'Grupo ' . $i, 'boletas_por_socio' => max(1, (int) ($data['boletas_por_socio'] ?? 1))];
+        }
+    }
+
+    $stmt = $pdo->prepare('INSERT INTO rifas_grupos (id_rifa, nombre, orden_grupo, boletas_por_socio, usuario_registro) VALUES (:id_rifa, :nombre, :orden, :boletas, :usuario)');
+    $creados = [];
+    foreach ($grupos as $i => $grupo) {
+        $stmt->execute([
+            ':id_rifa' => $idRifa,
+            ':nombre' => $grupo['nombre'],
+            ':orden' => $i + 1,
+            ':boletas' => $grupo['boletas_por_socio'],
+            ':usuario' => $data['usuario_registro'] ?? null,
+        ]);
+        $creados[] = ['id_grupo' => (int) $pdo->lastInsertId(), 'nombre' => $grupo['nombre']];
+    }
+
+    return $creados;
+}
+
+function construirNumerosRifa(int $cantidad, array $config = []): array
+{
+    $cifras = max(1, (int) ($config['cifras_numero'] ?? 2));
+    $inicio = max(0, (int) ($config['rango_inicio'] ?? 0));
+    $finDefault = (10 ** $cifras) - 1;
+    $fin = (int) ($config['rango_fin'] ?? $finDefault);
+    if ($fin < $inicio) {
+        $fin = $inicio;
+    }
+
+    $pool = range($inicio, $fin);
+    $modo = $config['modo_numeracion'] ?? 'secuencial';
+    if ($modo === 'aleatoria') {
+        shuffle($pool);
+    }
+
+    if ($modo === 'manual') {
+        $manual = preg_split('/\s*,\s*/', trim((string) ($config['numeros_manuales'] ?? '')));
+        $manual = array_filter($manual, static fn($n) => $n !== '');
+        if (!empty($manual)) {
+            $numeros = [];
+            $vistos = [];
+            foreach ($manual as $n) {
+                $valor = (int) $n;
+                if ($valor < $inicio || $valor > $fin || isset($vistos[$valor])) {
+                    continue;
+                }
+                $vistos[$valor] = true;
+                $numeros[] = str_pad((string) $valor, $cifras, '0', STR_PAD_LEFT);
+            }
+            return $numeros;
+        }
+    }
+
+    $pool = array_slice($pool, 0, max(1, $cantidad));
+    return array_map(static fn($n) => str_pad((string) $n, $cifras, '0', STR_PAD_LEFT), $pool);
+}
+
+function obtenerGruposRifa(PDO $pdo, int $idRifa): array
+{
+    $stmt = $pdo->prepare('SELECT g.*, COUNT(b.id_boleta) AS total_boletas, SUM(CASE WHEN b.estado = "pagada" THEN 1 ELSE 0 END) AS boletas_pagadas, COALESCE(SUM(CASE WHEN b.estado = "pagada" THEN b.valor ELSE 0 END), 0) AS recaudo FROM rifas_grupos g LEFT JOIN rifas_boletas b ON b.id_grupo = g.id_grupo WHERE g.id_rifa = :id GROUP BY g.id_grupo ORDER BY g.orden_grupo');
+    $stmt->execute([':id' => $idRifa]);
+    return $stmt->fetchAll();
+}
+
+function obtenerResumenSociosRifa(PDO $pdo, int $idRifa): array
+{
+    $stmt = $pdo->prepare('SELECT s.id_socio, s.nombre_completo, COUNT(b.id_boleta) AS boletas, SUM(CASE WHEN b.estado = "pagada" THEN 1 ELSE 0 END) AS pagadas, SUM(CASE WHEN b.estado IN ("pendiente", "asignada") THEN 1 ELSE 0 END) AS pendientes, COALESCE(SUM(CASE WHEN b.estado = "pagada" THEN b.valor ELSE 0 END),0) AS total_pagado FROM rifas_boletas b JOIN socios s ON s.id_socio = b.id_socio WHERE b.id_rifa = :id GROUP BY s.id_socio, s.nombre_completo ORDER BY s.nombre_completo');
+    $stmt->execute([':id' => $idRifa]);
+    return $stmt->fetchAll();
+}
+
+function obtenerUtilidadRifa(PDO $pdo, int $idRifa): array
+{
+    $stmt = $pdo->prepare('SELECT COALESCE(SUM(CASE WHEN estado = "pagada" THEN valor ELSE 0 END),0) AS total_recaudado, COALESCE(SUM(valor),0) AS total_vendido FROM rifas_boletas WHERE id_rifa = :id');
+    $stmt->execute([':id' => $idRifa]);
+    $base = $stmt->fetch() ?: ['total_recaudado' => 0, 'total_vendido' => 0];
+
+    $stmtRifa = $pdo->prepare('SELECT premio_valor FROM rifas WHERE id_rifa = :id LIMIT 1');
+    $stmtRifa->execute([':id' => $idRifa]);
+    $premio = (float) ($stmtRifa->fetchColumn() ?: 0);
+
+    return [
+        'total_vendido' => (float) $base['total_vendido'],
+        'total_recaudado' => (float) $base['total_recaudado'],
+        'premio_entregado' => $premio,
+        'utilidad_neta' => (float) $base['total_recaudado'] - $premio,
+    ];
 }
 
 function obtenerInformeMovimientosRifa(PDO $pdo, array $rifa): array

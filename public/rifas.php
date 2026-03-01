@@ -13,6 +13,9 @@ $idRifaSeleccionada = isset($_GET['id_rifa']) ? (int) $_GET['id_rifa'] : ((int) 
 $rifaActual = $idRifaSeleccionada ? obtenerRifa($pdo, $idRifaSeleccionada) : null;
 $boletas = $rifaActual ? obtenerBoletasRifa($pdo, $idRifaSeleccionada) : [];
 $resumen = $rifaActual ? obtenerResumenBoletas($pdo, $idRifaSeleccionada) : [];
+$gruposRifa = $rifaActual ? obtenerGruposRifa($pdo, $idRifaSeleccionada) : [];
+$resumenSocios = $rifaActual ? obtenerResumenSociosRifa($pdo, $idRifaSeleccionada) : [];
+$utilidadRifa = $rifaActual ? obtenerUtilidadRifa($pdo, $idRifaSeleccionada) : ['total_vendido' => 0, 'total_recaudado' => 0, 'premio_entregado' => 0, 'utilidad_neta' => 0];
 $informeRifa = ['movimientos' => [], 'totales' => ['ingresos' => 0, 'egresos' => 0]];
 
 if ($rifaActual) {
@@ -44,7 +47,7 @@ if ($rifaActual) {
                         <p class="text-muted mb-1">Nueva actividad contable</p>
                         <h5 class="mb-0">Crear rifa</h5>
                     </div>
-                    <span class="badge bg-primary-subtle text-primary"><i class="bi bi-shuffle me-1"></i>Asignación automática</span>
+                    <span class="badge bg-primary-subtle text-primary"><i class="bi bi-diagram-3 me-1"></i>Normal / Gemela</span>
                 </div>
                 <form method="POST" action="../actions/rifas_save.php" class="row g-2">
                     <input type="hidden" name="accion" value="crear_rifa">
@@ -83,6 +86,77 @@ if ($rifaActual) {
                                 <option value="<?php echo (int) $act['id_actividad']; ?>"><?php echo clean($act['nombre_actividad']); ?></option>
                             <?php endforeach; ?>
                         </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Tipo de rifa</label>
+                        <select name="tipo_rifa" class="form-select">
+                            <option value="normal">Normal</option>
+                            <option value="gemela">Gemela</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Cantidad de grupos</label>
+                        <input type="number" name="cantidad_grupos" class="form-control" min="1" max="20" value="1" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Cifras</label>
+                        <input type="number" name="cifras_numero" class="form-control" min="1" max="6" value="2" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Rango inicio</label>
+                        <input type="number" name="rango_inicio" class="form-control" min="0" value="0" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Rango fin</label>
+                        <input type="number" name="rango_fin" class="form-control" min="0" value="99" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Numeración</label>
+                        <select name="modo_numeracion" class="form-select">
+                            <option value="secuencial">Secuencial</option>
+                            <option value="aleatoria">Aleatoria</option>
+                            <option value="manual">Manual</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Distribución de boletas</label>
+                        <select name="modo_distribucion" class="form-select">
+                            <option value="aleatoria">Aleatoria</option>
+                            <option value="manual">Manual</option>
+                            <option value="mixta">Mixta</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Números manuales (si aplica)</label>
+                        <input type="text" name="numeros_manuales" class="form-control" placeholder="Ej: 01, 05, 10, 22">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Boletas por socio</label>
+                        <input type="number" name="boletas_por_socio" class="form-control" min="1" value="1">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Grupos (JSON opcional)</label>
+                        <input type="text" name="grupos_json" class="form-control" placeholder='[{"nombre":"Grupo A","boletas_por_socio":4}]'>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Arte base (ruta)</label>
+                        <input type="text" name="arte_base_path" class="form-control" placeholder="uploads/rifas/base.png">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">X</label>
+                        <input type="number" name="arte_numero_x" class="form-control" min="0">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Y</label>
+                        <input type="number" name="arte_numero_y" class="form-control" min="0">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Tamaño</label>
+                        <input type="number" name="arte_numero_size" class="form-control" min="8" max="144" value="28">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Color fuente</label>
+                        <input type="text" name="arte_numero_color" class="form-control" value="#000000">
                     </div>
                     <div class="col-12">
                         <label class="form-label">Observaciones</label>
@@ -290,6 +364,68 @@ if ($rifaActual) {
                                 <?php if (empty($boletas)): ?>
                                     <tr><td colspan="5" class="text-center text-muted">Aún no se han generado boletas.</td></tr>
                                 <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row g-3 mt-2">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="mb-3">Recaudo por grupo</h6>
+                    <div class="table-responsive" style="max-height:220px;">
+                        <table class="table table-sm table-bordered align-middle mb-0">
+                            <thead class="table-light"><tr><th>Grupo</th><th>Boletas</th><th>Pagadas</th><th>Recaudo</th></tr></thead>
+                            <tbody>
+                                <?php foreach ($gruposRifa as $grupo): ?>
+                                <tr>
+                                    <td><?php echo clean($grupo['nombre']); ?></td>
+                                    <td><?php echo (int) $grupo['total_boletas']; ?></td>
+                                    <td><?php echo (int) $grupo['boletas_pagadas']; ?></td>
+                                    <td>$<?php echo number_format((float) $grupo['recaudo'], 0, ',', '.'); ?></td>
+                                </tr>
+                                <?php endforeach; ?>
+                                <?php if (empty($gruposRifa)): ?><tr><td colspan="4" class="text-center text-muted">Sin grupos.</td></tr><?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="mb-3">Utilidad final</h6>
+                    <div class="d-flex flex-column gap-2">
+                        <div class="d-flex justify-content-between"><span>Total vendido</span><strong>$<?php echo number_format($utilidadRifa['total_vendido'], 0, ',', '.'); ?></strong></div>
+                        <div class="d-flex justify-content-between"><span>Total recaudado</span><strong>$<?php echo number_format($utilidadRifa['total_recaudado'], 0, ',', '.'); ?></strong></div>
+                        <div class="d-flex justify-content-between"><span>Premio entregado</span><strong>$<?php echo number_format($utilidadRifa['premio_entregado'], 0, ',', '.'); ?></strong></div>
+                        <div class="d-flex justify-content-between border-top pt-2"><span>Utilidad neta</span><strong class="<?php echo $utilidadRifa['utilidad_neta'] >= 0 ? 'text-success' : 'text-danger'; ?>">$<?php echo number_format(abs($utilidadRifa['utilidad_neta']), 0, ',', '.'); ?></strong></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="mb-3">Boletas por socio</h6>
+                    <div class="table-responsive" style="max-height:240px;">
+                        <table class="table table-sm table-bordered align-middle mb-0">
+                            <thead class="table-light"><tr><th>Socio</th><th>Boletas</th><th>Pagadas</th><th>Pendientes</th><th>Total pagado</th></tr></thead>
+                            <tbody>
+                                <?php foreach ($resumenSocios as $row): ?>
+                                <tr>
+                                    <td><?php echo clean($row['nombre_completo']); ?></td>
+                                    <td><?php echo (int) $row['boletas']; ?></td>
+                                    <td><?php echo (int) $row['pagadas']; ?></td>
+                                    <td><?php echo (int) $row['pendientes']; ?></td>
+                                    <td>$<?php echo number_format((float) $row['total_pagado'], 0, ',', '.'); ?></td>
+                                </tr>
+                                <?php endforeach; ?>
+                                <?php if (empty($resumenSocios)): ?><tr><td colspan="5" class="text-center text-muted">Sin asignaciones por socio.</td></tr><?php endif; ?>
                             </tbody>
                         </table>
                     </div>

@@ -10,6 +10,9 @@ try {
     asegurarEsquemaRifas($pdo);
 
     if ($accion === 'crear_rifa') {
+        $cifrasNumero = max(1, (int) ($_POST['cifras_numero'] ?? 2));
+        $rangoInicio = max(0, (int) ($_POST['rango_inicio'] ?? 0));
+        $rangoFin = (int) ($_POST['rango_fin'] ?? ((10 ** $cifrasNumero) - 1));
         $datos = [
             'nombre' => clean($_POST['nombre'] ?? ''),
             'fecha_inicio' => $_POST['fecha_inicio'] ?? '',
@@ -19,6 +22,21 @@ try {
             'observaciones' => $_POST['observaciones'] ?? '',
             'id_actividad_ingreso' => (int) ($_POST['id_actividad_ingreso'] ?? 0),
             'id_actividad_premio' => (int) ($_POST['id_actividad_premio'] ?? 0),
+            'tipo_rifa' => clean($_POST['tipo_rifa'] ?? 'normal'),
+            'cantidad_grupos' => max(1, (int) ($_POST['cantidad_grupos'] ?? 1)),
+            'cifras_numero' => $cifrasNumero,
+            'rango_inicio' => $rangoInicio,
+            'rango_fin' => max($rangoInicio, $rangoFin),
+            'modo_numeracion' => clean($_POST['modo_numeracion'] ?? 'secuencial'),
+            'numeros_manuales' => clean($_POST['numeros_manuales'] ?? ''),
+            'modo_distribucion' => clean($_POST['modo_distribucion'] ?? 'aleatoria'),
+            'boletas_por_socio' => max(1, (int) ($_POST['boletas_por_socio'] ?? 1)),
+            'grupos_json' => $_POST['grupos_json'] ?? '',
+            'arte_base_path' => clean($_POST['arte_base_path'] ?? ''),
+            'arte_numero_x' => ($_POST['arte_numero_x'] ?? '') !== '' ? (int) $_POST['arte_numero_x'] : null,
+            'arte_numero_y' => ($_POST['arte_numero_y'] ?? '') !== '' ? (int) $_POST['arte_numero_y'] : null,
+            'arte_numero_size' => ($_POST['arte_numero_size'] ?? '') !== '' ? (int) $_POST['arte_numero_size'] : null,
+            'arte_numero_color' => clean($_POST['arte_numero_color'] ?? ''),
             'usuario_registro' => $usuario,
         ];
 
