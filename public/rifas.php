@@ -88,6 +88,7 @@ if ($rifaActual) {
                     <input type="hidden" name="accion" value="crear_rifa">
                     <input type="hidden" name="tipo_rifa" id="tipo_rifa" value="">
                     <input type="hidden" name="grupos_json" id="grupos_json" value="">
+                    <input type="hidden" name="cantidad_grupos" id="cantidad_grupos" value="1">
                     <input type="hidden" name="manual_asignaciones_json" id="manual_asignaciones_json" value="[]">
 
                     <div class="col-12" data-step="1">
@@ -126,8 +127,20 @@ if ($rifaActual) {
                                 <input type="number" name="boletas_por_socio" class="form-control" min="1" value="1">
                             </div>
                             <div class="col-md-6 gemela-only d-none">
-                                <label class="form-label">Cantidad de grupos</label>
-                                <input type="number" name="cantidad_grupos" id="cantidad_grupos" class="form-control" min="1" max="20" value="2">
+                                <label class="form-label">Numeración Grupo A</label>
+                                <select id="metodo_grupo_a" class="form-select">
+                                    <option value="aleatoria">Automática</option>
+                                    <option value="manual">Manual</option>
+                                    <option value="mixta">Mixta</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 gemela-only d-none">
+                                <label class="form-label">Numeración Grupo B</label>
+                                <select id="metodo_grupo_b" class="form-select">
+                                    <option value="aleatoria">Automática</option>
+                                    <option value="manual">Manual</option>
+                                    <option value="mixta">Mixta</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -146,9 +159,8 @@ if ($rifaActual) {
                             <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="agregarAsignacionNormal">Agregar número manual</button>
                             <input type="hidden" name="numeros_manuales" id="numeros_manuales" value="">
                         </div>
-                        <div class="gemela-only d-none">
-                            <small class="text-muted d-block">Cada grupo puede repetir números respecto a otros grupos, pero no internamente.</small>
-                            <p class="mb-0 text-muted">Configura números manuales directamente en cada grupo.</p>
+                        <div class="gemela-only d-none" id="manualGemelaWrap">
+                            <small class="text-muted d-block mb-2">Cada grupo puede repetir números respecto a otros grupos, pero no internamente.</small>
                         </div>
                     </div>
 
@@ -627,9 +639,146 @@ if ($rifaActual) {
   const tipoInput = document.getElementById('tipo_rifa');
   const gruposWrap = document.getElementById('gruposBuilder');
   const normalSociosWrap = document.getElementById('normalSociosWrap');
+  const manualGemelaWrap = document.getElementById('manualGemelaWrap');
+
+  const gemelaState = {
+    included: new Set(socios.map(s => s.id)),
+    groupA: new Set(),
+    methodA: 'aleatoria',
+    methodB: 'aleatoria'
+  };
 
   function renderSociosCheckbox(name, checked = true) {
     return socios.map(s => `<label class="form-check col-md-4"><input class="form-check-input" type="checkbox" name="${name}" value="${s.id}" ${checked ? 'checked' : ''}><span class="form-check-label">${s.nombre}</span></label>`).join('');
+  }
+
+  function addManualRow(container, sociosGrupo = [], data = {}) {
+    const row = document.createElement('div');
+    row.className = 'row g-2 mt-1 manual-group-row';
+    row.innerHTML = `<div class="col-md-4"><input class="form-control manual-numero" placeholder="Número" value="${data.numero || ''}"></div>
+      <div class="col-md-6"><select class="form-select manual-socio"><option value="">Socio</option>${sociosGrupo.map(s => `<option value="${s.id}" ${Number(data.id_socio)===s.id?'selected':''}>${s.nombre}</option>`).join('')}</select></div>
+      <div class="col-md-2"><button type="button" class="btn btn-outline-danger w-100">X</button></div>`;
+    row.querySelector('button').addEventListener('click', () => row.remove());
+    container.appendChild(row);
+  }
+
+  function buildGemela() {
+    if (!gruposWrap) return;
+    const participantes = socios.filter(s => gemelaState.included.has(s.id));
+    const groupA = participantes.filter(s => gemelaState.groupA.has(s.id));
+    const groupB = participantes.filter(s => !gemelaState.groupA.has(s.id));
+
+    gruposWrap.innerHTML = `
+      <div class="alert alert-light py-2 mb-3">Seleccionados: <strong>${participantes.length}</strong> · Restantes: <strong>${Math.max(0, participantes.length - groupA.length)}</strong></div>
+      <div class="form-check form-switch mb-2">
+        <input class="form-check-input" type="checkbox" id="excluirSinParticipacion">
+        <label class="form-check-label" for="excluirSinParticipacion">Excluir socios sin participación</label>
+      </div>
+      <div id="listaParticipacion" class="row g-1 mb-3"></div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="border rounded p-2 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Grupo A</h6><span class="badge bg-primary-subtle text-primary">${groupA.length}</span></div>
+            <div class="d-flex gap-2 mb-2">
+              <button type="button" class="btn btn-sm btn-outline-success" id="selectAllA">✅ Seleccionar todos</button>
+              <button type="button" class="btn btn-sm btn-outline-danger" id="clearAllA">❌ Deseleccionar todos</button>
+            </div>
+            <div class="small text-muted mb-2">Los no seleccionados pasan automáticamente al Grupo B.</div>
+            <div class="row g-1" id="grupoAList"></div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="border rounded p-2 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Grupo B (automático)</h6><span class="badge bg-secondary-subtle text-secondary">${groupB.length}</span></div>
+            <div class="small text-muted mb-2">Ajuste manual moviendo socios entre grupos.</div>
+            <div class="row g-1" id="grupoBList"></div>
+          </div>
+        </div>
+      </div>`;
+
+    const listaParticipacion = gruposWrap.querySelector('#listaParticipacion');
+    participantes.forEach(s => {
+      const wrap = document.createElement('label');
+      wrap.className = 'form-check col-md-6';
+      wrap.innerHTML = `<input class="form-check-input toggle-participa" type="checkbox" value="${s.id}" checked><span class="form-check-label">${s.nombre}</span>`;
+      listaParticipacion.appendChild(wrap);
+    });
+
+    const renderGroupLists = () => {
+      const groupANow = socios.filter(s => gemelaState.included.has(s.id) && gemelaState.groupA.has(s.id));
+      const groupBNow = socios.filter(s => gemelaState.included.has(s.id) && !gemelaState.groupA.has(s.id));
+      gruposWrap.querySelector('#grupoAList').innerHTML = groupANow.map(s => `<label class="form-check col-12"><input class="form-check-input check-a" type="checkbox" value="${s.id}" checked><span class="form-check-label">${s.nombre}</span></label>`).join('');
+      gruposWrap.querySelector('#grupoBList').innerHTML = groupBNow.map(s => `<label class="form-check col-12"><input class="form-check-input check-b" type="checkbox" value="${s.id}"><span class="form-check-label">${s.nombre}</span></label>`).join('');
+      gruposWrap.querySelector('.alert strong').textContent = String(groupANow.length + groupBNow.length);
+      gruposWrap.querySelectorAll('.alert strong')[1].textContent = String(groupBNow.length);
+      groupsManualUI(groupANow, groupBNow);
+
+      gruposWrap.querySelectorAll('.check-a').forEach(el => el.addEventListener('change', () => {
+        const id = Number(el.value);
+        if (!el.checked) gemelaState.groupA.delete(id);
+        renderGroupLists();
+      }));
+      gruposWrap.querySelectorAll('.check-b').forEach(el => el.addEventListener('change', () => {
+        const id = Number(el.value);
+        if (el.checked) gemelaState.groupA.add(id);
+        renderGroupLists();
+      }));
+    };
+
+    gruposWrap.querySelector('#selectAllA').addEventListener('click', () => {
+      socios.forEach(s => { if (gemelaState.included.has(s.id)) gemelaState.groupA.add(s.id); });
+      renderGroupLists();
+    });
+    gruposWrap.querySelector('#clearAllA').addEventListener('click', () => {
+      gemelaState.groupA.clear();
+      renderGroupLists();
+    });
+
+    gruposWrap.querySelector('#excluirSinParticipacion').addEventListener('change', (e) => {
+      if (!e.target.checked) return;
+      socios.forEach(s => {
+        const cb = gruposWrap.querySelector(`.toggle-participa[value="${s.id}"]`);
+        if (cb && !cb.checked) {
+          gemelaState.included.delete(s.id);
+          gemelaState.groupA.delete(s.id);
+        }
+      });
+      buildGemela();
+    });
+
+    gruposWrap.querySelectorAll('.toggle-participa').forEach(cb => cb.addEventListener('change', () => {
+      const id = Number(cb.value);
+      if (cb.checked) {
+        gemelaState.included.add(id);
+      } else {
+        gemelaState.included.delete(id);
+        gemelaState.groupA.delete(id);
+      }
+      renderGroupLists();
+    }));
+
+    renderGroupLists();
+  }
+
+  function groupsManualUI(groupA, groupB) {
+    manualGemelaWrap.innerHTML = '';
+    const block = (id, label, sociosGrupo, method) => {
+      const box = document.createElement('div');
+      box.className = 'border rounded p-2 mb-2';
+      box.innerHTML = `<div class="d-flex justify-content-between align-items-center"><h6 class="mb-0">${label}</h6><span class="badge bg-light text-dark">Método: ${method}</span></div>
+      <div class="manual-zone mt-2"></div>
+      <button type="button" class="btn btn-sm btn-outline-secondary mt-2 add-manual">Agregar número manual</button>`;
+      const zone = box.querySelector('.manual-zone');
+      box.querySelector('.add-manual').addEventListener('click', () => addManualRow(zone, sociosGrupo));
+      if (method === 'aleatoria') {
+        box.querySelector('.add-manual').classList.add('d-none');
+        zone.innerHTML = '<small class="text-muted">Numeración automática.</small>';
+      }
+      box.dataset.groupId = id;
+      manualGemelaWrap.appendChild(box);
+    };
+    block('A', 'Grupo A', groupA, gemelaState.methodA);
+    block('B', 'Grupo B', groupB, gemelaState.methodB);
   }
 
   function updateStep() {
@@ -647,44 +796,7 @@ if ($rifaActual) {
     form.querySelectorAll('.normal-only').forEach(el => el.classList.toggle('d-none', tipo !== 'normal'));
     form.querySelectorAll('.gemela-only').forEach(el => el.classList.toggle('d-none', tipo !== 'gemela'));
     tipoInput.value = tipo;
-  }
-
-  function addNormalManualRow(data = {}) {
-    const row = document.createElement('div');
-    row.className = 'row g-2 mb-2 manual-row';
-    row.innerHTML = `<div class="col-md-4"><input class="form-control" placeholder="Número" value="${data.numero || ''}"></div>
-      <div class="col-md-6"><select class="form-select"><option value="">Socio</option>${socios.map(s => `<option value="${s.id}" ${Number(data.id_socio)===s.id?'selected':''}>${s.nombre}</option>`).join('')}</select></div>
-      <div class="col-md-2"><button type="button" class="btn btn-outline-danger w-100">X</button></div>`;
-    row.querySelector('button').addEventListener('click', () => row.remove());
-    document.getElementById('manualAsignacionesNormal').appendChild(row);
-  }
-
-  function buildGroups() {
-    const cantidad = Number(document.getElementById('cantidad_grupos').value || 1);
-    gruposWrap.innerHTML = '';
-    for (let i=1;i<=cantidad;i++) {
-      const item = document.createElement('div');
-      item.className = 'border rounded p-2 mb-2 grupo-item';
-      item.dataset.index = i;
-      item.innerHTML = `<h6>Grupo ${i}</h6>
-        <div class="row g-2">
-          <div class="col-md-6"><label class="form-label">Nombre grupo</label><input class="form-control grupo-nombre" value="Grupo ${i}"></div>
-          <div class="col-md-3"><label class="form-label">Boletas por socio</label><input type="number" class="form-control grupo-boletas" min="1" value="1"></div>
-          <div class="col-md-3"><label class="form-label">Método</label><select class="form-select grupo-metodo"><option value="aleatoria">Automática</option><option value="manual">Manual</option><option value="mixta">Mixta</option></select></div>
-          <div class="col-12"><label class="form-label">Socios del grupo</label><div class="row">${renderSociosCheckbox('socios_grupo_'+i)}</div></div>
-          <div class="col-12"><label class="form-label">Asignaciones manuales (número + socio)</label><div class="manual-grupo"></div><button type="button" class="btn btn-sm btn-outline-secondary add-manual-grupo">Agregar</button></div>
-        </div>`;
-      item.querySelector('.add-manual-grupo').addEventListener('click', () => {
-        const row = document.createElement('div');
-        row.className = 'row g-2 mt-1 manual-group-row';
-        row.innerHTML = `<div class="col-md-4"><input class="form-control manual-numero" placeholder="Número"></div>
-          <div class="col-md-6"><select class="form-select manual-socio"><option value="">Socio</option>${socios.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('')}</select></div>
-          <div class="col-md-2"><button type="button" class="btn btn-outline-danger w-100">X</button></div>`;
-        row.querySelector('button').addEventListener('click', () => row.remove());
-        item.querySelector('.manual-grupo').appendChild(row);
-      });
-      gruposWrap.appendChild(item);
-    }
+    document.getElementById('cantidad_grupos').value = tipo === 'gemela' ? '2' : '1';
   }
 
   function collectAndValidate() {
@@ -714,42 +826,64 @@ if ($rifaActual) {
       document.getElementById('manual_asignaciones_json').value = JSON.stringify(manual);
       document.getElementById('numeros_manuales').value = manual.map(m => m.numero).join(',');
       document.getElementById('grupos_json').value = JSON.stringify([{ nombre:'Grupo 1', boletas_por_socio:Number(form.querySelector('[name="boletas_por_socio"]').value||1), metodo_distribucion:form.querySelector('[name="modo_distribucion"]').value||'aleatoria', socios:selected, asignaciones:manual }]);
-    } else {
-      const grupos = [];
-      document.querySelectorAll('.grupo-item').forEach((g, idx) => {
-        const sociosGrupo = [...g.querySelectorAll('input[type="checkbox"]:checked')].map(el => Number(el.value));
-        if (!sociosGrupo.length) throw new Error(`El grupo ${idx+1} no tiene socios asignados.`);
-        const manual = [];
-        const nums = new Set();
-        g.querySelectorAll('.manual-group-row').forEach(row => {
-          const numero = row.querySelector('.manual-numero').value.trim();
-          const idSocio = Number(row.querySelector('.manual-socio').value || 0);
-          if (!numero) return;
-          const n = Number(numero);
-          if (!Number.isInteger(n) || n < inicio || n > fin) throw new Error(`Número fuera de rango en grupo ${idx+1}.`);
-          if (nums.has(n)) throw new Error(`Número duplicado dentro del grupo ${idx+1}.`);
-          if (!sociosGrupo.includes(idSocio)) throw new Error(`El socio manual del grupo ${idx+1} debe pertenecer al grupo.`);
-          nums.add(n);
-          manual.push({ numero: String(n), id_socio: idSocio });
-        });
-        if (manual.length > cantidad) throw new Error(`Los manuales del grupo ${idx+1} superan el total permitido.`);
-        grupos.push({ nombre:g.querySelector('.grupo-nombre').value.trim() || `Grupo ${idx+1}`, boletas_por_socio:Number(g.querySelector('.grupo-boletas').value||1), metodo_distribucion:g.querySelector('.grupo-metodo').value || 'aleatoria', socios:sociosGrupo, asignaciones:manual });
-      });
-      document.getElementById('grupos_json').value = JSON.stringify(grupos);
-      document.getElementById('manual_asignaciones_json').value = '[]';
-      document.getElementById('numeros_manuales').value = '';
+      return;
     }
+
+    const groupA = socios.filter(s => gemelaState.included.has(s.id) && gemelaState.groupA.has(s.id));
+    const groupB = socios.filter(s => gemelaState.included.has(s.id) && !gemelaState.groupA.has(s.id));
+    if (!groupA.length && !groupB.length) throw new Error('No se puede continuar si no hay socios asignados.');
+
+    const parseManual = (groupId, sociosGrupo) => {
+      const box = manualGemelaWrap.querySelector(`[data-group-id="${groupId}"]`);
+      const ids = sociosGrupo.map(s => s.id);
+      const nums = new Set();
+      const manual = [];
+      box.querySelectorAll('.manual-group-row').forEach(row => {
+        const numero = row.querySelector('.manual-numero').value.trim();
+        const idSocio = Number(row.querySelector('.manual-socio').value || 0);
+        if (!numero) return;
+        const n = Number(numero);
+        if (!Number.isInteger(n) || n < inicio || n > fin) throw new Error(`Número fuera de rango en grupo ${groupId}.`);
+        if (nums.has(n)) throw new Error(`Número duplicado dentro del grupo ${groupId}.`);
+        if (!ids.includes(idSocio)) throw new Error(`El socio manual del grupo ${groupId} debe pertenecer al grupo.`);
+        nums.add(n);
+        manual.push({ numero: String(n), id_socio: idSocio });
+      });
+      if (manual.length > cantidad) throw new Error(`No se permiten más números manuales que el total disponible en grupo ${groupId}.`);
+      return manual;
+    };
+
+    const manualA = parseManual('A', groupA);
+    const manualB = parseManual('B', groupB);
+
+    const grupos = [];
+    if (groupA.length) grupos.push({ nombre:'Grupo A', boletas_por_socio:1, metodo_distribucion:gemelaState.methodA, socios:groupA.map(s=>s.id), asignaciones:manualA });
+    if (groupB.length) grupos.push({ nombre:'Grupo B', boletas_por_socio:1, metodo_distribucion:gemelaState.methodB, socios:groupB.map(s=>s.id), asignaciones:manualB });
+    document.getElementById('grupos_json').value = JSON.stringify(grupos);
+    document.getElementById('manual_asignaciones_json').value = '[]';
+    document.getElementById('numeros_manuales').value = '';
   }
 
   document.querySelectorAll('#tipoRifaOptions [data-tipo]').forEach(btn => btn.addEventListener('click', () => {
     tipo = btn.dataset.tipo;
     applyTipoUI();
     normalSociosWrap.innerHTML = `<label class="form-label">Socios participantes</label><div class="row">${renderSociosCheckbox('socios_normal')}</div>`;
-    buildGroups();
+    buildGemela();
   }));
 
-  document.getElementById('agregarAsignacionNormal').addEventListener('click', () => addNormalManualRow());
-  document.getElementById('cantidad_grupos').addEventListener('change', buildGroups);
+  document.getElementById('metodo_grupo_a')?.addEventListener('change', (e) => { gemelaState.methodA = e.target.value; buildGemela(); });
+  document.getElementById('metodo_grupo_b')?.addEventListener('change', (e) => { gemelaState.methodB = e.target.value; buildGemela(); });
+
+  document.getElementById('agregarAsignacionNormal').addEventListener('click', () => {
+    const row = document.createElement('div');
+    row.className = 'row g-2 mb-2 manual-row';
+    row.innerHTML = `<div class="col-md-4"><input class="form-control" placeholder="Número"></div>
+      <div class="col-md-6"><select class="form-select"><option value="">Socio</option>${socios.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('')}</select></div>
+      <div class="col-md-2"><button type="button" class="btn btn-outline-danger w-100">X</button></div>`;
+    row.querySelector('button').addEventListener('click', () => row.remove());
+    document.getElementById('manualAsignacionesNormal').appendChild(row);
+  });
+
   document.getElementById('cifras_numero').addEventListener('change', (e) => {
     const cifras = Number(e.target.value || 2);
     document.getElementById('previewNumero').textContent = String(0).padStart(cifras, '0');
