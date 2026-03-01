@@ -159,7 +159,7 @@ function asegurarEsquemaRifas(PDO $pdo): void
     $pdo->exec("CREATE TABLE IF NOT EXISTS rifas_boletas (
         id_boleta INT AUTO_INCREMENT PRIMARY KEY,
         id_rifa INT NOT NULL,
-        id_grupo INT DEFAULT NULL,
+        id_grupo INT NOT NULL,
         numero VARCHAR(5) NOT NULL,
         id_socio INT DEFAULT NULL,
         estado VARCHAR(20) DEFAULT 'pendiente',
@@ -172,7 +172,7 @@ function asegurarEsquemaRifas(PDO $pdo): void
         UNIQUE KEY uq_rifa_grupo_numero (id_rifa, id_grupo, numero),
         CONSTRAINT fk_boleta_rifa FOREIGN KEY (id_rifa) REFERENCES rifas(id_rifa) ON DELETE CASCADE ON UPDATE CASCADE,
         CONSTRAINT fk_boleta_socio FOREIGN KEY (id_socio) REFERENCES socios(id_socio) ON DELETE SET NULL ON UPDATE CASCADE,
-        CONSTRAINT fk_boleta_grupo FOREIGN KEY (id_grupo) REFERENCES rifas_grupos(id_grupo) ON DELETE SET NULL ON UPDATE CASCADE
+        CONSTRAINT fk_boleta_grupo FOREIGN KEY (id_grupo) REFERENCES rifas_grupos(id_grupo) ON DELETE CASCADE ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     if (!columnExists($pdo, 'rifas_boletas', 'id_grupo')) {
@@ -183,6 +183,16 @@ function asegurarEsquemaRifas(PDO $pdo): void
     }
 
     eliminarIndicesUnicosLegadosRifasBoletas($pdo);
+
+    $pdo->exec('UPDATE rifas_boletas b JOIN (SELECT rg.id_rifa, MIN(rg.id_grupo) AS id_grupo_default FROM rifas_grupos rg GROUP BY rg.id_rifa) gd ON gd.id_rifa = b.id_rifa SET b.id_grupo = gd.id_grupo_default WHERE b.id_grupo IS NULL');
+    $pdo->exec('DELETE b FROM rifas_boletas b LEFT JOIN rifas_grupos g ON g.id_grupo = b.id_grupo WHERE g.id_grupo IS NULL');
+
+    $stmtIdGrupo = $pdo->query('SHOW COLUMNS FROM rifas_boletas LIKE "id_grupo"');
+    $colIdGrupo = $stmtIdGrupo ? $stmtIdGrupo->fetch() : null;
+    if (is_array($colIdGrupo) && strtoupper((string) ($colIdGrupo['Null'] ?? 'YES')) === 'YES') {
+        $pdo->exec('ALTER TABLE rifas_boletas MODIFY COLUMN id_grupo INT NOT NULL');
+    }
+
     if (!indexExists($pdo, 'rifas_boletas', 'uq_rifa_grupo_numero')) {
         $pdo->exec('CREATE UNIQUE INDEX uq_rifa_grupo_numero ON rifas_boletas (id_rifa, id_grupo, numero)');
     }
@@ -346,17 +356,30 @@ function crearRifa(PDO $pdo, array $data): int
 
 function generarBoletasRifa(PDO $pdo, int $idRifa, int $cantidad, float $valor, array $config = [], array $grupos = []): void
 {
+    $pdo->prepare('DELETE FROM rifas_boletas WHERE id_rifa = :id')->execute([':id' => $idRifa]);
+
     $numeros = construirNumerosRifa($cantidad, $config);
     if (empty($grupos)) {
-        $grupos = [['id_grupo' => null]];
+        $stmtGrupoDefault = $pdo->prepare('SELECT id_grupo FROM rifas_grupos WHERE id_rifa = :id ORDER BY orden_grupo ASC LIMIT 1');
+        $stmtGrupoDefault->execute([':id' => $idRifa]);
+        $idGrupoDefault = (int) $stmtGrupoDefault->fetchColumn();
+        if ($idGrupoDefault <= 0) {
+            throw new RuntimeException('No existe un grupo válido para generar boletas.');
+        }
+        $grupos = [['id_grupo' => $idGrupoDefault]];
     }
 
     $stmt = $pdo->prepare('INSERT INTO rifas_boletas (id_rifa, id_grupo, numero, valor, usuario_ultimo) VALUES (:id_rifa, :id_grupo, :numero, :valor, :usuario)');
     foreach ($grupos as $grupo) {
+        $idGrupo = (int) ($grupo['id_grupo'] ?? 0);
+        if ($idGrupo <= 0) {
+            throw new RuntimeException('Grupo inválido al generar boletas base.');
+        }
+
         foreach ($numeros as $numero) {
             $stmt->execute([
                 ':id_rifa' => $idRifa,
-                ':id_grupo' => $grupo['id_grupo'],
+                ':id_grupo' => $idGrupo,
                 ':numero' => $numero,
                 ':valor' => $valor,
                 ':usuario' => $_SESSION['usuario'] ?? null,
@@ -400,7 +423,7 @@ function asignarBoletasManualesPorGrupo(PDO $pdo, int $idRifa, array $config, ar
         $nombreGrupo = (string) ($grupo['nombre'] ?? ('ID ' . (string) ($grupo['id_grupo'] ?? 'N/A')));
         $idGrupo = $grupo['id_grupo'] ?? null;
         try {
-            $stmtBoletas = $pdo->prepare('SELECT * FROM rifas_boletas WHERE id_rifa = :id AND ((:grupo IS NULL AND id_grupo IS NULL) OR id_grupo = :grupo) ORDER BY numero');
+            $stmtBoletas = $pdo->prepare('SELECT * FROM rifas_boletas WHERE id_rifa = :id AND id_grupo = :grupo ORDER BY numero');
             $stmtBoletas->execute([':id' => $idRifa, ':grupo' => $idGrupo]);
             $boletas = $stmtBoletas->fetchAll();
             if (empty($boletas)) {
@@ -448,6 +471,9 @@ function asignarBoletasManualesPorGrupo(PDO $pdo, int $idRifa, array $config, ar
 
                 $manualNumeros[$numero] = true;
                 $boleta = $boletasPorNumero[$numero];
+                if ((int) ($boleta['id_socio'] ?? 0) > 0) {
+                    throw new RuntimeException('Asignación manual inválida: el número ya fue usado dentro del grupo.');
+                }
                 $stmtUpd->execute([
                     ':socio' => $idSocio,
                     ':usuario' => $usuario,
@@ -485,7 +511,7 @@ function asignarBoletasAleatoriasPorGrupo(PDO $pdo, int $idRifa, array $config, 
         $nombreGrupo = (string) ($grupo['nombre'] ?? ('ID ' . (string) ($grupo['id_grupo'] ?? 'N/A')));
         $idGrupo = $grupo['id_grupo'] ?? null;
         try {
-            $stmtBoletas = $pdo->prepare('SELECT * FROM rifas_boletas WHERE id_rifa = :id AND ((:grupo IS NULL AND id_grupo IS NULL) OR id_grupo = :grupo) ORDER BY numero');
+            $stmtBoletas = $pdo->prepare('SELECT * FROM rifas_boletas WHERE id_rifa = :id AND id_grupo = :grupo ORDER BY numero');
             $stmtBoletas->execute([':id' => $idRifa, ':grupo' => $idGrupo]);
             $boletas = $stmtBoletas->fetchAll();
             if (empty($boletas)) {
@@ -506,7 +532,7 @@ function asignarBoletasAleatoriasPorGrupo(PDO $pdo, int $idRifa, array $config, 
 
             $stmtUpd = $pdo->prepare('UPDATE rifas_boletas SET id_socio = :socio, estado = "asignada", usuario_ultimo = :usuario WHERE id_boleta = :id');
 
-            $stmtManuales = $pdo->prepare('SELECT id_socio, COUNT(*) AS total FROM rifas_boletas WHERE id_rifa = :id_rifa AND ((:grupo IS NULL AND id_grupo IS NULL) OR id_grupo = :grupo) AND id_socio IS NOT NULL GROUP BY id_socio');
+            $stmtManuales = $pdo->prepare('SELECT id_socio, COUNT(*) AS total FROM rifas_boletas WHERE id_rifa = :id_rifa AND id_grupo = :grupo AND id_socio IS NOT NULL GROUP BY id_socio');
             $stmtManuales->execute([':id_rifa' => $idRifa, ':grupo' => $idGrupo]);
             $manualPorSocio = array_fill_keys($idsSociosGrupo, 0);
             foreach ($stmtManuales->fetchAll() as $filaManual) {
@@ -551,7 +577,7 @@ function asignarBoletasAleatoriasPorGrupo(PDO $pdo, int $idRifa, array $config, 
                 }
             }
 
-            $stmtValida = $pdo->prepare('SELECT COUNT(*) FROM rifas_boletas WHERE id_rifa = :id_rifa AND ((:grupo IS NULL AND id_grupo IS NULL) OR id_grupo = :grupo) AND id_socio IS NOT NULL');
+            $stmtValida = $pdo->prepare('SELECT COUNT(*) FROM rifas_boletas WHERE id_rifa = :id_rifa AND id_grupo = :grupo AND id_socio IS NOT NULL');
             $stmtValida->execute([':id_rifa' => $idRifa, ':grupo' => $idGrupo]);
             $totalAsignadoGrupo = (int) $stmtValida->fetchColumn();
             if ($totalAsignadoGrupo !== $totalEsperadoGrupo) {
@@ -647,20 +673,31 @@ function obtenerBoletasRifa(PDO $pdo, int $idRifa): array
     return $stmt->fetchAll();
 }
 
-function reAsignarBoleta(PDO $pdo, int $idRifa, string $numeroActual, string $numeroNuevo, ?int $idSocio, ?string $motivo, ?string $usuario): void
+function reAsignarBoleta(PDO $pdo, int $idRifa, string $numeroActual, string $numeroNuevo, ?int $idSocio, ?string $motivo, ?string $usuario, ?int $idGrupo = null): void
 {
-    $stmtBoletaActual = $pdo->prepare('SELECT * FROM rifas_boletas WHERE id_rifa = :id AND numero = :numero');
-    $stmtBoletaActual->execute([':id' => $idRifa, ':numero' => $numeroActual]);
-    $boleta = $stmtBoletaActual->fetch();
+    $sqlBoletaActual = 'SELECT * FROM rifas_boletas WHERE id_rifa = :id AND numero = :numero';
+    $paramsBoletaActual = [':id' => $idRifa, ':numero' => $numeroActual];
+    if ($idGrupo !== null && $idGrupo > 0) {
+        $sqlBoletaActual .= ' AND id_grupo = :grupo';
+        $paramsBoletaActual[':grupo'] = $idGrupo;
+    }
+
+    $stmtBoletaActual = $pdo->prepare($sqlBoletaActual . ' ORDER BY id_grupo LIMIT 2');
+    $stmtBoletaActual->execute($paramsBoletaActual);
+    $coincidencias = $stmtBoletaActual->fetchAll();
+    if (count($coincidencias) > 1) {
+        throw new RuntimeException('El número actual existe en varios grupos. Seleccione un grupo para continuar.');
+    }
+    $boleta = $coincidencias[0] ?? null;
     if (!$boleta) {
         throw new RuntimeException('La boleta seleccionada no existe.');
     }
 
-    $stmtVerificar = $pdo->prepare('SELECT COUNT(*) FROM rifas_boletas WHERE id_rifa = :id AND numero = :nuevo');
-    $stmtVerificar->execute([':id' => $idRifa, ':nuevo' => $numeroNuevo]);
+    $stmtVerificar = $pdo->prepare('SELECT COUNT(*) FROM rifas_boletas WHERE id_rifa = :id AND id_grupo = :grupo AND numero = :nuevo');
+    $stmtVerificar->execute([':id' => $idRifa, ':grupo' => (int) $boleta['id_grupo'], ':nuevo' => $numeroNuevo]);
     if ((int) $stmtVerificar->fetchColumn() > 0 && $numeroNuevo !== $numeroActual) {
-        $stmtNumeroLibre = $pdo->prepare('SELECT id_boleta FROM rifas_boletas WHERE id_rifa = :id AND numero = :nuevo AND id_boleta = :boleta');
-        $stmtNumeroLibre->execute([':id' => $idRifa, ':nuevo' => $numeroNuevo, ':boleta' => $boleta['id_boleta']]);
+        $stmtNumeroLibre = $pdo->prepare('SELECT id_boleta FROM rifas_boletas WHERE id_rifa = :id AND id_grupo = :grupo AND numero = :nuevo AND id_boleta = :boleta');
+        $stmtNumeroLibre->execute([':id' => $idRifa, ':grupo' => (int) $boleta['id_grupo'], ':nuevo' => $numeroNuevo, ':boleta' => $boleta['id_boleta']]);
         if (!$stmtNumeroLibre->fetch()) {
             throw new RuntimeException('El número solicitado ya está asignado a otra boleta.');
         }
@@ -721,11 +758,22 @@ function crearMovimientoRifa(PDO $pdo, int $idActividad, int $idSocio, float $va
     actualizarSaldoNatillera($pdo, $valorMovimiento, $reglaNatillera);
 }
 
-function registrarPagoBoleta(PDO $pdo, int $idRifa, string $numero, string $fechaPago, string $medio, ?int $idMedio, ?string $usuario, ?int $idActividadIngreso = null): void
+function registrarPagoBoleta(PDO $pdo, int $idRifa, string $numero, string $fechaPago, string $medio, ?int $idMedio, ?string $usuario, ?int $idActividadIngreso = null, ?int $idGrupo = null): void
 {
-    $stmt = $pdo->prepare('SELECT b.*, r.id_actividad_ingreso FROM rifas_boletas b JOIN rifas r ON r.id_rifa = b.id_rifa WHERE b.id_rifa = :id AND b.numero = :numero');
-    $stmt->execute([':id' => $idRifa, ':numero' => $numero]);
-    $boleta = $stmt->fetch();
+    $sql = 'SELECT b.*, r.id_actividad_ingreso FROM rifas_boletas b JOIN rifas r ON r.id_rifa = b.id_rifa WHERE b.id_rifa = :id AND b.numero = :numero';
+    $params = [':id' => $idRifa, ':numero' => $numero];
+    if ($idGrupo !== null && $idGrupo > 0) {
+        $sql .= ' AND b.id_grupo = :grupo';
+        $params[':grupo'] = $idGrupo;
+    }
+
+    $stmt = $pdo->prepare($sql . ' ORDER BY b.id_grupo LIMIT 2');
+    $stmt->execute($params);
+    $coincidencias = $stmt->fetchAll();
+    if (count($coincidencias) > 1) {
+        throw new RuntimeException('El número existe en varios grupos. Seleccione un grupo para registrar el pago.');
+    }
+    $boleta = $coincidencias[0] ?? null;
     if (!$boleta) {
         throw new RuntimeException('No se encontró la boleta.');
     }
@@ -1120,7 +1168,7 @@ function obtenerConfiguracionGruposRifa(PDO $pdo, int $idRifa): array
     return $grupos;
 }
 
-function reiniciarAsignacionesRifa(PDO $pdo, int $idRifa, ?string $usuario = null, bool $forzarConPagos = false): void
+function limpiarAsignacionesRifa(PDO $pdo, int $idRifa, ?string $usuario = null, bool $forzarConPagos = false): void
 {
     $rifa = obtenerRifa($pdo, $idRifa);
     if (!$rifa) {
@@ -1134,8 +1182,6 @@ function reiniciarAsignacionesRifa(PDO $pdo, int $idRifa, ?string $usuario = nul
         throw new RuntimeException('La rifa tiene pagos registrados (' . $pagadas . '). Confirme para continuar con el reinicio.');
     }
 
-    $grupos = obtenerConfiguracionGruposRifa($pdo, $idRifa);
-
     $pdo->beginTransaction();
     try {
         $pdo->prepare('DELETE FROM rifas_boletas_historial WHERE id_rifa = :id')->execute([':id' => $idRifa]);
@@ -1148,9 +1194,6 @@ function reiniciarAsignacionesRifa(PDO $pdo, int $idRifa, ?string $usuario = nul
         $pdo->prepare('UPDATE rifas SET estado = "abierta", numero_ganador = NULL, id_boleta_ganadora = NULL, premio_valor = NULL, premio_descripcion = NULL, fecha_cierre = NULL WHERE id_rifa = :id')
             ->execute([':id' => $idRifa]);
 
-        asignarBoletasAutomaticas($pdo, $idRifa, $usuario, $rifa, $grupos);
-        generarImagenesBoletasRifa($pdo, $idRifa, $rifa);
-
         $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
@@ -1160,6 +1203,36 @@ function reiniciarAsignacionesRifa(PDO $pdo, int $idRifa, ?string $usuario = nul
     }
 
     recalcularSaldosDesdeMovimientos($pdo);
+}
+
+function reiniciarAsignacionesRifa(PDO $pdo, int $idRifa, ?string $usuario = null, bool $forzarConPagos = false): void
+{
+    limpiarAsignacionesRifa($pdo, $idRifa, $usuario, $forzarConPagos);
+}
+
+function regenerarAsignacionesRifa(PDO $pdo, int $idRifa, ?string $usuario = null): void
+{
+    $rifa = obtenerRifa($pdo, $idRifa);
+    if (!$rifa) {
+        throw new RuntimeException('La rifa no existe.');
+    }
+
+    $grupos = obtenerConfiguracionGruposRifa($pdo, $idRifa);
+    if (empty($grupos)) {
+        throw new RuntimeException('No hay grupos configurados para regenerar asignaciones.');
+    }
+
+    $pdo->beginTransaction();
+    try {
+        asignarBoletasAutomaticas($pdo, $idRifa, $usuario, $rifa, $grupos);
+        generarImagenesBoletasRifa($pdo, $idRifa, $rifa);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
 }
 
 function exportarBoletasZipFiltrado(int $idRifa, ?int $idGrupo = null, ?int $idSocio = null): ?string

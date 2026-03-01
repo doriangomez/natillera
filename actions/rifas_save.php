@@ -150,7 +150,8 @@ try {
             clean($_POST['numero_nuevo'] ?? ''),
             ($_POST['id_socio'] ?? '') !== '' ? (int) $_POST['id_socio'] : null,
             clean($_POST['motivo'] ?? ''),
-            $usuario
+            $usuario,
+            ($_POST['id_grupo'] ?? '') !== '' ? (int) $_POST['id_grupo'] : null
         );
         $_SESSION['exito'] = 'Boleta ajustada correctamente.';
     }
@@ -166,7 +167,8 @@ try {
             clean($_POST['medio'] ?? ''),
             ($_POST['id_medio_pago'] ?? '') !== '' ? (int) $_POST['id_medio_pago'] : null,
             $usuario,
-            ($_POST['id_actividad_movimiento'] ?? '') !== '' ? (int) $_POST['id_actividad_movimiento'] : null
+            ($_POST['id_actividad_movimiento'] ?? '') !== '' ? (int) $_POST['id_actividad_movimiento'] : null,
+            ($_POST['id_grupo'] ?? '') !== '' ? (int) $_POST['id_grupo'] : null
         );
         $_SESSION['exito'] = 'Pago registrado y contabilizado correctamente.';
     }
@@ -211,8 +213,15 @@ try {
         $idRifa = (int) ($_POST['id_rifa'] ?? 0);
         rifaDebeExistir($pdo, $idRifa, 'reasignar asignaciones');
         $forzar = (int) ($_POST['forzar_con_pagos'] ?? 0) === 1;
-        reiniciarAsignacionesRifa($pdo, $idRifa, $usuario, $forzar);
-        $_SESSION['exito'] = 'Asignaciones reiniciadas y regeneradas correctamente.';
+        limpiarAsignacionesRifa($pdo, $idRifa, $usuario, $forzar);
+        $_SESSION['exito'] = 'Asignaciones eliminadas. Los números base se conservaron para regenerar nuevamente.';
+    }
+
+    if ($accion === 'regenerar_asignaciones') {
+        $idRifa = (int) ($_POST['id_rifa'] ?? 0);
+        rifaDebeExistir($pdo, $idRifa, 'regenerar asignaciones');
+        regenerarAsignacionesRifa($pdo, $idRifa, $usuario);
+        $_SESSION['exito'] = 'Asignaciones regeneradas correctamente.';
     }
 
     if ($accion === 'eliminar_rifa') {
