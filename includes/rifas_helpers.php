@@ -371,6 +371,7 @@ function asignarBoletasAutomaticas(PDO $pdo, int $idRifa, ?string $usuario = nul
 
         $manualAsignadas = [];
         $manualNumeros = [];
+        $manualPorSocio = array_fill_keys($idsSociosGrupo, 0);
         $asignacionesNumero = is_array($grupo['asignaciones'] ?? null) ? $grupo['asignaciones'] : [];
         foreach ($asignacionesNumero as $asig) {
             if (!isset($asig['numero']) || !isset($asig['id_socio'])) {
@@ -396,6 +397,7 @@ function asignarBoletasAutomaticas(PDO $pdo, int $idRifa, ?string $usuario = nul
             ]);
             registrarHistorialBoleta($pdo, (int) $boleta['id_boleta'], $idRifa, $boleta['numero'], 'asignacion', 'Asignación manual a ' . $sociosMap[$idSocio]['nombre_completo'], $usuario);
             $manualAsignadas[(int) $boleta['id_boleta']] = true;
+            $manualPorSocio[$idSocio] = ($manualPorSocio[$idSocio] ?? 0) + 1;
         }
 
         $restantes = array_values(array_filter($boletas, static fn($b) => !isset($manualAsignadas[(int) $b['id_boleta']])));
@@ -404,13 +406,6 @@ function asignarBoletasAutomaticas(PDO $pdo, int $idRifa, ?string $usuario = nul
         }
 
         $boletasPorSocio = max(1, (int) ($grupo['boletas_por_socio'] ?? ($config['boletas_por_socio'] ?? 1)));
-        $manualPorSocio = array_fill_keys($idsSociosGrupo, 0);
-        foreach ($asignacionesNumero as $asig) {
-            $idSocioAsig = (int) ($asig['id_socio'] ?? 0);
-            if (isset($manualPorSocio[$idSocioAsig])) {
-                $manualPorSocio[$idSocioAsig]++;
-            }
-        }
 
         $asignacion = [];
         foreach ($idsSociosGrupo as $idSocio) {
@@ -425,12 +420,17 @@ function asignarBoletasAutomaticas(PDO $pdo, int $idRifa, ?string $usuario = nul
             throw new RuntimeException('No hay números suficientes para completar el cupo de boletas por socio en el grupo.');
         }
 
-        // Si sobran boletas después de completar cupos, se reparten de forma equilibrada.
+        // Si sobran boletas después de completar cupos, se reparten de forma equilibrada
+        // solo entre quienes aún tienen faltantes.
         $extras = count($restantes) - $totalFaltantes;
         if ($extras > 0) {
+            $sociosConFaltantes = array_values(array_keys(array_filter($asignacion, static fn($faltan) => $faltan > 0)));
+            if (empty($sociosConFaltantes)) {
+                $sociosConFaltantes = $idsSociosGrupo;
+            }
             $idx = 0;
             while ($extras > 0) {
-                $idSocio = $idsSociosGrupo[$idx % count($idsSociosGrupo)];
+                $idSocio = $sociosConFaltantes[$idx % count($sociosConFaltantes)];
                 $asignacion[$idSocio] = ($asignacion[$idSocio] ?? 0) + 1;
                 $extras--;
                 $idx++;
@@ -1028,7 +1028,7 @@ function reiniciarAsignacionesRifa(PDO $pdo, int $idRifa, ?string $usuario = nul
             ':ingreso' => (int) $rifa['id_actividad_ingreso'],
             ':premio' => (int) $rifa['id_actividad_premio'],
         ]);
-        $pdo->prepare('UPDATE rifas_boletas SET id_socio = NULL, estado = "pendiente", fecha_pago = NULL, medio_pago = NULL, id_medio_pago = NULL, usuario_ultimo = :usuario WHERE id_rifa = :id')
+        $pdo->prepare('UPDATE rifas_boletas SET id_socio = NULL, estado = "pendiente", fecha_pago = NULL, forma_pago = NULL, usuario_ultimo = :usuario WHERE id_rifa = :id')
             ->execute([':id' => $idRifa, ':usuario' => $usuario]);
         $pdo->prepare('UPDATE rifas SET estado = "abierta", numero_ganador = NULL, id_boleta_ganadora = NULL, premio_valor = NULL, premio_descripcion = NULL, fecha_cierre = NULL WHERE id_rifa = :id')
             ->execute([':id' => $idRifa]);

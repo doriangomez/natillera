@@ -21,6 +21,7 @@ $informeRifa = ['movimientos' => [], 'totales' => ['ingresos' => 0, 'egresos' =>
 $filtroGrupo = isset($_GET['grupo']) ? (int) $_GET['grupo'] : 0;
 $filtroSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
 $filtroEstado = isset($_GET['estado']) ? clean($_GET['estado']) : '';
+$rifaEliminada = isset($_GET['deleted']) && (int) $_GET['deleted'] === 1;
 
 try {
     asegurarEsquemaRifas($pdo);
@@ -31,8 +32,15 @@ try {
     $actividadesIngreso = array_values(array_filter($actividadesRifa, 'actividadValidaParaCausacion'));
     $actividadesPremio = array_values(array_filter($actividadesRifa, 'actividadValidaParaPremioRifa'));
     $rifas = obtenerRifas($pdo);
-    $idRifaSeleccionada = isset($_GET['id_rifa']) ? (int) $_GET['id_rifa'] : ((int) ($rifas[0]['id_rifa'] ?? 0));
-    $rifaActual = $idRifaSeleccionada ? obtenerRifa($pdo, $idRifaSeleccionada) : null;
+    $idRifaSolicitada = isset($_GET['id_rifa']) ? (int) $_GET['id_rifa'] : 0;
+    $rifaActual = $idRifaSolicitada > 0 ? obtenerRifa($pdo, $idRifaSolicitada) : null;
+    if ($idRifaSolicitada > 0 && !$rifaActual) {
+        $_SESSION['error'] = 'La rifa seleccionada ya no existe. Se recargó el listado actualizado.';
+    }
+    $idRifaSeleccionada = $rifaActual ? $idRifaSolicitada : ((int) ($rifas[0]['id_rifa'] ?? 0));
+    if (!$rifaActual && $idRifaSeleccionada > 0) {
+        $rifaActual = obtenerRifa($pdo, $idRifaSeleccionada);
+    }
     $boletas = $rifaActual ? obtenerBoletasRifa($pdo, $idRifaSeleccionada) : [];
     if ($rifaActual) {
         $boletas = array_values(array_filter($boletas, static function ($b) use ($filtroGrupo, $filtroSocio, $filtroEstado) {
@@ -69,6 +77,9 @@ if ($rifaActual) {
 <?php endif; ?>
 <?php if (!empty($_SESSION['exito'])): ?>
     <div class="alert alert-success"><?php echo clean($_SESSION['exito']); unset($_SESSION['exito']); ?></div>
+<?php endif; ?>
+<?php if ($rifaEliminada): ?>
+    <div class="alert alert-info">Se limpió la selección de rifa eliminada y se actualizó el listado.</div>
 <?php endif; ?>
 <?php if ($errorCarga): ?>
     <div class="alert alert-danger"><?php echo clean($errorCarga); ?></div>
