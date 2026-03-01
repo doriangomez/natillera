@@ -73,10 +73,10 @@ try {
         $actividadIngreso = getActividad($pdo, $datos['id_actividad_ingreso']);
         $actividadPremio = getActividad($pdo, $datos['id_actividad_premio']);
 
-        if (!$actividadIngreso || (int) ($actividadIngreso['es_ingreso'] ?? 0) !== 1) {
+        if (!$actividadIngreso || (int) ($actividadIngreso['es_ingreso'] ?? 0) !== 1 || (int) ($actividadIngreso['activo'] ?? 0) !== 1) {
             throw new RuntimeException('Debe seleccionar una actividad de ingreso válida.');
         }
-        if (!$actividadPremio || (int) ($actividadPremio['es_ingreso'] ?? 1) !== 0) {
+        if (!$actividadPremio || (int) ($actividadPremio['es_ingreso'] ?? 1) !== 0 || (int) ($actividadPremio['activo'] ?? 0) !== 1) {
             throw new RuntimeException('Debe seleccionar una actividad de egreso/premio válida.');
         }
 
@@ -90,6 +90,18 @@ try {
             throw new RuntimeException('El valor y la cantidad de boletas deben ser mayores a cero.');
         }
 
+        if (empty($datos['arte_base_path']) && empty($_FILES['arte_base_file']['tmp_name'])) {
+            throw new RuntimeException('Debe cargar un arte base para crear la rifa.');
+        }
+
+        if ($datos['arte_numero_x'] === null || $datos['arte_numero_y'] === null || $datos['arte_numero_size'] === null) {
+            throw new RuntimeException('Debe definir posición y tamaño del número en el arte.');
+        }
+
+        if ($datos['cantidad_boletas'] > (($datos['rango_fin'] - $datos['rango_inicio']) + 1)) {
+            throw new RuntimeException('La cantidad de boletas no puede superar los números disponibles en el rango.');
+        }
+
         if ($datos['tipo_rifa'] === 'normal') {
             $sociosNormal = [];
             if (is_array($gruposParsed) && isset($gruposParsed[0]['socios']) && is_array($gruposParsed[0]['socios'])) {
@@ -97,6 +109,16 @@ try {
             }
             if (empty($sociosNormal)) {
                 throw new RuntimeException('No se puede crear rifa sin asignar socios.');
+            }
+        } elseif ($datos['tipo_rifa'] === 'gemela') {
+            if (!is_array($gruposParsed) || count($gruposParsed) < 2) {
+                throw new RuntimeException('La rifa gemela debe tener al menos dos grupos configurados.');
+            }
+            foreach ($gruposParsed as $grupo) {
+                $sociosGrupo = is_array($grupo['socios'] ?? null) ? array_values(array_filter(array_map('intval', $grupo['socios']), static fn($id) => $id > 0)) : [];
+                if (empty($sociosGrupo)) {
+                    throw new RuntimeException('Cada grupo de la rifa gemela debe tener socios asignados.');
+                }
             }
         }
 
