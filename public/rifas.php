@@ -731,89 +731,66 @@ if ($rifaActual) {
 
   function buildGemela() {
     if (!gruposWrap) return;
-    const participantes = socios.filter(s => gemelaState.included.has(s.id));
-    const groupA = participantes.filter(s => gemelaState.groupA.has(s.id));
-    const groupB = participantes.filter(s => !gemelaState.groupA.has(s.id));
-
     gruposWrap.innerHTML = `
-      <div class="alert alert-light py-2 mb-3">Seleccionados: <strong>${participantes.length}</strong> · Restantes: <strong>${Math.max(0, participantes.length - groupA.length)}</strong></div>
-      <div class="form-check form-switch mb-2">
-        <input class="form-check-input" type="checkbox" id="excluirSinParticipacion">
-        <label class="form-check-label" for="excluirSinParticipacion">Excluir socios sin participación</label>
-      </div>
-      <div id="listaParticipacion" class="row g-1 mb-3"></div>
-      <div class="row g-3">
-        <div class="col-md-6">
-          <div class="border rounded p-2 h-100">
-            <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Grupo A</h6><span class="badge bg-primary-subtle text-primary">${groupA.length}</span></div>
-            <div class="d-flex gap-2 mb-2">
-              <button type="button" class="btn btn-sm btn-outline-success" id="selectAllA">✅ Seleccionar todos</button>
-              <button type="button" class="btn btn-sm btn-outline-danger" id="clearAllA">❌ Deseleccionar todos</button>
-            </div>
-            <div class="small text-muted mb-2">Los no seleccionados pasan automáticamente al Grupo B.</div>
-            <div class="row g-1" id="grupoAList"></div>
-          </div>
+      <div class="border rounded p-2 mb-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+          <h6 class="mb-0">Paso 1 · Definir participantes</h6>
+          <small class="text-muted">Participan: <strong id="countParticipan">0</strong> · Excluidos: <strong id="countExcluidos">0</strong></small>
         </div>
-        <div class="col-md-6">
-          <div class="border rounded p-2 h-100">
-            <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Grupo B (automático)</h6><span class="badge bg-secondary-subtle text-secondary">${groupB.length}</span></div>
-            <div class="small text-muted mb-2">Ajuste manual moviendo socios entre grupos.</div>
-            <div class="row g-1" id="grupoBList"></div>
+        <div id="listaParticipacion" class="row g-1"></div>
+      </div>
+      <div class="border rounded p-2">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+          <h6 class="mb-0">Paso 2 · Distribuir participantes</h6>
+          <small class="text-muted">Grupo A: <strong id="countGrupoA">0</strong> · Grupo B: <strong id="countGrupoB">0</strong></small>
+        </div>
+        <div class="row g-2 align-items-start">
+          <div class="col-md-5">
+            <div class="border rounded p-2">
+              <div class="fw-semibold mb-2">Socios disponibles</div>
+              <div class="small text-muted mb-2">Participan, pero aún no están en Grupo A.</div>
+              <div id="disponiblesList" class="d-flex flex-column gap-1"></div>
+            </div>
+          </div>
+          <div class="col-md-2 d-flex flex-md-column justify-content-center align-items-stretch gap-2">
+            <button type="button" class="btn btn-outline-primary btn-sm" id="moveToA">➡️ Pasar a Grupo A</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="removeFromA">⬅️ Quitar de Grupo A</button>
+          </div>
+          <div class="col-md-5">
+            <div class="border rounded p-2">
+              <div class="fw-semibold mb-2">Grupo A</div>
+              <div class="small text-muted mb-2">Los que no estén aquí quedan automáticamente en Grupo B.</div>
+              <div id="grupoAList" class="d-flex flex-column gap-1"></div>
+            </div>
           </div>
         </div>
       </div>`;
 
     const listaParticipacion = gruposWrap.querySelector('#listaParticipacion');
-    participantes.forEach(s => {
-      const wrap = document.createElement('label');
-      wrap.className = 'form-check col-md-6';
-      wrap.innerHTML = `<input class="form-check-input toggle-participa" type="checkbox" value="${s.id}" checked><span class="form-check-label">${s.nombre}</span>`;
-      listaParticipacion.appendChild(wrap);
-    });
+    const render = () => {
+      const participantes = socios.filter(s => gemelaState.included.has(s.id));
+      const groupA = participantes.filter(s => gemelaState.groupA.has(s.id));
+      const disponibles = participantes.filter(s => !gemelaState.groupA.has(s.id));
 
-    const renderGroupLists = () => {
-      const groupANow = socios.filter(s => gemelaState.included.has(s.id) && gemelaState.groupA.has(s.id));
-      const groupBNow = socios.filter(s => gemelaState.included.has(s.id) && !gemelaState.groupA.has(s.id));
-      gruposWrap.querySelector('#grupoAList').innerHTML = groupANow.map(s => `<label class="form-check col-12"><input class="form-check-input check-a" type="checkbox" value="${s.id}" checked><span class="form-check-label">${s.nombre}</span></label>`).join('');
-      gruposWrap.querySelector('#grupoBList').innerHTML = groupBNow.map(s => `<label class="form-check col-12"><input class="form-check-input check-b" type="checkbox" value="${s.id}"><span class="form-check-label">${s.nombre}</span></label>`).join('');
-      gruposWrap.querySelector('.alert strong').textContent = String(groupANow.length + groupBNow.length);
-      gruposWrap.querySelectorAll('.alert strong')[1].textContent = String(groupBNow.length);
-      groupsManualUI(groupANow, groupBNow);
+      gruposWrap.querySelector('#countParticipan').textContent = String(participantes.length);
+      gruposWrap.querySelector('#countExcluidos').textContent = String(Math.max(0, socios.length - participantes.length));
+      gruposWrap.querySelector('#countGrupoA').textContent = String(groupA.length);
+      gruposWrap.querySelector('#countGrupoB').textContent = String(disponibles.length);
 
-      gruposWrap.querySelectorAll('.check-a').forEach(el => el.addEventListener('change', () => {
-        const id = Number(el.value);
-        if (!el.checked) gemelaState.groupA.delete(id);
-        renderGroupLists();
-      }));
-      gruposWrap.querySelectorAll('.check-b').forEach(el => el.addEventListener('change', () => {
-        const id = Number(el.value);
-        if (el.checked) gemelaState.groupA.add(id);
-        renderGroupLists();
-      }));
+      gruposWrap.querySelector('#disponiblesList').innerHTML = disponibles.length
+        ? disponibles.map(s => `<label class="form-check"><input class="form-check-input disponible-check" type="checkbox" value="${s.id}"><span class="form-check-label">${s.nombre}</span></label>`).join('')
+        : '<small class="text-muted">Sin socios disponibles.</small>';
+      gruposWrap.querySelector('#grupoAList').innerHTML = groupA.length
+        ? groupA.map(s => `<label class="form-check"><input class="form-check-input grupoa-check" type="checkbox" value="${s.id}"><span class="form-check-label">${s.nombre}</span></label>`).join('')
+        : '<small class="text-muted">Aún no hay socios en Grupo A.</small>';
+
+      groupsManualUI(groupA, disponibles);
+      updateStepValidationState();
     };
 
-    gruposWrap.querySelector('#selectAllA').addEventListener('click', () => {
-      socios.forEach(s => { if (gemelaState.included.has(s.id)) gemelaState.groupA.add(s.id); });
-      renderGroupLists();
-    });
-    gruposWrap.querySelector('#clearAllA').addEventListener('click', () => {
-      gemelaState.groupA.clear();
-      renderGroupLists();
-    });
+    listaParticipacion.innerHTML = socios.map(s => `<label class="form-check col-md-6 col-lg-4"><input class="form-check-input toggle-participa" type="checkbox" value="${s.id}" ${gemelaState.included.has(s.id) ? 'checked' : ''}><span class="form-check-label">${s.nombre}</span></label>`).join('');
 
-    gruposWrap.querySelector('#excluirSinParticipacion').addEventListener('change', (e) => {
-      if (!e.target.checked) return;
-      socios.forEach(s => {
-        const cb = gruposWrap.querySelector(`.toggle-participa[value="${s.id}"]`);
-        if (cb && !cb.checked) {
-          gemelaState.included.delete(s.id);
-          gemelaState.groupA.delete(s.id);
-        }
-      });
-      buildGemela();
-    });
-
-    gruposWrap.querySelectorAll('.toggle-participa').forEach(cb => cb.addEventListener('change', () => {
+    listaParticipacion.querySelectorAll('.toggle-participa').forEach(cb => cb.addEventListener('change', () => {
       const id = Number(cb.value);
       if (cb.checked) {
         gemelaState.included.add(id);
@@ -821,10 +798,25 @@ if ($rifaActual) {
         gemelaState.included.delete(id);
         gemelaState.groupA.delete(id);
       }
-      renderGroupLists();
+      render();
     }));
 
-    renderGroupLists();
+    gruposWrap.querySelector('#moveToA').addEventListener('click', () => {
+      gruposWrap.querySelectorAll('.disponible-check:checked').forEach(cb => {
+        const id = Number(cb.value);
+        if (gemelaState.included.has(id)) gemelaState.groupA.add(id);
+      });
+      render();
+    });
+
+    gruposWrap.querySelector('#removeFromA').addEventListener('click', () => {
+      gruposWrap.querySelectorAll('.grupoa-check:checked').forEach(cb => {
+        gemelaState.groupA.delete(Number(cb.value));
+      });
+      render();
+    });
+
+    render();
   }
 
   function syncArteInputsFromDrag() {
@@ -884,6 +876,8 @@ if ($rifaActual) {
         if (!selected.length) return 'Debes seleccionar al menos un socio.';
       }
       if (tipo === 'gemela') {
+        const participantes = socios.filter(s => gemelaState.included.has(s.id));
+        if (!participantes.length) return 'Debes tener al menos un socio participante activo.';
         const groupA = socios.filter(s => gemelaState.included.has(s.id) && gemelaState.groupA.has(s.id));
         const groupB = socios.filter(s => gemelaState.included.has(s.id) && !gemelaState.groupA.has(s.id));
         if (!groupA.length || !groupB.length) return 'Debe existir al menos un socio en Grupo A y Grupo B.';
@@ -963,6 +957,7 @@ if ($rifaActual) {
 
     const groupA = socios.filter(s => gemelaState.included.has(s.id) && gemelaState.groupA.has(s.id));
     const groupB = socios.filter(s => gemelaState.included.has(s.id) && !gemelaState.groupA.has(s.id));
+    if (!groupA.length && !groupB.length) throw new Error('Debes tener al menos un socio participante activo.');
     if (!groupA.length || !groupB.length) throw new Error('Debe existir al menos un socio por grupo.');
 
     const parseManual = (groupId, sociosGrupo) => {
