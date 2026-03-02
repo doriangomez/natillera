@@ -912,7 +912,28 @@ function validarRifaActivaParaOperacion(PDO $pdo, int $idRifa, string $operacion
     if (!$rifa) {
         throw new RuntimeException('La rifa seleccionada no existe para ' . $operacion . '.');
     }
-    if (($rifa['estado'] ?? '') !== 'activa') {
+
+    $idRifaConsulta = (int) ($rifa['id_rifa'] ?? 0);
+    $estadoCrudo = $rifa['estado'] ?? '';
+    $estadoNormalizado = strtolower(trim((string) $estadoCrudo));
+
+    registrarLog('info', 'Validación de estado de rifa antes de operación', [
+        'operacion' => $operacion,
+        'id_rifa_solicitada' => $idRifa,
+        'id_rifa_consulta' => $idRifaConsulta,
+        'estado_crudo' => $estadoCrudo,
+        'estado_normalizado' => $estadoNormalizado,
+        'tipo_estado' => gettype($estadoCrudo),
+    ]);
+
+    if ($idRifaConsulta !== $idRifa) {
+        throw new RuntimeException('Inconsistencia al validar la rifa seleccionada para ' . $operacion . '.');
+    }
+
+    $estadosAbiertos = ['abierta', 'activo', 'activa', '1'];
+    $rifaAbierta = in_array($estadoNormalizado, $estadosAbiertos, true);
+
+    if (!$rifaAbierta) {
         throw new RuntimeException('La rifa está cerrada. No se permite ' . $operacion . '.');
     }
     return $rifa;
