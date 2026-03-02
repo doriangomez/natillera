@@ -905,8 +905,22 @@ function crearMovimientoRifa(PDO $pdo, int $idActividad, int $idSocio, float $va
     actualizarSaldoNatillera($pdo, $valorMovimiento, $reglaNatillera);
 }
 
+
+function validarRifaActivaParaOperacion(PDO $pdo, int $idRifa, string $operacion): array
+{
+    $rifa = obtenerRifa($pdo, $idRifa);
+    if (!$rifa) {
+        throw new RuntimeException('La rifa seleccionada no existe para ' . $operacion . '.');
+    }
+    if (($rifa['estado'] ?? '') !== 'activa') {
+        throw new RuntimeException('La rifa está cerrada. No se permite ' . $operacion . '.');
+    }
+    return $rifa;
+}
+
 function registrarPagoBoleta(PDO $pdo, int $idRifa, string $numero, string $fechaPago, string $medio, ?int $idMedio, ?string $usuario, ?int $idActividadIngreso = null, ?int $idGrupo = null): void
 {
+    validarRifaActivaParaOperacion($pdo, $idRifa, 'registrar pagos');
     $numero = trim($numero);
     if ($numero === '') {
         throw new RuntimeException('Debe indicar el número de boleta.');
@@ -931,6 +945,7 @@ function registrarPagoBoleta(PDO $pdo, int $idRifa, string $numero, string $fech
 
 function registrarPagoBoletasPorSocio(PDO $pdo, int $idRifa, array $data): array
 {
+    validarRifaActivaParaOperacion($pdo, $idRifa, 'registrar pagos');
     $idSocio = isset($data['id_socio']) && (int) $data['id_socio'] > 0 ? (int) $data['id_socio'] : null;
     $idGrupo = isset($data['id_grupo']) && (int) $data['id_grupo'] > 0 ? (int) $data['id_grupo'] : null;
     $marcarTodas = !empty($data['marcar_todas']);
@@ -1093,6 +1108,7 @@ function registrarPagoBoletasPorSocio(PDO $pdo, int $idRifa, array $data): array
 
 function registrarPremioRifa(PDO $pdo, int $idRifa, string $numeroGanador, ?int $idGrupoGanador, float $valorPremio, string $fecha, string $medio, ?int $idMedio, ?string $usuario, ?int $idActividadPremio = null): void
 {
+    validarRifaActivaParaOperacion($pdo, $idRifa, 'registrar premio');
     $sql = 'SELECT b.*, r.id_actividad_premio FROM rifas_boletas b JOIN rifas r ON r.id_rifa = b.id_rifa WHERE b.id_rifa = :id AND b.numero = :numero';
     $params = [':id' => $idRifa, ':numero' => $numeroGanador];
     if ($idGrupoGanador) {

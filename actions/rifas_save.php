@@ -7,6 +7,19 @@ $accion = $_POST['accion'] ?? '';
 $usuario = $_SESSION['usuario'] ?? null;
 
 
+function construirRutaRifa(int $idRifa, string $vista = 'detalle'): string
+{
+    if ($idRifa <= 0) {
+        return '../public/rifas.php';
+    }
+    $qs = 'id_rifa=' . $idRifa;
+    if ($vista !== 'detalle') {
+        $qs .= '&vista=' . urlencode($vista);
+    }
+    return '../public/rifas.php?' . $qs;
+}
+
+
 function rifaDebeExistir(PDO $pdo, int $idRifa, string $accion): void
 {
     if ($idRifa <= 0) {
@@ -270,7 +283,10 @@ if ($accion === 'eliminar_rifa') {
     header('Location: ../public/rifas.php?deleted=1');
 } else {
     $idRifaRedirect = isset($_POST['id_rifa']) ? (int) ($_POST['id_rifa'] ?? 0) : 0;
-    $qs = $idRifaRedirect > 0 ? ('?id_rifa=' . $idRifaRedirect) : '';
-    header('Location: ../public/rifas.php' . $qs);
+    $vista = clean($_POST['current_view'] ?? 'detalle');
+    if (!in_array($vista, ['detalle', 'boletas', 'pagos', 'premios', 'reportes'], true)) {
+        $vista = 'detalle';
+    }
+    header('Location: ' . construirRutaRifa($idRifaRedirect, $vista));
 }
 exit;
