@@ -6,7 +6,7 @@ $totalSocios = (int) ($pdo->query("SELECT COUNT(*) AS total FROM socios WHERE ac
 
 $totalesMovimientos = $pdo->query("
     WITH mov_signado AS (
-        SELECT m.id_movimiento, m.valor, m.id_actividad,
+        SELECT m.id_movimiento, m.valor, m.id_actividad, m.modulo,
                CASE WHEN a.es_polla = 1 THEN 0 ELSE
                     CASE a.afecta_saldo_socio
                         WHEN 'suma' THEN m.valor
@@ -18,43 +18,90 @@ $totalesMovimientos = $pdo->query("
                     WHEN 'suma' THEN m.valor
                     WHEN 'resta' THEN -m.valor
                     ELSE 0 END AS valor_natillera,
-               a.es_prestamo, a.es_pago_prestamo, a.es_pago_interes, a.es_polla, a.es_gasto_general
+               a.es_prestamo, a.es_pago_prestamo, a.es_pago_interes, a.es_polla, a.es_gasto_general, a.es_rifa
         FROM movimientos m
         JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
     )
     SELECT
-        COALESCE(SUM(CASE WHEN es_prestamo = 0 AND es_pago_prestamo = 0 AND es_pago_interes = 0 AND es_polla = 0 AND es_gasto_general = 0 THEN valor_natillera END),0) AS total_cuotas,
-        COALESCE(SUM(CASE WHEN es_polla = 1 THEN valor_natillera END),0) AS total_pollas,
-        COALESCE(SUM(CASE WHEN es_prestamo = 1 THEN valor_natillera END),0) AS total_prestado,
+        COALESCE(SUM(CASE WHEN es_prestamo = 0 AND es_pago_prestamo = 0 AND es_pago_interes = 0 AND es_polla = 0 AND es_gasto_general = 0 AND es_rifa = 0 AND modulo <> 'rifas' AND valor_natillera > 0 THEN valor_natillera END),0) AS ingresos_cuotas,
+        COALESCE(SUM(CASE WHEN (es_pago_prestamo = 1 AND valor_socio = 0 OR es_pago_interes = 1) AND valor_natillera > 0 THEN valor_natillera END),0) AS ingresos_intereses,
+        COALESCE(SUM(CASE WHEN es_polla = 1 AND valor_natillera > 0 THEN valor_natillera END),0) AS ingresos_pollas,
+        COALESCE(SUM(CASE WHEN (es_rifa = 1 OR modulo = 'rifas') AND valor_natillera > 0 THEN valor_natillera END),0) AS ingresos_rifas,
+        COALESCE(SUM(CASE WHEN es_prestamo = 1 AND valor_natillera < 0 THEN -valor_natillera END),0) AS egresos_prestamos,
+        COALESCE(SUM(CASE WHEN (es_rifa = 1 OR modulo = 'rifas') AND valor_natillera < 0 THEN -valor_natillera END),0) AS egresos_premios_rifas,
+        COALESCE(SUM(CASE WHEN es_gasto_general = 1 AND valor_natillera < 0 THEN -valor_natillera END),0) AS egresos_gastos,
         COALESCE(SUM(CASE WHEN es_pago_prestamo = 1 AND valor_socio <> 0 THEN valor_natillera END),0) AS total_prestamo_recuperado,
-        COALESCE(SUM(CASE WHEN es_pago_prestamo = 1 AND valor_socio = 0 THEN valor_natillera END),0) +
-        COALESCE(SUM(CASE WHEN es_pago_interes = 1 THEN valor_natillera END),0) AS total_intereses,
-        COALESCE(SUM(CASE WHEN es_gasto_general = 1 THEN valor_natillera END),0) AS total_gastos,
         COALESCE(SUM(CASE WHEN valor_natillera > 0 THEN valor_natillera END),0) AS total_ingresos,
         COALESCE(SUM(CASE WHEN valor_natillera < 0 THEN -valor_natillera END),0) AS total_egresos,
         COALESCE(SUM(valor_natillera),0) AS total_natillera
     FROM mov_signado
 ")->fetch(PDO::FETCH_ASSOC);
 
-$totalCuotas = (float) ($totalesMovimientos['total_cuotas'] ?? 0);
-$totalPollas = (float) ($totalesMovimientos['total_pollas'] ?? 0);
+$totalCuotas = (float) ($totalesMovimientos['ingresos_cuotas'] ?? 0);
+$totalPollas = (float) ($totalesMovimientos['ingresos_pollas'] ?? 0);
 $totalPrestamoRecuperado = (float) ($totalesMovimientos['total_prestamo_recuperado'] ?? 0);
-$totalInteresesPrestamo = (float) ($totalesMovimientos['total_intereses'] ?? 0);
-$totalPrestado = (float) ($totalesMovimientos['total_prestado'] ?? 0);
+$totalInteresesPrestamo = (float) ($totalesMovimientos['ingresos_intereses'] ?? 0);
+$totalPrestado = (float) ($totalesMovimientos['egresos_prestamos'] ?? 0);
+$totalRifasIngresos = (float) ($totalesMovimientos['ingresos_rifas'] ?? 0);
+$totalPremiosRifas = (float) ($totalesMovimientos['egresos_premios_rifas'] ?? 0);
+$totalGastos = (float) ($totalesMovimientos['egresos_gastos'] ?? 0);
 $totalIngresos = (float) ($totalesMovimientos['total_ingresos'] ?? 0);
 $totalEgresos = (float) ($totalesMovimientos['total_egresos'] ?? 0);
 $saldoNatillera = (float) ($totalesMovimientos['total_natillera'] ?? 0);
 
-$totalOtrasActividades = max(0, $totalIngresos - (max(0, $totalCuotas) + max(0, $totalPollas) + max(0, $totalPrestamoRecuperado) + max(0, $totalInteresesPrestamo)));
+$otrosIngresos = max(0, $totalIngresos - ($totalCuotas + $totalInteresesPrestamo + $totalPollas + $totalRifasIngresos));
+$otrosEgresos = max(0, $totalEgresos - ($totalPrestado + $totalPremiosRifas + $totalGastos));
+$resultadoNeto = $totalIngresos - $totalEgresos;
+$validacionSaldo = abs($saldoNatillera - $resultadoNeto) < 0.01;
 
-$chartLabels = ['Cuotas', 'Pollas', 'Préstamos (capital recuperado)', 'Intereses', 'Otras actividades'];
+$totalOtrasActividades = $otrosIngresos;
+
+$chartLabels = ['Cuotas', 'Pollas', 'Rifas (ingresos)', 'Intereses', 'Premios rifas (egreso)', 'Otros ingresos'];
 $chartDataset = [
-    max(0, $totalCuotas),
-    max(0, $totalPollas),
-    max(0, $totalPrestamoRecuperado),
-    max(0, $totalInteresesPrestamo),
-    max(0, $totalOtrasActividades)
+    $totalCuotas,
+    $totalPollas,
+    $totalRifasIngresos,
+    $totalInteresesPrestamo,
+    -$totalPremiosRifas,
+    $totalOtrasActividades,
 ];
+
+$flujoActividades = [
+    'Natillera' => ['ingresos' => 0.0, 'egresos' => 0.0],
+    'Rifas' => ['ingresos' => 0.0, 'egresos' => 0.0],
+    'Pollas' => ['ingresos' => 0.0, 'egresos' => 0.0],
+    'Préstamos' => ['ingresos' => 0.0, 'egresos' => 0.0],
+];
+
+$resumenActividadStmt = $pdo->query("
+    WITH mov_signado AS (
+        SELECT m.modulo,
+               CASE a.afecta_saldo_natillera WHEN 'suma' THEN m.valor WHEN 'resta' THEN -m.valor ELSE 0 END AS valor_natillera,
+               a.es_prestamo, a.es_pago_prestamo, a.es_pago_interes, a.es_polla, a.es_rifa
+        FROM movimientos m
+        JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+    )
+    SELECT
+        CASE
+            WHEN es_polla = 1 THEN 'Pollas'
+            WHEN es_prestamo = 1 OR es_pago_prestamo = 1 OR es_pago_interes = 1 THEN 'Préstamos'
+            WHEN es_rifa = 1 OR modulo = 'rifas' THEN 'Rifas'
+            ELSE 'Natillera'
+        END AS actividad,
+        COALESCE(SUM(CASE WHEN valor_natillera > 0 THEN valor_natillera END),0) AS ingresos,
+        COALESCE(SUM(CASE WHEN valor_natillera < 0 THEN -valor_natillera END),0) AS egresos
+    FROM mov_signado
+    GROUP BY actividad
+");
+
+foreach ($resumenActividadStmt->fetchAll(PDO::FETCH_ASSOC) as $actividadItem) {
+    $nombreActividad = $actividadItem['actividad'];
+    if (!isset($flujoActividades[$nombreActividad])) {
+        continue;
+    }
+    $flujoActividades[$nombreActividad]['ingresos'] = (float) ($actividadItem['ingresos'] ?? 0);
+    $flujoActividades[$nombreActividad]['egresos'] = (float) ($actividadItem['egresos'] ?? 0);
+}
 
 $socios = getSocios($pdo);
 $actividades = getActividades($pdo, false, true);
@@ -180,8 +227,14 @@ $movimientos = $movimientosStmt->fetchAll();
             <div class="card h-100">
                 <div class="card-header category-gastos"><i class="bi bi-wallet2"></i><span>Saldo natillera</span></div>
                 <div class="card-body">
-                    <p class="text-muted mb-1">Saldo general</p>
-                    <h2 class="display-6 mb-0">$<?php echo number_format($saldoNatillera, 0, ',', '.'); ?></h2>
+                    <p class="text-muted mb-1">Saldo general (auditable)</p>
+                    <button class="btn btn-link p-0 text-decoration-none" type="button" data-bs-toggle="collapse" data-bs-target="#saldoNatilleraDetalle" aria-expanded="false" aria-controls="saldoNatilleraDetalle">
+                        <h2 class="display-6 mb-0 text-start">$<?php echo number_format($saldoNatillera, 0, ',', '.'); ?></h2>
+                    </button>
+                    <div class="collapse mt-2" id="saldoNatilleraDetalle">
+                        <div class="small text-muted">Fórmula: <strong>Saldo = Total ingresos - Total egresos</strong></div>
+                        <div class="small text-muted">$<?php echo number_format($totalIngresos, 0, ',', '.'); ?> - $<?php echo number_format($totalEgresos, 0, ',', '.'); ?> = $<?php echo number_format($resultadoNeto, 0, ',', '.'); ?></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -216,21 +269,26 @@ $movimientos = $movimientosStmt->fetchAll();
         </div>
         <div class="col-md-3">
             <div class="card h-100">
-                <div class="card-header category-ingresos"><i class="bi bi-stars"></i><span>Otras actividades</span></div>
+                <div class="card-header category-ingresos"><i class="bi bi-ticket-perforated"></i><span>Ingresos de rifas</span></div>
                 <div class="card-body">
-                    <p class="text-muted mb-1">Ingresos complementarios</p>
-                    <h2 class="display-6 mb-0">$<?php echo number_format($totalOtrasActividades, 0, ',', '.'); ?></h2>
-                    <a class="btn btn-link btn-sm px-0 mt-2" href="index.php?resumen=otras#tablaConsolidado">Ver detalle</a>
+                    <p class="text-muted mb-1">Recaudo registrado en rifas</p>
+                    <h2 class="display-6 mb-0">$<?php echo number_format($totalRifasIngresos, 0, ',', '.'); ?></h2>
                 </div>
             </div>
         </div>
     </div>
+    <?php if (!$validacionSaldo): ?>
+        <div class="alert alert-danger mt-3 d-flex align-items-center gap-2" role="alert">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <span>Inconsistencia contable: el saldo mostrado no coincide con Total ingresos - Total egresos.</span>
+        </div>
+    <?php endif; ?>
     <div class="row g-4 mt-1">
         <div class="col-lg-6">
             <div class="card h-100">
                 <div class="card-header"><i class="bi bi-pie-chart"></i><span>Distribución de ingresos</span></div>
                 <div class="card-body">
-                    <p class="text-muted small mb-2">Ingresos vs egresos por categoría</p>
+                    <p class="text-muted small mb-2">Incluye rifas (ingresos y premios como egreso)</p>
                     <canvas id="ingresosChart" height="220"></canvas>
                     <div class="mt-3 d-flex flex-wrap gap-3">
                         <span class="badge-soft">Total ingresos: $<?php echo number_format($totalIngresos,0,',','.'); ?></span>
@@ -248,6 +306,65 @@ $movimientos = $movimientosStmt->fetchAll();
                     <div class="mt-3 row g-2">
                         <div class="col-md-6"><div class="badge-soft w-100 text-center"><i class="bi bi-check2-circle text-success"></i> Flujos de ingreso/egreso automáticos</div></div>
                         <div class="col-md-6"><div class="badge-soft w-100 text-center"><i class="bi bi-download"></i> Exporta reportes en segundos</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row g-4 mt-1">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><i class="bi bi-journal-check"></i><span>Estado de resultados</span></div>
+                <div class="card-body">
+                    <h6 class="text-success">INGRESOS</h6>
+                    <ul class="list-unstyled mb-3 small">
+                        <li>Cuotas acumuladas: <strong>$<?php echo number_format($totalCuotas,0,',','.'); ?></strong></li>
+                        <li>Intereses préstamos: <strong>$<?php echo number_format($totalInteresesPrestamo,0,',','.'); ?></strong></li>
+                        <li>Ingresos de pollas: <strong>$<?php echo number_format($totalPollas,0,',','.'); ?></strong></li>
+                        <li>Ingresos de rifas: <strong>$<?php echo number_format($totalRifasIngresos,0,',','.'); ?></strong></li>
+                        <li>Otros ingresos: <strong>$<?php echo number_format($otrosIngresos,0,',','.'); ?></strong></li>
+                        <li class="mt-2">Subtotal ingresos: <strong>$<?php echo number_format($totalIngresos,0,',','.'); ?></strong></li>
+                    </ul>
+                    <h6 class="text-danger">EGRESOS</h6>
+                    <ul class="list-unstyled mb-3 small">
+                        <li>Préstamos otorgados: <strong>$<?php echo number_format($totalPrestado,0,',','.'); ?></strong></li>
+                        <li>Premios de rifas: <strong>$<?php echo number_format($totalPremiosRifas,0,',','.'); ?></strong></li>
+                        <li>Gastos: <strong>$<?php echo number_format($totalGastos,0,',','.'); ?></strong></li>
+                        <li>Otros egresos: <strong>$<?php echo number_format($otrosEgresos,0,',','.'); ?></strong></li>
+                        <li class="mt-2">Subtotal egresos: <strong>$<?php echo number_format($totalEgresos,0,',','.'); ?></strong></li>
+                    </ul>
+                    <div class="p-2 rounded bg-light border">
+                        <strong>RESULTADO NETO: $<?php echo number_format($resultadoNeto,0,',','.'); ?></strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header"><i class="bi bi-diagram-3"></i><span>Flujo financiero por actividad</span></div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Actividad</th>
+                                    <th class="text-end">Ingresos</th>
+                                    <th class="text-end">Egresos</th>
+                                    <th class="text-end">Resultado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($flujoActividades as $nombreActividad => $totalesActividad): ?>
+                                    <?php $resultadoActividad = $totalesActividad['ingresos'] - $totalesActividad['egresos']; ?>
+                                    <tr>
+                                        <td><?php echo clean($nombreActividad); ?></td>
+                                        <td class="text-end">$<?php echo number_format($totalesActividad['ingresos'],0,',','.'); ?></td>
+                                        <td class="text-end">$<?php echo number_format($totalesActividad['egresos'],0,',','.'); ?></td>
+                                        <td class="text-end <?php echo $resultadoActividad >= 0 ? 'text-success' : 'text-danger'; ?>">$<?php echo number_format($resultadoActividad,0,',','.'); ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -350,12 +467,12 @@ const ctx = document.getElementById('ingresosChart');
 if (ctx) {
     new Chart(ctx, {
         type: 'doughnut',
-        data: {
+                data: {
             labels: chartLabels,
             datasets: [{
                 label: 'Ingresos vs egresos',
                 data: chartData,
-                backgroundColor: ['#0f172a','#34d399','#f59e0b','#3b82f6','#a855f7'],
+                backgroundColor: ['#0f172a','#34d399','#8b5cf6','#3b82f6','#ef4444','#a855f7'],
                 borderWidth: 0
             }]
         },
