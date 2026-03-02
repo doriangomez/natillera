@@ -4,57 +4,166 @@ require_once __DIR__ . '/../includes/functions.php';
 
 $totalSocios = (int) ($pdo->query("SELECT COUNT(*) AS total FROM socios WHERE activo = 1")->fetch()['total'] ?? 0);
 
-$totalesMovimientos = $pdo->query("
-    WITH mov_signado AS (
-        SELECT m.id_movimiento, m.valor, m.id_actividad, m.modulo,
-               CASE WHEN a.es_polla = 1 THEN 0 ELSE
-                    CASE a.afecta_saldo_socio
-                        WHEN 'suma' THEN m.valor
-                        WHEN 'resta' THEN -m.valor
-                        ELSE 0
-                    END
-               END AS valor_socio,
-               CASE a.afecta_saldo_natillera
+$movimientosContablesStmt = $pdo->query("
+    WITH mov_clasificado AS (
+        SELECT
+            m.id_movimiento,
+            m.modulo,
+            m.valor,
+            CASE WHEN a.es_polla = 1 THEN 0 ELSE
+                CASE a.afecta_saldo_socio
                     WHEN 'suma' THEN m.valor
                     WHEN 'resta' THEN -m.valor
-                    ELSE 0 END AS valor_natillera,
-               a.es_prestamo, a.es_pago_prestamo, a.es_pago_interes, a.es_polla, a.es_gasto_general, a.es_rifa
+                    ELSE 0
+                END
+            END AS valor_socio,
+            CASE a.afecta_saldo_natillera
+                WHEN 'suma' THEN m.valor
+                WHEN 'resta' THEN -m.valor
+                ELSE 0
+            END AS valor_natillera,
+            a.es_prestamo,
+            a.es_pago_prestamo,
+            a.es_pago_interes,
+            a.es_polla,
+            a.es_gasto_general,
+            a.es_rifa
         FROM movimientos m
         JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
     )
     SELECT
-        COALESCE(SUM(CASE WHEN es_prestamo = 0 AND es_pago_prestamo = 0 AND es_pago_interes = 0 AND es_polla = 0 AND es_gasto_general = 0 AND es_rifa = 0 AND modulo <> 'rifas' AND valor_natillera > 0 THEN valor_natillera END),0) AS ingresos_cuotas,
-        COALESCE(SUM(CASE WHEN (es_pago_prestamo = 1 AND valor_socio = 0 OR es_pago_interes = 1) AND valor_natillera > 0 THEN valor_natillera END),0) AS ingresos_intereses,
-        COALESCE(SUM(CASE WHEN es_polla = 1 AND valor_natillera > 0 THEN valor_natillera END),0) AS ingresos_pollas,
-        COALESCE(SUM(CASE WHEN (es_rifa = 1 OR modulo = 'rifas') AND valor_natillera > 0 THEN valor_natillera END),0) AS ingresos_rifas,
-        COALESCE(SUM(CASE WHEN es_prestamo = 1 AND valor_natillera < 0 THEN -valor_natillera END),0) AS egresos_prestamos,
-        COALESCE(SUM(CASE WHEN (es_rifa = 1 OR modulo = 'rifas') AND valor_natillera < 0 THEN -valor_natillera END),0) AS egresos_premios_rifas,
-        COALESCE(SUM(CASE WHEN es_gasto_general = 1 AND valor_natillera < 0 THEN -valor_natillera END),0) AS egresos_gastos,
-        COALESCE(SUM(CASE WHEN es_pago_prestamo = 1 AND valor_socio <> 0 THEN valor_natillera END),0) AS total_prestamo_recuperado,
-        COALESCE(SUM(CASE WHEN valor_natillera > 0 THEN valor_natillera END),0) AS total_ingresos,
-        COALESCE(SUM(CASE WHEN valor_natillera < 0 THEN -valor_natillera END),0) AS total_egresos,
-        COALESCE(SUM(valor_natillera),0) AS total_natillera
-    FROM mov_signado
-")->fetch(PDO::FETCH_ASSOC);
+        *,
+        CASE
+            WHEN valor_natillera > 0 THEN 'ingreso'
+            WHEN valor_natillera < 0 THEN 'egreso'
+            ELSE 'neutral'
+        END AS tipo_contable,
+        CASE
+            WHEN es_polla = 1 THEN 'pollas'
+            WHEN es_prestamo = 1 OR es_pago_prestamo = 1 OR es_pago_interes = 1 THEN 'prestamos'
+            WHEN es_rifa = 1 OR modulo = 'rifas' THEN 'rifas'
+            ELSE 'natillera'
+        END AS actividad
+    FROM mov_clasificado
+    WHERE valor_natillera <> 0
+");
+$movimientosContables = $movimientosContablesStmt->fetchAll(PDO::FETCH_ASSOC);
 
-$totalCuotas = (float) ($totalesMovimientos['ingresos_cuotas'] ?? 0);
-$totalPollas = (float) ($totalesMovimientos['ingresos_pollas'] ?? 0);
-$totalPrestamoRecuperado = (float) ($totalesMovimientos['total_prestamo_recuperado'] ?? 0);
-$totalInteresesPrestamo = (float) ($totalesMovimientos['ingresos_intereses'] ?? 0);
-$totalPrestado = (float) ($totalesMovimientos['egresos_prestamos'] ?? 0);
-$totalRifasIngresos = (float) ($totalesMovimientos['ingresos_rifas'] ?? 0);
-$totalPremiosRifas = (float) ($totalesMovimientos['egresos_premios_rifas'] ?? 0);
-$totalGastos = (float) ($totalesMovimientos['egresos_gastos'] ?? 0);
-$totalIngresos = (float) ($totalesMovimientos['total_ingresos'] ?? 0);
-$totalEgresos = (float) ($totalesMovimientos['total_egresos'] ?? 0);
-$saldoNatillera = (float) ($totalesMovimientos['total_natillera'] ?? 0);
+$estadoResultados = [
+    'ingresos' => [
+        'cuotas' => 0.0,
+        'intereses' => 0.0,
+        'pollas' => 0.0,
+        'rifas' => 0.0,
+        'otros' => 0.0,
+    ],
+    'egresos' => [
+        'prestamos' => 0.0,
+        'premios_rifas' => 0.0,
+        'gastos' => 0.0,
+        'otros' => 0.0,
+    ],
+];
 
-$otrosIngresos = max(0, $totalIngresos - ($totalCuotas + $totalInteresesPrestamo + $totalPollas + $totalRifasIngresos));
-$otrosEgresos = max(0, $totalEgresos - ($totalPrestado + $totalPremiosRifas + $totalGastos));
+$flujoActividades = [
+    'natillera' => ['ingresos' => 0.0, 'egresos' => 0.0],
+    'rifas' => ['ingresos' => 0.0, 'egresos' => 0.0],
+    'pollas' => ['ingresos' => 0.0, 'egresos' => 0.0],
+    'prestamos' => ['ingresos' => 0.0, 'egresos' => 0.0],
+];
+
+$totalIngresos = 0.0;
+$totalEgresos = 0.0;
+$saldoNatillera = 0.0;
+
+foreach ($movimientosContables as $mov) {
+    $valorNatillera = (float) ($mov['valor_natillera'] ?? 0);
+    $valorAbsoluto = abs($valorNatillera);
+    $tipoContable = $mov['tipo_contable'];
+    $actividad = $mov['actividad'];
+
+    $saldoNatillera += $valorNatillera;
+
+    if ($tipoContable === 'ingreso') {
+        $totalIngresos += $valorAbsoluto;
+        $flujoActividades[$actividad]['ingresos'] += $valorAbsoluto;
+
+        if ($actividad === 'pollas') {
+            $estadoResultados['ingresos']['pollas'] += $valorAbsoluto;
+            continue;
+        }
+        if ($actividad === 'rifas') {
+            $estadoResultados['ingresos']['rifas'] += $valorAbsoluto;
+            continue;
+        }
+        if ((int) $mov['es_pago_interes'] === 1 || ((int) $mov['es_pago_prestamo'] === 1 && (float) $mov['valor_socio'] === 0.0)) {
+            $estadoResultados['ingresos']['intereses'] += $valorAbsoluto;
+            continue;
+        }
+
+        if ($actividad === 'natillera'
+            && (int) $mov['es_prestamo'] === 0
+            && (int) $mov['es_pago_prestamo'] === 0
+            && (int) $mov['es_pago_interes'] === 0
+            && (int) $mov['es_polla'] === 0
+            && (int) $mov['es_gasto_general'] === 0
+            && (int) $mov['es_rifa'] === 0
+            && ($mov['modulo'] ?? '') !== 'rifas') {
+            $estadoResultados['ingresos']['cuotas'] += $valorAbsoluto;
+            continue;
+        }
+
+        $estadoResultados['ingresos']['otros'] += $valorAbsoluto;
+        continue;
+    }
+
+    if ($tipoContable === 'egreso') {
+        $totalEgresos += $valorAbsoluto;
+        $flujoActividades[$actividad]['egresos'] += $valorAbsoluto;
+
+        if ((int) $mov['es_prestamo'] === 1) {
+            $estadoResultados['egresos']['prestamos'] += $valorAbsoluto;
+            continue;
+        }
+        if ($actividad === 'rifas') {
+            $estadoResultados['egresos']['premios_rifas'] += $valorAbsoluto;
+            continue;
+        }
+        if ((int) $mov['es_gasto_general'] === 1) {
+            $estadoResultados['egresos']['gastos'] += $valorAbsoluto;
+            continue;
+        }
+
+        $estadoResultados['egresos']['otros'] += $valorAbsoluto;
+    }
+}
+
+$totalCuotas = $estadoResultados['ingresos']['cuotas'];
+$totalInteresesPrestamo = $estadoResultados['ingresos']['intereses'];
+$totalPollas = $estadoResultados['ingresos']['pollas'];
+$totalRifasIngresos = $estadoResultados['ingresos']['rifas'];
+$otrosIngresos = $estadoResultados['ingresos']['otros'];
+
+$totalPrestado = $estadoResultados['egresos']['prestamos'];
+$totalPremiosRifas = $estadoResultados['egresos']['premios_rifas'];
+$totalGastos = $estadoResultados['egresos']['gastos'];
+$otrosEgresos = $estadoResultados['egresos']['otros'];
+
+$totalPrestamoRecuperado = 0.0;
+foreach ($movimientosContables as $mov) {
+    if ((int) $mov['es_pago_prestamo'] === 1 && (float) $mov['valor_socio'] !== 0.0 && (float) $mov['valor_natillera'] > 0) {
+        $totalPrestamoRecuperado += (float) $mov['valor_natillera'];
+    }
+}
+
 $resultadoNeto = $totalIngresos - $totalEgresos;
 $validacionSaldo = abs($saldoNatillera - $resultadoNeto) < 0.01;
 
-$totalOtrasActividades = $otrosIngresos;
+$resultadoPorActividadSuma = 0.0;
+foreach ($flujoActividades as $totalesActividad) {
+    $resultadoPorActividadSuma += $totalesActividad['ingresos'] - $totalesActividad['egresos'];
+}
+$validacionActividad = abs($resultadoPorActividadSuma - $resultadoNeto) < 0.01;
 
 $chartLabels = ['Cuotas', 'Pollas', 'Rifas (ingresos)', 'Intereses', 'Premios rifas (egreso)', 'Otros ingresos'];
 $chartDataset = [
@@ -63,14 +172,7 @@ $chartDataset = [
     $totalRifasIngresos,
     $totalInteresesPrestamo,
     -$totalPremiosRifas,
-    $totalOtrasActividades,
-];
-
-$flujoActividades = [
-    'Natillera' => ['ingresos' => 0.0, 'egresos' => 0.0],
-    'Rifas' => ['ingresos' => 0.0, 'egresos' => 0.0],
-    'Pollas' => ['ingresos' => 0.0, 'egresos' => 0.0],
-    'Préstamos' => ['ingresos' => 0.0, 'egresos' => 0.0],
+    $otrosIngresos,
 ];
 
 $resumenActividadStmt = $pdo->query("
@@ -355,9 +457,12 @@ $movimientos = $movimientosStmt->fetchAll();
                             </thead>
                             <tbody>
                                 <?php foreach ($flujoActividades as $nombreActividad => $totalesActividad): ?>
-                                    <?php $resultadoActividad = $totalesActividad['ingresos'] - $totalesActividad['egresos']; ?>
+                                    <?php
+                                        $resultadoActividad = $totalesActividad['ingresos'] - $totalesActividad['egresos'];
+                                        $nombreActividadLabel = ucfirst($nombreActividad);
+                                    ?>
                                     <tr>
-                                        <td><?php echo clean($nombreActividad); ?></td>
+                                        <td><?php echo clean($nombreActividadLabel); ?></td>
                                         <td class="text-end">$<?php echo number_format($totalesActividad['ingresos'],0,',','.'); ?></td>
                                         <td class="text-end">$<?php echo number_format($totalesActividad['egresos'],0,',','.'); ?></td>
                                         <td class="text-end <?php echo $resultadoActividad >= 0 ? 'text-success' : 'text-danger'; ?>">$<?php echo number_format($resultadoActividad,0,',','.'); ?></td>
@@ -370,6 +475,13 @@ $movimientos = $movimientosStmt->fetchAll();
             </div>
         </div>
     </div>
+                    <?php if (!$validacionActividad): ?>
+                        <div class="alert alert-danger mt-3 mb-0 d-flex align-items-center gap-2" role="alert">
+                            <i class="bi bi-exclamation-octagon-fill"></i>
+                            <span>Inconsistencia de actividad: la suma de resultados por actividad no coincide con el resultado neto global.</span>
+                        </div>
+                    <?php endif; ?>
+
     <div class="card mt-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-2">
