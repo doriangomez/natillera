@@ -26,6 +26,39 @@ $filtroSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
 $filtroEstado = isset($_GET['estado']) ? clean($_GET['estado']) : '';
 $rifaEliminada = isset($_GET['deleted']) && (int) $_GET['deleted'] === 1;
 
+$solicitudPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
+$segmentosRuta = array_values(array_filter(explode('/', trim($solicitudPath, '/')), static fn($seg) => $seg !== ''));
+$vistaActual = 'index';
+$idRifaRuta = 0;
+if (!empty($segmentosRuta) && $segmentosRuta[0] === 'rifas') {
+    if (isset($segmentosRuta[1]) && ctype_digit($segmentosRuta[1])) {
+        $idRifaRuta = (int) $segmentosRuta[1];
+        $vistaActual = $segmentosRuta[2] ?? 'detalle';
+    }
+}
+$vistasPermitidasRifa = ['detalle', 'boletas', 'pagos', 'premios', 'reportes'];
+$vistaParam = isset($_GET['vista']) ? clean((string) $_GET['vista']) : '';
+if ($vistaParam !== '' && in_array($vistaParam, $vistasPermitidasRifa, true)) {
+    $vistaActual = $vistaParam;
+}
+if (!in_array($vistaActual, array_merge(['index'], $vistasPermitidasRifa), true)) {
+    $vistaActual = 'index';
+}
+if ($idRifaRuta > 0) {
+    $_GET['id_rifa'] = $idRifaRuta;
+}
+if ((int) ($_GET['id_rifa'] ?? 0) > 0 && $vistaActual === 'index') {
+    $vistaActual = 'detalle';
+}
+
+function rutaRifa(int $idRifa, string $vista = 'detalle'): string
+{
+    if ($idRifa <= 0) {
+        return '/rifas';
+    }
+    return $vista === 'detalle' ? ('/rifas/' . $idRifa) : ('/rifas/' . $idRifa . '/' . $vista);
+}
+
 try {
     asegurarEsquemaRifas($pdo);
 
@@ -94,6 +127,7 @@ if ($rifaActual) {
 <?php if ($errorCarga): ?>
     <div class="alert alert-danger"><?php echo clean($errorCarga); ?></div>
 <?php endif; ?>
+<?php if ($vistaActual === 'index'): ?>
 <div class="row g-3">
     <div class="col-lg-5">
         <div class="card">
@@ -309,7 +343,7 @@ if ($rifaActual) {
                         <p class="text-muted mb-1">Resumen operativo</p>
                         <h5 class="mb-0">Rifas activas y cerradas</h5>
                     </div>
-                    <a href="rifas.php" class="btn btn-outline-secondary btn-sm">Refrescar</a>
+                    <a href="/rifas" class="btn btn-outline-secondary btn-sm">Refrescar</a>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-sm table-striped align-middle">
@@ -327,7 +361,7 @@ if ($rifaActual) {
                                 </td>
                                 <td>$<?php echo number_format($rifa['total_recaudado'], 0, ',', '.'); ?></td>
                                 <td><span class="badge <?php echo $rifa['estado'] === 'cerrada' ? 'bg-dark-subtle text-dark' : 'bg-primary-subtle text-primary'; ?>"><?php echo clean($rifa['estado']); ?></span></td>
-                                <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="?id_rifa=<?php echo (int) $rifa['id_rifa']; ?>">Gestionar</a></td>
+                                <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="<?php echo rutaRifa((int) $rifa['id_rifa']); ?>">Gestionar</a></td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if (empty($rifas)): ?>
@@ -340,12 +374,16 @@ if ($rifaActual) {
         </div>
     </div>
 </div>
+</div>
+<?php endif; ?>
+
 <?php if ($rifaActual): ?>
     <hr class="my-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <p class="text-muted mb-1">Administración de boletas</p>
             <h4 class="mb-0"><?php echo clean($rifaActual['nombre']); ?></h4>
+            <small class="text-muted">Estás trabajando en: <?php echo clean($rifaActual['nombre']); ?></small>
         </div>
         <div class="d-flex gap-2 flex-wrap align-items-center">
             <span class="badge bg-success-subtle text-success">Pagadas: <?php echo $resumen['pagada']['cantidad'] ?? 0; ?></span>
@@ -355,6 +393,7 @@ if ($rifaActual) {
             <form method="POST" action="../actions/rifas_save.php" class="d-flex gap-2">
                 <input type="hidden" name="accion" value="descargar_boletas_zip">
                 <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                        <input type="hidden" name="current_view" value="<?php echo clean($vistaActual); ?>">
                 <input type="hidden" name="id_grupo" value="<?php echo $filtroGrupo > 0 ? (int) $filtroGrupo : ''; ?>">
                 <input type="hidden" name="id_socio" value="<?php echo $filtroSocio > 0 ? (int) $filtroSocio : ''; ?>">
                 <button class="btn btn-outline-secondary btn-sm"><i class="bi bi-file-earmark-zip me-1"></i>Descargar ZIP (filtro actual)</button>
@@ -362,12 +401,14 @@ if ($rifaActual) {
             <form method="POST" action="../actions/rifas_save.php" onsubmit="return confirm('Se eliminarán todas las boletas de la rifa (excepto pagadas). ¿Deseas continuar?');">
                 <input type="hidden" name="accion" value="eliminar_boletas">
                 <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                        <input type="hidden" name="current_view" value="<?php echo clean($vistaActual); ?>">
                 <input type="hidden" name="eliminar_todo" value="1">
                 <button class="btn btn-outline-warning btn-sm"><i class="bi bi-eraser me-1"></i>Eliminar todas las boletas</button>
             </form>
             <form method="POST" action="../actions/rifas_save.php" onsubmit="return confirm('¿Seguro que deseas eliminar esta rifa? Esta acción también removerá boletas y movimientos relacionados.');">
                 <input type="hidden" name="accion" value="eliminar_rifa">
                 <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                        <input type="hidden" name="current_view" value="<?php echo clean($vistaActual); ?>">
                 <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash3 me-1"></i>Eliminar rifa</button>
             </form>
         </div>
@@ -380,18 +421,19 @@ if ($rifaActual) {
         <div class="col-6 col-md"><div class="card"><div class="card-body py-2"><small class="text-muted d-block">Utilidad</small><strong class="<?php echo $utilidadRifa['utilidad_neta'] >= 0 ? 'text-success' : 'text-danger'; ?>">$<?php echo number_format(abs($utilidadRifa['utilidad_neta']), 0, ',', '.'); ?></strong></div></div></div>
     </div>
     <ul class="nav nav-tabs mb-3" id="rifasTabsLite">
-        <li class="nav-item"><button type="button" class="nav-link active" data-rifas-tab="admin">Gestión de boletas</button></li>
-        <li class="nav-item"><button type="button" class="nav-link" data-rifas-tab="pagos">Registrar pagos</button></li>
-        <li class="nav-item"><button type="button" class="nav-link" data-rifas-tab="premio">Registrar premios</button></li>
-        <li class="nav-item"><button type="button" class="nav-link" data-rifas-tab="reportes">Reportes</button></li>
+        <li class="nav-item"><a class="nav-link <?php echo in_array($vistaActual, ['detalle','boletas'], true) ? 'active' : ''; ?>" href="<?php echo rutaRifa((int) $rifaActual['id_rifa'], 'boletas'); ?>">Boletas</a></li>
+        <li class="nav-item"><a class="nav-link <?php echo $vistaActual === 'pagos' ? 'active' : ''; ?>" href="<?php echo rutaRifa((int) $rifaActual['id_rifa'], 'pagos'); ?>">Pagos</a></li>
+        <li class="nav-item"><a class="nav-link <?php echo $vistaActual === 'premios' ? 'active' : ''; ?>" href="<?php echo rutaRifa((int) $rifaActual['id_rifa'], 'premios'); ?>">Premios</a></li>
+        <li class="nav-item"><a class="nav-link <?php echo $vistaActual === 'reportes' ? 'active' : ''; ?>" href="<?php echo rutaRifa((int) $rifaActual['id_rifa'], 'reportes'); ?>">Reportes</a></li>
     </ul>
     <div class="row g-3">
         <div class="col-lg-4" data-rifas-panel="admin pagos premio">
-            <div class="card mb-3" data-rifas-panel="admin">
+            <div class="card mb-3 <?php echo in_array($vistaActual, ['detalle', 'boletas'], true) ? '' : 'd-none'; ?>" data-rifas-panel="admin">
                 <div class="card-body">
                     <h6 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-pencil-square text-primary"></i><span>Asignación manual de boleta</span></h6>
-                    <form method="GET" action="rifas.php" class="row g-2 mb-3">
+                    <form method="GET" action="<?php echo rutaRifa((int) $rifaActual['id_rifa'], 'boletas'); ?>" class="row g-2 mb-3">
                         <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                        <input type="hidden" name="current_view" value="<?php echo clean($vistaActual); ?>">
                         <div class="col-12">
                             <label class="form-label">Grupo</label>
                             <select name="grupo_manual" class="form-select" onchange="this.form.submit()">
@@ -404,6 +446,7 @@ if ($rifaActual) {
                     <form method="POST" action="../actions/rifas_save.php" class="row g-2">
                         <input type="hidden" name="accion" value="crear_boleta_manual">
                         <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                        <input type="hidden" name="current_view" value="<?php echo clean($vistaActual); ?>">
                         <div class="col-12">
                             <label class="form-label">Grupo</label>
                             <select name="id_grupo" class="form-select" required>
@@ -442,6 +485,7 @@ if ($rifaActual) {
                     <form method="POST" action="../actions/rifas_save.php" class="row g-2" onsubmit="return confirm('Se eliminarán boletas según filtros (no permite pagadas). ¿Deseas continuar?');">
                         <input type="hidden" name="accion" value="eliminar_boletas">
                         <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                        <input type="hidden" name="current_view" value="<?php echo clean($vistaActual); ?>">
                         <div class="col-12">
                             <label class="form-label">Eliminar por grupo (opcional)</label>
                             <select name="id_grupo" class="form-select">
@@ -466,12 +510,13 @@ if ($rifaActual) {
                     </form>
                 </div>
             </div>
-            <div class="card mb-3" data-rifas-panel="pagos">
+            <div class="card mb-3 <?php echo $vistaActual === 'pagos' ? '' : 'd-none'; ?>" data-rifas-panel="pagos">
                 <div class="card-body">
                     <h6 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-cash-coin text-success"></i><span>Registrar pago de boletas por socio</span></h6>
                     <form method="POST" action="../actions/rifas_save.php" class="row g-2" id="formPagoBoletasSocio">
                         <input type="hidden" name="accion" value="pagar_boletas_socio">
                         <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                        <input type="hidden" name="current_view" value="<?php echo clean($vistaActual); ?>">
                         <div class="col-12">
                             <label class="form-label">Socio</label>
                             <select name="id_socio" id="pago_id_socio" class="form-select" required>
@@ -532,12 +577,13 @@ if ($rifaActual) {
                         </div>
                     </form>
                 </div>
-            <div class="card" data-rifas-panel="premio">
+            <div class="card <?php echo $vistaActual === 'premios' ? '' : 'd-none'; ?>" data-rifas-panel="premio">
                 <div class="card-body">
                     <h6 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-award text-danger"></i><span>Registrar premio</span></h6>
                     <form method="POST" action="../actions/rifas_save.php" class="row g-2">
                         <input type="hidden" name="accion" value="registrar_premio">
                         <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                        <input type="hidden" name="current_view" value="<?php echo clean($vistaActual); ?>">
                         <div class="col-12">
                             <label class="form-label">Número ganador</label>
                             <input type="text" name="numero_ganador" class="form-control" maxlength="3" required placeholder="Ej: 33">
@@ -589,7 +635,7 @@ if ($rifaActual) {
             </div>
         </div>
         <div class="col-lg-8" data-rifas-panel="admin reportes pagos">
-            <div class="card" data-rifas-panel="admin">
+            <div class="card <?php echo in_array($vistaActual, ['detalle', 'boletas'], true) ? '' : 'd-none'; ?>" data-rifas-panel="admin">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
@@ -600,6 +646,7 @@ if ($rifaActual) {
                     </div>
                     <form method="GET" class="row g-2 mb-3">
                         <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
+                        <input type="hidden" name="current_view" value="<?php echo clean($vistaActual); ?>">
                         <div class="col-md-4">
                             <select name="grupo" class="form-select form-select-sm">
                                 <option value="0">Todos los grupos</option>
@@ -655,7 +702,7 @@ if ($rifaActual) {
             </div>
         </div>
     </div>
-    <div class="row g-3 mt-2" data-rifas-panel="reportes pagos premio">
+    <div class="row g-3 mt-2 <?php echo $vistaActual === 'reportes' ? '' : 'd-none'; ?>" data-rifas-panel="reportes pagos premio">
         <div class="col-lg-6">
             <div class="card h-100">
                 <div class="card-body">
@@ -1305,7 +1352,7 @@ if (!empty($boletasRifaFull)) {
       });
     };
     tabButtons.forEach((btn) => btn.addEventListener('click', () => activarTab(btn.dataset.rifasTab || 'admin')));
-    activarTab('admin');
+    activarTab(<?php echo json_encode((($vistaActual === 'pagos') ? 'pagos' : (($vistaActual === 'premios') ? 'premio' : (($vistaActual === 'reportes') ? 'reportes' : 'admin')))); ?>);
   }
 
   const formPago = document.getElementById('formPagoBoletasSocio');
