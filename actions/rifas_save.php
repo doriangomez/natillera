@@ -10,9 +10,13 @@ $usuario = $_SESSION['usuario'] ?? null;
 function construirRutaRifa(int $idRifa, string $vista = 'detalle'): string
 {
     if ($idRifa <= 0) {
-        return '/rifas';
+        return '../public/rifas.php';
     }
-    return $vista === 'detalle' ? ('/rifas/' . $idRifa) : ('/rifas/' . $idRifa . '/' . $vista);
+    $qs = 'id_rifa=' . $idRifa;
+    if ($vista !== 'detalle') {
+        $qs .= '&vista=' . urlencode($vista);
+    }
+    return '../public/rifas.php?' . $qs;
 }
 
 

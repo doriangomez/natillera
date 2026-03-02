@@ -26,26 +26,10 @@ $filtroSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
 $filtroEstado = isset($_GET['estado']) ? clean($_GET['estado']) : '';
 $rifaEliminada = isset($_GET['deleted']) && (int) $_GET['deleted'] === 1;
 
-$solicitudPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
-$segmentosRuta = array_values(array_filter(explode('/', trim($solicitudPath, '/')), static fn($seg) => $seg !== ''));
-$vistaActual = 'index';
-$idRifaRuta = 0;
-if (!empty($segmentosRuta) && $segmentosRuta[0] === 'rifas') {
-    if (isset($segmentosRuta[1]) && ctype_digit($segmentosRuta[1])) {
-        $idRifaRuta = (int) $segmentosRuta[1];
-        $vistaActual = $segmentosRuta[2] ?? 'detalle';
-    }
-}
-$vistasPermitidasRifa = ['detalle', 'boletas', 'pagos', 'premios', 'reportes'];
-$vistaParam = isset($_GET['vista']) ? clean((string) $_GET['vista']) : '';
-if ($vistaParam !== '' && in_array($vistaParam, $vistasPermitidasRifa, true)) {
-    $vistaActual = $vistaParam;
-}
-if (!in_array($vistaActual, array_merge(['index'], $vistasPermitidasRifa), true)) {
+$vistaActual = isset($_GET['vista']) ? clean((string) $_GET['vista']) : 'index';
+$vistasPermitidasRifa = ['index', 'detalle', 'boletas', 'pagos', 'premios', 'reportes'];
+if (!in_array($vistaActual, $vistasPermitidasRifa, true)) {
     $vistaActual = 'index';
-}
-if ($idRifaRuta > 0) {
-    $_GET['id_rifa'] = $idRifaRuta;
 }
 if ((int) ($_GET['id_rifa'] ?? 0) > 0 && $vistaActual === 'index') {
     $vistaActual = 'detalle';
@@ -54,9 +38,13 @@ if ((int) ($_GET['id_rifa'] ?? 0) > 0 && $vistaActual === 'index') {
 function rutaRifa(int $idRifa, string $vista = 'detalle'): string
 {
     if ($idRifa <= 0) {
-        return '/rifas';
+        return 'rifas.php';
     }
-    return $vista === 'detalle' ? ('/rifas/' . $idRifa) : ('/rifas/' . $idRifa . '/' . $vista);
+    $qs = 'id_rifa=' . $idRifa;
+    if ($vista !== 'detalle') {
+        $qs .= '&vista=' . urlencode($vista);
+    }
+    return 'rifas.php?' . $qs;
 }
 
 try {
