@@ -578,8 +578,11 @@ function actualizarSaldoSocio($pdo, $idSocio, $monto, $regla) {
 }
 
 function recalcularSaldosDesdeMovimientos(PDO $pdo): void {
+    $iniciaTransaccion = !$pdo->inTransaction();
     try {
-        $pdo->beginTransaction();
+        if ($iniciaTransaccion) {
+            $pdo->beginTransaction();
+        }
 
         $pdo->exec('UPDATE socios SET saldo_socio = 0');
 
@@ -615,11 +618,14 @@ function recalcularSaldosDesdeMovimientos(PDO $pdo): void {
         $pdo->prepare('UPDATE natillera_estado SET saldo_actual = :saldo WHERE id_estado = 1')
             ->execute([':saldo' => (float) $saldoNatillera]);
 
-        $pdo->commit();
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) {
+        if ($iniciaTransaccion && $pdo->inTransaction()) {
+            $pdo->commit();
+        }
+    } catch (Throwable $e) {
+        if ($iniciaTransaccion && $pdo->inTransaction()) {
             $pdo->rollBack();
         }
+        throw $e;
     }
 }
 

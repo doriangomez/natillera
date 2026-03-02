@@ -317,7 +317,10 @@ function crearRifa(PDO $pdo, array $data): int
 {
     asegurarEsquemaRifas($pdo);
 
-    $pdo->beginTransaction();
+    $iniciaTransaccion = !$pdo->inTransaction();
+    if ($iniciaTransaccion) {
+        $pdo->beginTransaction();
+    }
     try {
         $stmt = $pdo->prepare('INSERT INTO rifas (nombre, fecha_inicio, fecha_fin, valor_boleta, cantidad_boletas, observaciones, id_actividad_ingreso, id_actividad_premio, usuario_registro, tipo_rifa, cantidad_grupos, cifras_numero, rango_inicio, rango_fin, modo_numeracion, modo_distribucion, arte_base_path, arte_numero_x, arte_numero_y, arte_numero_size, arte_numero_color, arte_font_path)
             VALUES (:nombre, :inicio, :fin, :valor, :cantidad, :obs, :act_ingreso, :act_premio, :usuario, :tipo, :grupos, :cifras, :rango_inicio, :rango_fin, :modo_num, :modo_dist, :arte_path, :arte_x, :arte_y, :arte_size, :arte_color, :arte_font_path)');
@@ -1031,7 +1034,10 @@ function registrarPagoBoletasPorSocio(PDO $pdo, int $idRifa, array $data): array
         throw new RuntimeException('El concepto seleccionado para el ingreso no es válido.');
     }
 
-    $pdo->beginTransaction();
+    $iniciaTransaccion = !$pdo->inTransaction();
+    if ($iniciaTransaccion) {
+        $pdo->beginTransaction();
+    }
     try {
         $stmtUpd = $pdo->prepare('UPDATE rifas_boletas SET estado = "pagada", fecha_pago = :fecha, forma_pago = :forma_pago, usuario_ultimo = :usuario WHERE id_boleta = :id AND estado <> "pagada"');
 
@@ -1067,9 +1073,11 @@ function registrarPagoBoletasPorSocio(PDO $pdo, int $idRifa, array $data): array
         }
 
         recalcularSaldosDesdeMovimientos($pdo);
-        $pdo->commit();
+        if ($iniciaTransaccion && $pdo->inTransaction()) {
+            $pdo->commit();
+        }
     } catch (Throwable $e) {
-        if ($pdo->inTransaction()) {
+        if ($iniciaTransaccion && $pdo->inTransaction()) {
             $pdo->rollBack();
         }
         throw $e;
