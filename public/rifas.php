@@ -102,6 +102,38 @@ if ($rifaActual) {
     }
 }
 ?>
+<style>
+    .rifas-module-shell {
+        width: min(1400px, 100%);
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+    .rifas-grid-two-columns {
+        align-items: stretch;
+    }
+    .rifas-summary-cards > [class*='col-'] {
+        display: flex;
+    }
+    .rifas-summary-cards .card {
+        width: 100%;
+    }
+    .rifas-section-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: #475569;
+        margin: 0;
+    }
+    @media (max-width: 991.98px) {
+        .rifas-module-shell {
+            width: 100%;
+        }
+    }
+</style>
+<div class="rifas-module-shell">
 <h2 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-stars text-primary"></i><span>Módulo de rifas</span></h2>
 <?php if (!empty($_SESSION['error'])): ?>
     <div class="alert alert-danger"><?php echo clean($_SESSION['error']); unset($_SESSION['error']); ?></div>
@@ -116,7 +148,7 @@ if ($rifaActual) {
     <div class="alert alert-danger"><?php echo clean($errorCarga); ?></div>
 <?php endif; ?>
 <?php if ($vistaActual === 'index'): ?>
-<div class="row g-3">
+<div class="row g-3 rifas-grid-two-columns">
     <div class="col-lg-5">
         <div class="card">
             <div class="card-body">
@@ -362,7 +394,6 @@ if ($rifaActual) {
         </div>
     </div>
 </div>
-</div>
 <?php endif; ?>
 
 <?php if ($rifaActual): ?>
@@ -401,7 +432,8 @@ if ($rifaActual) {
             </form>
         </div>
     </div>
-    <div class="row g-2 mb-3">
+    <p class="rifas-section-title">Resumen</p>
+    <div class="row g-2 mb-3 rifas-summary-cards">
         <div class="col-6 col-md"><div class="card"><div class="card-body py-2"><small class="text-muted d-block">Total boletas</small><strong><?php echo (int) ($rifaActual['cantidad_boletas'] ?? 0); ?></strong></div></div></div>
         <div class="col-6 col-md"><div class="card"><div class="card-body py-2"><small class="text-muted d-block">Pagadas</small><strong class="text-success"><?php echo (int) ($resumen['pagada']['cantidad'] ?? 0); ?></strong></div></div></div>
         <div class="col-6 col-md"><div class="card"><div class="card-body py-2"><small class="text-muted d-block">Pendientes</small><strong class="text-warning"><?php echo (int) ($resumen['pendiente']['cantidad'] ?? 0); ?></strong></div></div></div>
@@ -414,7 +446,8 @@ if ($rifaActual) {
         <li class="nav-item"><a class="nav-link <?php echo $vistaActual === 'premios' ? 'active' : ''; ?>" href="<?php echo rutaRifa((int) $rifaActual['id_rifa'], 'premios'); ?>">Premios</a></li>
         <li class="nav-item"><a class="nav-link <?php echo $vistaActual === 'reportes' ? 'active' : ''; ?>" href="<?php echo rutaRifa((int) $rifaActual['id_rifa'], 'reportes'); ?>">Reportes</a></li>
     </ul>
-    <div class="row g-3">
+    <p class="rifas-section-title">Administración</p>
+    <div class="row g-3 rifas-grid-two-columns">
         <div class="col-lg-4" data-rifas-panel="admin pagos premio">
             <div class="card mb-3 <?php echo in_array($vistaActual, ['detalle', 'boletas'], true) ? '' : 'd-none'; ?>" data-rifas-panel="admin">
                 <div class="card-body">
@@ -690,7 +723,8 @@ if ($rifaActual) {
             </div>
         </div>
     </div>
-    <div class="row g-3 mt-2 <?php echo $vistaActual === 'reportes' ? '' : 'd-none'; ?>" data-rifas-panel="reportes pagos premio">
+    <p class="rifas-section-title <?php echo $vistaActual === 'reportes' ? '' : 'd-none'; ?>" data-rifas-panel="reportes pagos premio">Reportes</p>
+    <div class="row g-3 mt-2 <?php echo $vistaActual === 'reportes' ? '' : 'd-none'; ?> rifas-grid-two-columns" data-rifas-panel="reportes pagos premio">
         <div class="col-lg-6">
             <div class="card h-100">
                 <div class="card-body">
@@ -753,6 +787,7 @@ if ($rifaActual) {
             </div>
         </div>
     </div>
+    <p class="rifas-section-title">Movimientos</p>
     <div class="card mt-3">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -791,6 +826,7 @@ if ($rifaActual) {
         </div>
     </div>
 <?php endif; ?>
+</div>
 <?php
 $boletasPagoPorSocio = [];
 if (!empty($boletasRifaFull)) {
