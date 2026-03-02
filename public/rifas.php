@@ -372,9 +372,22 @@ if ($rifaActual) {
             </form>
         </div>
     </div>
+    <div class="row g-2 mb-3">
+        <div class="col-6 col-md"><div class="card"><div class="card-body py-2"><small class="text-muted d-block">Total boletas</small><strong><?php echo (int) ($rifaActual['cantidad_boletas'] ?? 0); ?></strong></div></div></div>
+        <div class="col-6 col-md"><div class="card"><div class="card-body py-2"><small class="text-muted d-block">Pagadas</small><strong class="text-success"><?php echo (int) ($resumen['pagada']['cantidad'] ?? 0); ?></strong></div></div></div>
+        <div class="col-6 col-md"><div class="card"><div class="card-body py-2"><small class="text-muted d-block">Pendientes</small><strong class="text-warning"><?php echo (int) ($resumen['pendiente']['cantidad'] ?? 0); ?></strong></div></div></div>
+        <div class="col-6 col-md"><div class="card"><div class="card-body py-2"><small class="text-muted d-block">Recaudo</small><strong>$<?php echo number_format($utilidadRifa['total_recaudado'] ?? 0, 0, ',', '.'); ?></strong></div></div></div>
+        <div class="col-6 col-md"><div class="card"><div class="card-body py-2"><small class="text-muted d-block">Utilidad</small><strong class="<?php echo $utilidadRifa['utilidad_neta'] >= 0 ? 'text-success' : 'text-danger'; ?>">$<?php echo number_format(abs($utilidadRifa['utilidad_neta']), 0, ',', '.'); ?></strong></div></div></div>
+    </div>
+    <ul class="nav nav-tabs mb-3" id="rifasTabsLite">
+        <li class="nav-item"><button type="button" class="nav-link active" data-rifas-tab="admin">Gestión de boletas</button></li>
+        <li class="nav-item"><button type="button" class="nav-link" data-rifas-tab="pagos">Registrar pagos</button></li>
+        <li class="nav-item"><button type="button" class="nav-link" data-rifas-tab="premio">Registrar premios</button></li>
+        <li class="nav-item"><button type="button" class="nav-link" data-rifas-tab="reportes">Reportes</button></li>
+    </ul>
     <div class="row g-3">
-        <div class="col-lg-4">
-            <div class="card mb-3">
+        <div class="col-lg-4" data-rifas-panel="admin pagos premio">
+            <div class="card mb-3" data-rifas-panel="admin">
                 <div class="card-body">
                     <h6 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-pencil-square text-primary"></i><span>Asignación manual de boleta</span></h6>
                     <form method="GET" action="rifas.php" class="row g-2 mb-3">
@@ -453,7 +466,7 @@ if ($rifaActual) {
                     </form>
                 </div>
             </div>
-            <div class="card mb-3">
+            <div class="card mb-3" data-rifas-panel="pagos">
                 <div class="card-body">
                     <h6 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-cash-coin text-success"></i><span>Registrar pago de boletas por socio</span></h6>
                     <form method="POST" action="../actions/rifas_save.php" class="row g-2" id="formPagoBoletasSocio">
@@ -479,10 +492,14 @@ if ($rifaActual) {
                                     <i class="bi bi-check2-square me-1"></i>Marcar todas como pagadas
                                 </button>
                             </div>
-                            <div id="lista_boletas_socio" class="border rounded p-2 bg-light" style="max-height: 220px; overflow-y: auto;">
+                            <div id="lista_boletas_socio" class="border rounded p-2 bg-light d-flex flex-wrap gap-2" style="max-height: 220px; overflow-y: auto;">
                                 <p class="text-muted mb-0 small">Seleccione un socio para cargar sus boletas.</p>
                             </div>
                             <div class="form-text">Solo se pueden seleccionar boletas pendientes o asignadas.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Resumen antes de confirmar</label>
+                            <div class="alert alert-light py-2 mb-0" id="resumen_pago_boletas">0 boletas seleccionadas.</div>
                         </div>
                         <div class="col-12">
                             <label class="form-label">Fecha pago</label>
@@ -515,7 +532,7 @@ if ($rifaActual) {
                         </div>
                     </form>
                 </div>
-            <div class="card">
+            <div class="card" data-rifas-panel="premio">
                 <div class="card-body">
                     <h6 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-award text-danger"></i><span>Registrar premio</span></h6>
                     <form method="POST" action="../actions/rifas_save.php" class="row g-2">
@@ -571,8 +588,8 @@ if ($rifaActual) {
                 </div>
             </div>
         </div>
-        <div class="col-lg-8">
-            <div class="card">
+        <div class="col-lg-8" data-rifas-panel="admin reportes pagos">
+            <div class="card" data-rifas-panel="admin">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
@@ -638,7 +655,7 @@ if ($rifaActual) {
             </div>
         </div>
     </div>
-    <div class="row g-3 mt-2">
+    <div class="row g-3 mt-2" data-rifas-panel="reportes pagos premio">
         <div class="col-lg-6">
             <div class="card h-100">
                 <div class="card-body">
@@ -1277,6 +1294,20 @@ if (!empty($boletasRifaFull)) {
 
 <script>
 (() => {
+  const tabButtons = document.querySelectorAll('#rifasTabsLite [data-rifas-tab]');
+  const panels = document.querySelectorAll('[data-rifas-panel]');
+  if (tabButtons.length && panels.length) {
+    const activarTab = (tab) => {
+      tabButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.rifasTab === tab));
+      panels.forEach((panel) => {
+        const tabs = String(panel.dataset.rifasPanel || '').split(' ');
+        panel.classList.toggle('d-none', !tabs.includes(tab));
+      });
+    };
+    tabButtons.forEach((btn) => btn.addEventListener('click', () => activarTab(btn.dataset.rifasTab || 'admin')));
+    activarTab('admin');
+  }
+
   const formPago = document.getElementById('formPagoBoletasSocio');
   if (!formPago) return;
 
@@ -1285,12 +1316,14 @@ if (!empty($boletasRifaFull)) {
   const grupoInput = document.getElementById('pago_grupo_nombre');
   const listaBoletas = document.getElementById('lista_boletas_socio');
   const btnTodas = document.getElementById('btnMarcarTodasPagadas');
+  const resumenPago = document.getElementById('resumen_pago_boletas');
 
   function renderBoletas(idSocio) {
     const info = dataSocios[String(idSocio)] || dataSocios[idSocio] || null;
     if (!info) {
       grupoInput.value = 'Sin boletas asignadas';
       listaBoletas.innerHTML = '<p class="text-muted mb-0 small">Este socio no tiene boletas asignadas.</p>';
+      if (resumenPago) resumenPago.textContent = '0 boletas seleccionadas.';
       btnTodas.disabled = true;
       return;
     }
@@ -1303,18 +1336,23 @@ if (!empty($boletasRifaFull)) {
       const esPendiente = estado === 'pendiente' || estado === 'asignada';
       const badgeClass = estado === 'pagada' ? 'success' : (esPendiente ? 'warning text-dark' : 'secondary');
       const badgeText = estado === 'pagada' ? 'Pagada' : (esPendiente ? 'Pendiente' : (b.estado || 'N/A'));
-      return `<label class="d-flex align-items-center justify-content-between border rounded px-2 py-1 mb-1 bg-white">
-        <span class="d-flex align-items-center gap-2">
-          <input type="checkbox" name="boletas[]" value="${b.numero}" ${esPendiente ? '' : 'disabled'}>
-          <span class="fw-semibold">#${b.numero}</span>
-          <small class="text-muted">${b.grupo || 'General'}</small>
-        </span>
-        <span class="badge bg-${badgeClass}-subtle text-${badgeClass}">${badgeText}</span>
+      return `<label class="btn btn-sm btn-outline-secondary rounded-pill ${esPendiente ? '' : 'disabled'}">
+        <input class="d-none" type="checkbox" name="boletas[]" value="${b.numero}" ${esPendiente ? '' : 'disabled'}>
+        #${b.numero} · ${b.grupo || 'General'} · ${badgeText}
       </label>`;
     });
 
     listaBoletas.innerHTML = rows.join('');
     btnTodas.disabled = !listaBoletas.querySelector('input[type="checkbox"]:not(:disabled)');
+    if (resumenPago) resumenPago.textContent = '0 boletas seleccionadas.';
+
+    listaBoletas.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        cb.parentElement.classList.toggle('active', cb.checked);
+        const marcadas = listaBoletas.querySelectorAll('input[type="checkbox"]:checked').length;
+        if (resumenPago) resumenPago.textContent = `${marcadas} boletas seleccionadas.`;
+      });
+    });
   }
 
   selectSocio.addEventListener('change', () => renderBoletas(selectSocio.value));
@@ -1322,7 +1360,10 @@ if (!empty($boletasRifaFull)) {
   btnTodas.addEventListener('click', () => {
     listaBoletas.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach((cb) => {
       cb.checked = true;
+      cb.parentElement.classList.add('active');
     });
+    const marcadas = listaBoletas.querySelectorAll('input[type="checkbox"]:checked').length;
+    if (resumenPago) resumenPago.textContent = `${marcadas} boletas seleccionadas.`;
   });
 
   formPago.addEventListener('submit', (e) => {
