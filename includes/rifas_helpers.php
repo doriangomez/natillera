@@ -904,45 +904,183 @@ function crearMovimientoRifa(PDO $pdo, int $idActividad, int $idSocio, float $va
 
 function registrarPagoBoleta(PDO $pdo, int $idRifa, string $numero, string $fechaPago, string $medio, ?int $idMedio, ?string $usuario, ?int $idActividadIngreso = null, ?int $idGrupo = null): void
 {
-    $sql = 'SELECT b.*, r.id_actividad_ingreso FROM rifas_boletas b JOIN rifas r ON r.id_rifa = b.id_rifa WHERE b.id_rifa = :id AND b.numero = :numero';
-    $params = [':id' => $idRifa, ':numero' => $numero];
-    if ($idGrupo !== null && $idGrupo > 0) {
-        $sql .= ' AND b.id_grupo = :grupo';
-        $params[':grupo'] = $idGrupo;
+    $numero = trim($numero);
+    if ($numero === '') {
+        throw new RuntimeException('Debe indicar el número de boleta.');
     }
 
-    $stmt = $pdo->prepare($sql . ' ORDER BY b.id_grupo LIMIT 2');
+    $resultado = registrarPagoBoletasPorSocio($pdo, $idRifa, [
+        'id_socio' => null,
+        'id_grupo' => $idGrupo,
+        'boletas' => [$numero],
+        'marcar_todas' => false,
+        'fecha_pago' => $fechaPago,
+        'medio' => $medio,
+        'id_medio_pago' => $idMedio,
+        'usuario' => $usuario,
+        'id_actividad_movimiento' => $idActividadIngreso,
+    ]);
+
+    if (($resultado['cantidad_pagadas'] ?? 0) <= 0) {
+        throw new RuntimeException('No fue posible registrar el pago de la boleta seleccionada.');
+    }
+}
+
+function registrarPagoBoletasPorSocio(PDO $pdo, int $idRifa, array $data): array
+{
+    $idSocio = isset($data['id_socio']) && (int) $data['id_socio'] > 0 ? (int) $data['id_socio'] : null;
+    $idGrupo = isset($data['id_grupo']) && (int) $data['id_grupo'] > 0 ? (int) $data['id_grupo'] : null;
+    $marcarTodas = !empty($data['marcar_todas']);
+    $fechaPago = (string) ($data['fecha_pago'] ?? date('Y-m-d'));
+    $medio = trim((string) ($data['medio'] ?? ''));
+    $idMedio = isset($data['id_medio_pago']) && (int) $data['id_medio_pago'] > 0 ? (int) $data['id_medio_pago'] : null;
+    $usuario = isset($data['usuario']) ? (string) $data['usuario'] : null;
+    $idActividadIngreso = isset($data['id_actividad_movimiento']) && (int) $data['id_actividad_movimiento'] > 0 ? (int) $data['id_actividad_movimiento'] : null;
+
+    if ($idSocio === null && empty($data['boletas'])) {
+        throw new RuntimeException('Debe seleccionar un socio o indicar boletas para registrar el pago.');
+    }
+    if ($medio === '') {
+        throw new RuntimeException('Debe indicar el medio de pago.');
+    }
+
+    $boletasSolicitadas = [];
+    foreach ((array) ($data['boletas'] ?? []) as $numero) {
+        $numeroLimpio = trim((string) $numero);
+        if ($numeroLimpio !== '') {
+            $boletasSolicitadas[$numeroLimpio] = $numeroLimpio;
+        }
+    }
+    $boletasSolicitadas = array_values($boletasSolicitadas);
+
+    if (!$marcarTodas && empty($boletasSolicitadas)) {
+        throw new RuntimeException('Debe seleccionar al menos una boleta pendiente.');
+    }
+
+    $sql = 'SELECT b.id_boleta, b.numero, b.id_socio, b.id_grupo, b.estado, b.valor, g.nombre AS nombre_grupo, r.id_actividad_ingreso
+            FROM rifas_boletas b
+            JOIN rifas r ON r.id_rifa = b.id_rifa
+            LEFT JOIN rifas_grupos g ON g.id_grupo = b.id_grupo
+            WHERE b.id_rifa = :id_rifa';
+    $params = [':id_rifa' => $idRifa];
+
+    if ($idSocio !== null) {
+        $sql .= ' AND b.id_socio = :id_socio';
+        $params[':id_socio'] = $idSocio;
+    }
+
+    if ($idGrupo !== null) {
+        $sql .= ' AND b.id_grupo = :id_grupo';
+        $params[':id_grupo'] = $idGrupo;
+    }
+
+    if (!$marcarTodas) {
+        $placeholders = [];
+        foreach ($boletasSolicitadas as $idx => $numero) {
+            $ph = ':numero_' . $idx;
+            $placeholders[] = $ph;
+            $params[$ph] = $numero;
+        }
+        $sql .= ' AND b.numero IN (' . implode(', ', $placeholders) . ')';
+    }
+
+    $stmt = $pdo->prepare($sql . ' ORDER BY b.id_boleta ASC');
     $stmt->execute($params);
-    $coincidencias = $stmt->fetchAll();
-    if (count($coincidencias) > 1) {
-        throw new RuntimeException('El número existe en varios grupos. Seleccione un grupo para registrar el pago.');
-    }
-    $boleta = $coincidencias[0] ?? null;
-    if (!$boleta) {
-        throw new RuntimeException('No se encontró la boleta.');
-    }
-    if (!$boleta['id_socio']) {
-        throw new RuntimeException('La boleta no tiene un socio asignado.');
+    $boletas = $stmt->fetchAll();
+
+    if (empty($boletas)) {
+        throw new RuntimeException('No se encontraron boletas para registrar pago con los filtros seleccionados.');
     }
 
-    $idActividadMovimiento = $idActividadIngreso ?: (int) $boleta['id_actividad_ingreso'];
+    if ($idSocio === null) {
+        $sociosEncontrados = [];
+        foreach ($boletas as $b) {
+            $idSocioBoleta = (int) ($b['id_socio'] ?? 0);
+            if ($idSocioBoleta > 0) {
+                $sociosEncontrados[$idSocioBoleta] = true;
+            }
+        }
+        if (count($sociosEncontrados) > 1) {
+            throw new RuntimeException('Las boletas seleccionadas pertenecen a diferentes socios. Seleccione un único socio.');
+        }
+        if (count($sociosEncontrados) === 1) {
+            $idSocio = (int) array_key_first($sociosEncontrados);
+        }
+    }
+
+    foreach ($boletas as $b) {
+        if ((int) ($b['id_socio'] ?? 0) <= 0) {
+            throw new RuntimeException('Una o más boletas seleccionadas no tienen socio asignado.');
+        }
+    }
+
+    $boletasPagadas = array_values(array_filter($boletas, static fn($b) => ($b['estado'] ?? '') === 'pagada'));
+    if (!empty($boletasPagadas)) {
+        $nums = array_map(static fn($b) => $b['numero'], $boletasPagadas);
+        throw new RuntimeException('No se puede registrar pago sobre boletas ya pagadas: ' . implode(', ', $nums) . '.');
+    }
+
+    $boletasPendientes = array_values(array_filter($boletas, static fn($b) => in_array(($b['estado'] ?? ''), ['pendiente', 'asignada'], true)));
+    if (empty($boletasPendientes)) {
+        throw new RuntimeException('No hay boletas pendientes por pagar para la selección actual.');
+    }
+
+    $idActividadMovimiento = $idActividadIngreso ?: (int) ($boletasPendientes[0]['id_actividad_ingreso'] ?? 0);
     $actividadIngreso = getActividad($pdo, $idActividadMovimiento);
     if (!$actividadIngreso || (int) ($actividadIngreso['es_ingreso'] ?? 0) !== 1) {
         throw new RuntimeException('El concepto seleccionado para el ingreso no es válido.');
     }
 
-    crearMovimientoRifa($pdo, $idActividadMovimiento, (int) $boleta['id_socio'], (float) $boleta['valor'], $fechaPago, $medio, $idMedio, 'rifas', 'Recaudo de boleta ' . $numero);
+    $pdo->beginTransaction();
+    try {
+        $stmtUpd = $pdo->prepare('UPDATE rifas_boletas SET estado = "pagada", fecha_pago = :fecha, forma_pago = :forma_pago, usuario_ultimo = :usuario WHERE id_boleta = :id AND estado <> "pagada"');
 
-    $stmtUpd = $pdo->prepare('UPDATE rifas_boletas SET estado = "pagada", fecha_pago = :fecha, forma_pago = :forma_pago, usuario_ultimo = :usuario WHERE id_boleta = :id');
-    $stmtUpd->execute([
-        ':fecha' => $fechaPago,
-        ':forma_pago' => $medio,
-        ':usuario' => $usuario,
-        ':id' => $boleta['id_boleta'],
-    ]);
+        foreach ($boletasPendientes as $boleta) {
+            $numero = (string) $boleta['numero'];
+            $idSocioBoleta = (int) $boleta['id_socio'];
+            $valor = (float) $boleta['valor'];
 
-    registrarHistorialBoleta($pdo, (int) $boleta['id_boleta'], $idRifa, $numero, 'pago', 'Pago registrado', $usuario);
-    recalcularSaldosDesdeMovimientos($pdo);
+            crearMovimientoRifa(
+                $pdo,
+                $idActividadMovimiento,
+                $idSocioBoleta,
+                $valor,
+                $fechaPago,
+                $medio,
+                $idMedio,
+                'rifas',
+                'Recaudo de boleta ' . $numero
+            );
+
+            $stmtUpd->execute([
+                ':fecha' => $fechaPago,
+                ':forma_pago' => $medio,
+                ':usuario' => $usuario,
+                ':id' => (int) $boleta['id_boleta'],
+            ]);
+
+            if ((int) $stmtUpd->rowCount() !== 1) {
+                throw new RuntimeException('No se pudo actualizar el estado de la boleta #' . $numero . '.');
+            }
+
+            registrarHistorialBoleta($pdo, (int) $boleta['id_boleta'], $idRifa, $numero, 'pago', 'Pago registrado', $usuario);
+        }
+
+        recalcularSaldosDesdeMovimientos($pdo);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+
+    return [
+        'id_socio' => $idSocio,
+        'id_grupo' => $idGrupo,
+        'cantidad_pagadas' => count($boletasPendientes),
+        'boletas_pagadas' => array_map(static fn($b) => (string) $b['numero'], $boletasPendientes),
+    ];
 }
 
 function registrarPremioRifa(PDO $pdo, int $idRifa, string $numeroGanador, ?int $idGrupoGanador, float $valorPremio, string $fecha, string $medio, ?int $idMedio, ?string $usuario, ?int $idActividadPremio = null): void

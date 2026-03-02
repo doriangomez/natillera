@@ -12,6 +12,7 @@ $rifas = [];
 $idRifaSeleccionada = 0;
 $rifaActual = null;
 $boletas = [];
+$boletasRifaFull = [];
 $resumen = [];
 $gruposRifa = [];
 $resumenSocios = [];
@@ -43,7 +44,8 @@ try {
     if (!$rifaActual && $idRifaSeleccionada > 0) {
         $rifaActual = obtenerRifa($pdo, $idRifaSeleccionada);
     }
-    $boletas = $rifaActual ? obtenerBoletasRifa($pdo, $idRifaSeleccionada) : [];
+    $boletasRifaFull = $rifaActual ? obtenerBoletasRifa($pdo, $idRifaSeleccionada) : [];
+    $boletas = $boletasRifaFull;
     if ($rifaActual) {
         $boletas = array_values(array_filter($boletas, static function ($b) use ($filtroGrupo, $filtroSocio, $filtroEstado) {
             if ($filtroGrupo > 0 && (int) ($b['id_grupo'] ?? 0) !== $filtroGrupo) return false;
@@ -453,33 +455,45 @@ if ($rifaActual) {
             </div>
             <div class="card mb-3">
                 <div class="card-body">
-                    <h6 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-cash-coin text-success"></i><span>Registrar pago de boleta</span></h6>
-                    <form method="POST" action="../actions/rifas_save.php" class="row g-2">
-                        <input type="hidden" name="accion" value="pagar_boleta">
+                    <h6 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-cash-coin text-success"></i><span>Registrar pago de boletas por socio</span></h6>
+                    <form method="POST" action="../actions/rifas_save.php" class="row g-2" id="formPagoBoletasSocio">
+                        <input type="hidden" name="accion" value="pagar_boletas_socio">
                         <input type="hidden" name="id_rifa" value="<?php echo (int) $rifaActual['id_rifa']; ?>">
                         <div class="col-12">
-                            <label class="form-label">Grupo</label>
-                            <select name="id_grupo" class="form-select">
-                                <option value="">Detectar automáticamente</option>
-                                <?php foreach ($gruposRifa as $grupo): ?>
-                                    <option value="<?php echo (int) $grupo['id_grupo']; ?>"><?php echo clean($grupo['nombre']); ?></option>
+                            <label class="form-label">Socio</label>
+                            <select name="id_socio" id="pago_id_socio" class="form-select" required>
+                                <option value="">Seleccionar socio</option>
+                                <?php foreach ($socios as $s): ?>
+                                    <option value="<?php echo (int) $s['id_socio']; ?>"><?php echo clean($s['nombre_completo']); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Número</label>
-                            <input type="text" name="numero" class="form-control" maxlength="3" required placeholder="Ej: 10">
+                            <label class="form-label">Grupo</label>
+                            <input type="text" id="pago_grupo_nombre" class="form-control" value="Seleccione un socio" readonly>
+                        </div>
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label mb-0">Boletas asignadas</label>
+                                <button type="button" class="btn btn-outline-success btn-sm" id="btnMarcarTodasPagadas" disabled>
+                                    <i class="bi bi-check2-square me-1"></i>Marcar todas como pagadas
+                                </button>
+                            </div>
+                            <div id="lista_boletas_socio" class="border rounded p-2 bg-light" style="max-height: 220px; overflow-y: auto;">
+                                <p class="text-muted mb-0 small">Seleccione un socio para cargar sus boletas.</p>
+                            </div>
+                            <div class="form-text">Solo se pueden seleccionar boletas pendientes o asignadas.</div>
                         </div>
                         <div class="col-12">
                             <label class="form-label">Fecha pago</label>
                             <input type="date" name="fecha_pago" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Medio</label>
+                            <label class="form-label">Medio de pago</label>
                             <input type="text" name="medio" class="form-control" required placeholder="Efectivo / Transferencia">
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Medio configurado</label>
+                            <label class="form-label">Cuenta</label>
                             <select name="id_medio_pago" class="form-select">
                                 <option value="">Seleccionar</option>
                                 <?php foreach ($mediosPago as $mp): ?>
@@ -501,7 +515,6 @@ if ($rifaActual) {
                         </div>
                     </form>
                 </div>
-            </div>
             <div class="card">
                 <div class="card-body">
                     <h6 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-award text-danger"></i><span>Registrar premio</span></h6>
@@ -726,6 +739,32 @@ if ($rifaActual) {
         </div>
     </div>
 <?php endif; ?>
+<?php
+$boletasPagoPorSocio = [];
+if (!empty($boletasRifaFull)) {
+    foreach ($boletasRifaFull as $boletaPago) {
+        $idSocioBoleta = (int) ($boletaPago['id_socio'] ?? 0);
+        if ($idSocioBoleta <= 0) {
+            continue;
+        }
+        if (!isset($boletasPagoPorSocio[$idSocioBoleta])) {
+            $boletasPagoPorSocio[$idSocioBoleta] = [
+                'id_socio' => $idSocioBoleta,
+                'socio' => (string) ($boletaPago['nombre_completo'] ?? ''),
+                'grupo' => (string) ($boletaPago['nombre_grupo'] ?? 'General'),
+                'boletas' => [],
+            ];
+        }
+        $boletasPagoPorSocio[$idSocioBoleta]['boletas'][] = [
+            'id_boleta' => (int) ($boletaPago['id_boleta'] ?? 0),
+            'numero' => (string) ($boletaPago['numero'] ?? ''),
+            'estado' => (string) ($boletaPago['estado'] ?? ''),
+            'id_grupo' => (int) ($boletaPago['id_grupo'] ?? 0),
+            'grupo' => (string) ($boletaPago['nombre_grupo'] ?? 'General'),
+        ];
+    }
+}
+?>
 <?php $sociosWizard = array_values(array_map(static fn($s) => ['id' => (int) $s['id_socio'], 'nombre' => $s['nombre_completo']], $socios)); ?>
 <script>
 (() => {
@@ -1235,4 +1274,71 @@ if ($rifaActual) {
   updateStep();
 })();
 </script>
+
+<script>
+(() => {
+  const formPago = document.getElementById('formPagoBoletasSocio');
+  if (!formPago) return;
+
+  const dataSocios = <?php echo json_encode($boletasPagoPorSocio, JSON_UNESCAPED_UNICODE); ?>;
+  const selectSocio = document.getElementById('pago_id_socio');
+  const grupoInput = document.getElementById('pago_grupo_nombre');
+  const listaBoletas = document.getElementById('lista_boletas_socio');
+  const btnTodas = document.getElementById('btnMarcarTodasPagadas');
+
+  function renderBoletas(idSocio) {
+    const info = dataSocios[String(idSocio)] || dataSocios[idSocio] || null;
+    if (!info) {
+      grupoInput.value = 'Sin boletas asignadas';
+      listaBoletas.innerHTML = '<p class="text-muted mb-0 small">Este socio no tiene boletas asignadas.</p>';
+      btnTodas.disabled = true;
+      return;
+    }
+
+    const grupos = [...new Set((info.boletas || []).map(b => b.grupo || 'General'))];
+    grupoInput.value = grupos.join(', ');
+
+    const rows = (info.boletas || []).map((b) => {
+      const estado = String(b.estado || '').toLowerCase();
+      const esPendiente = estado === 'pendiente' || estado === 'asignada';
+      const badgeClass = estado === 'pagada' ? 'success' : (esPendiente ? 'warning text-dark' : 'secondary');
+      const badgeText = estado === 'pagada' ? 'Pagada' : (esPendiente ? 'Pendiente' : (b.estado || 'N/A'));
+      return `<label class="d-flex align-items-center justify-content-between border rounded px-2 py-1 mb-1 bg-white">
+        <span class="d-flex align-items-center gap-2">
+          <input type="checkbox" name="boletas[]" value="${b.numero}" ${esPendiente ? '' : 'disabled'}>
+          <span class="fw-semibold">#${b.numero}</span>
+          <small class="text-muted">${b.grupo || 'General'}</small>
+        </span>
+        <span class="badge bg-${badgeClass}-subtle text-${badgeClass}">${badgeText}</span>
+      </label>`;
+    });
+
+    listaBoletas.innerHTML = rows.join('');
+    btnTodas.disabled = !listaBoletas.querySelector('input[type="checkbox"]:not(:disabled)');
+  }
+
+  selectSocio.addEventListener('change', () => renderBoletas(selectSocio.value));
+
+  btnTodas.addEventListener('click', () => {
+    listaBoletas.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach((cb) => {
+      cb.checked = true;
+    });
+  });
+
+  formPago.addEventListener('submit', (e) => {
+    const socio = selectSocio.value;
+    if (!socio) {
+      e.preventDefault();
+      alert('Debe seleccionar un socio.');
+      return;
+    }
+    const marcadas = listaBoletas.querySelectorAll('input[type="checkbox"]:checked').length;
+    if (marcadas === 0) {
+      e.preventDefault();
+      alert('Seleccione al menos una boleta pendiente o use "Marcar todas como pagadas".');
+    }
+  });
+})();
+</script>
+
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
