@@ -181,6 +181,24 @@ try {
         $_SESSION['exito'] = 'Pago registrado y contabilizado correctamente.';
     }
 
+    if ($accion === 'pagar_boletas_socio') {
+        $idRifa = (int) ($_POST['id_rifa'] ?? 0);
+        rifaDebeExistir($pdo, $idRifa, 'registrar pago por socio');
+
+        $resultadoPago = registrarPagoBoletasPorSocio($pdo, $idRifa, [
+            'id_socio' => ($_POST['id_socio'] ?? '') !== '' ? (int) $_POST['id_socio'] : null,
+            'boletas' => array_map('clean', (array) ($_POST['boletas'] ?? [])),
+            'marcar_todas' => (int) ($_POST['marcar_todas'] ?? 0) === 1,
+            'fecha_pago' => $_POST['fecha_pago'] ?? date('Y-m-d'),
+            'medio' => clean($_POST['medio'] ?? ''),
+            'id_medio_pago' => ($_POST['id_medio_pago'] ?? '') !== '' ? (int) $_POST['id_medio_pago'] : null,
+            'usuario' => $usuario,
+            'id_actividad_movimiento' => ($_POST['id_actividad_movimiento'] ?? '') !== '' ? (int) $_POST['id_actividad_movimiento'] : null,
+        ]);
+
+        $_SESSION['exito'] = 'Pagos registrados correctamente. Boletas actualizadas: ' . (int) ($resultadoPago['cantidad_pagadas'] ?? 0) . '.';
+    }
+
     if ($accion === 'registrar_premio') {
         $idRifa = (int) ($_POST['id_rifa'] ?? 0);
         rifaDebeExistir($pdo, $idRifa, 'registrar premio');
