@@ -280,7 +280,7 @@ try {
 }
 
 if ($accion === 'eliminar_rifa') {
-    header('Location: ../public/rifas.php?deleted=1');
+    header('Location: /rifas?deleted=1');
 } else {
     $idRifaRedirect = isset($_POST['id_rifa']) ? (int) ($_POST['id_rifa'] ?? 0) : 0;
     $vista = clean($_POST['current_view'] ?? 'detalle');

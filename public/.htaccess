@@ -1,0 +1,6 @@
+RewriteEngine On
+
+# Pretty URLs para módulo de rifas
+RewriteRule ^rifas/?$ rifas.php [L,QSA]
+RewriteRule ^rifas/([0-9]+)/?$ rifas.php?id_rifa=$1 [L,QSA]
+RewriteRule ^rifas/([0-9]+)/(boletas|pagos|premios|reportes)/?$ rifas.php?id_rifa=$1&vista=$2 [L,QSA]

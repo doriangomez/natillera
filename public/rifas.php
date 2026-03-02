@@ -331,7 +331,7 @@ if ($rifaActual) {
                         <p class="text-muted mb-1">Resumen operativo</p>
                         <h5 class="mb-0">Rifas activas y cerradas</h5>
                     </div>
-                    <a href="rifas.php" class="btn btn-outline-secondary btn-sm">Refrescar</a>
+                    <a href="/rifas" class="btn btn-outline-secondary btn-sm">Refrescar</a>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-sm table-striped align-middle">
