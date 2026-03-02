@@ -175,6 +175,36 @@ $chartDataset = [
     $otrosIngresos,
 ];
 
+$resumenActividadStmt = $pdo->query("
+    WITH mov_signado AS (
+        SELECT m.modulo,
+               CASE a.afecta_saldo_natillera WHEN 'suma' THEN m.valor WHEN 'resta' THEN -m.valor ELSE 0 END AS valor_natillera,
+               a.es_prestamo, a.es_pago_prestamo, a.es_pago_interes, a.es_polla, a.es_rifa
+        FROM movimientos m
+        JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+    )
+    SELECT
+        CASE
+            WHEN es_polla = 1 THEN 'Pollas'
+            WHEN es_prestamo = 1 OR es_pago_prestamo = 1 OR es_pago_interes = 1 THEN 'Préstamos'
+            WHEN es_rifa = 1 OR modulo = 'rifas' THEN 'Rifas'
+            ELSE 'Natillera'
+        END AS actividad,
+        COALESCE(SUM(CASE WHEN valor_natillera > 0 THEN valor_natillera END),0) AS ingresos,
+        COALESCE(SUM(CASE WHEN valor_natillera < 0 THEN -valor_natillera END),0) AS egresos
+    FROM mov_signado
+    GROUP BY actividad
+");
+
+foreach ($resumenActividadStmt->fetchAll(PDO::FETCH_ASSOC) as $actividadItem) {
+    $nombreActividad = $actividadItem['actividad'];
+    if (!isset($flujoActividades[$nombreActividad])) {
+        continue;
+    }
+    $flujoActividades[$nombreActividad]['ingresos'] = (float) ($actividadItem['ingresos'] ?? 0);
+    $flujoActividades[$nombreActividad]['egresos'] = (float) ($actividadItem['egresos'] ?? 0);
+}
+
 $socios = getSocios($pdo);
 $actividades = getActividades($pdo, false, true);
 
