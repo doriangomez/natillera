@@ -3,8 +3,11 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 $socios = $pdo->query('SELECT id_socio, nombre_completo, saldo_socio FROM socios WHERE activo = 1 ORDER BY nombre_completo')->fetchAll();
+$actividades = getActividades($pdo, false, false, false);
 $idSocio = isset($_GET['id_socio']) ? (int) $_GET['id_socio'] : 0;
 $cuotaManejo = isset($_GET['cuota_manejo']) ? (float) $_GET['cuota_manejo'] : 0.0;
+$idActividadDevolucion = isset($_GET['id_actividad_devolucion']) ? (int) $_GET['id_actividad_devolucion'] : 0;
+$idActividadCuota = isset($_GET['id_actividad_cuota']) ? (int) $_GET['id_actividad_cuota'] : 0;
 
 $resultado = null;
 $socioSeleccionado = null;
@@ -73,7 +76,7 @@ if ($idSocio > 0) {
 <div class="card mb-3">
     <div class="card-body">
         <form method="get" class="row g-3 align-items-end">
-            <div class="col-md-5">
+            <div class="col-md-4">
                 <label class="form-label" for="id_socio">Socio</label>
                 <select class="form-select" name="id_socio" id="id_socio" required>
                     <option value="">Seleccione...</option>
@@ -84,11 +87,33 @@ if ($idSocio > 0) {
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label" for="cuota_manejo">Cuota de manejo</label>
                 <input type="number" step="0.01" min="0" class="form-control" id="cuota_manejo" name="cuota_manejo" value="<?php echo number_format($cuotaManejo, 2, '.', ''); ?>">
             </div>
-            <div class="col-md-4 d-grid">
+            <div class="col-md-3">
+                <label class="form-label" for="id_actividad_devolucion">Actividad devolución</label>
+                <select class="form-select" name="id_actividad_devolucion" id="id_actividad_devolucion" required>
+                    <option value="">Seleccione...</option>
+                    <?php foreach ($actividades as $actividad): ?>
+                        <option value="<?php echo (int) $actividad['id_actividad']; ?>" <?php echo $idActividadDevolucion === (int) $actividad['id_actividad'] ? 'selected' : ''; ?>>
+                            <?php echo clean($actividad['nombre_actividad']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="id_actividad_cuota">Actividad cuota manejo</label>
+                <select class="form-select" name="id_actividad_cuota" id="id_actividad_cuota" required>
+                    <option value="">Seleccione...</option>
+                    <?php foreach ($actividades as $actividad): ?>
+                        <option value="<?php echo (int) $actividad['id_actividad']; ?>" <?php echo $idActividadCuota === (int) $actividad['id_actividad'] ? 'selected' : ''; ?>>
+                            <?php echo clean($actividad['nombre_actividad']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-12 d-grid">
                 <button type="submit" class="btn btn-primary"><i class="bi bi-calculator"></i> Calcular liquidación</button>
             </div>
         </form>
@@ -158,8 +183,19 @@ if ($idSocio > 0) {
                     </tbody>
                 </table>
             </div>
-            <p class="small text-muted mb-0">
-                Nota: los aportes identificados como <strong>pollas</strong> se muestran como referencia pero no hacen parte de la devolución en esta liquidación anticipada.
+
+            <form method="post" action="../actions/liquidacion_anticipada_save.php" class="mt-3" onsubmit="return confirm('¿Confirmas registrar definitivamente la liquidación anticipada de este socio?');">
+                <input type="hidden" name="id_socio" value="<?php echo (int) $socioSeleccionado['id_socio']; ?>">
+                <input type="hidden" name="cuota_manejo" value="<?php echo number_format($resultado['cuota_manejo'], 2, '.', ''); ?>">
+                <input type="hidden" name="id_actividad_devolucion" value="<?php echo (int) $idActividadDevolucion; ?>">
+                <input type="hidden" name="id_actividad_cuota" value="<?php echo (int) $idActividadCuota; ?>">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-check2-circle"></i> Registrar definitivamente la liquidación anticipada
+                </button>
+            </form>
+
+            <p class="small text-muted mb-0 mt-3">
+                Nota: los aportes identificados como <strong>pollas</strong> se muestran como referencia pero no hacen parte de la devolución en esta liquidación anticipada. La actividad de <strong>cuota de manejo</strong> debe tener afectación de natillera en <strong>neutral</strong> para no impactar el saldo general.
             </p>
         </div>
     </div>
