@@ -57,8 +57,8 @@ $medioReferencia = $medios[0] ?? null;
 
 $stmtSaldo = $pdo->prepare(
     'SELECT COALESCE(SUM(CASE'
-    . " WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor)"
-    . " WHEN a.afecta_saldo_natillera = 'resta' THEN -ABS(m.valor)"
+    . " WHEN a.afecta_saldo_natillera = 'suma' THEN m.valor"
+    . " WHEN a.afecta_saldo_natillera = 'resta' THEN -m.valor"
     . ' ELSE 0 END), 0) AS saldo '
     . 'FROM movimientos m '
     . 'JOIN actividades_maestro a ON m.id_actividad = a.id_actividad '

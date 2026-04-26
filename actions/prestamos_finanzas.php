@@ -46,8 +46,8 @@ $totalRecaudado = (float) ($stmtTotalRecaudado->fetchColumn() ?: 0);
 // Saldo acumulado: base de pago de cuotas menos todos los conceptos que restan
 $stmtSaldoAcumulado = $pdo->prepare(
     'SELECT
-        COALESCE(SUM(CASE WHEN a.afecta_saldo_socio = "suma" THEN ABS(m.valor) ELSE 0 END), 0) AS pago_cuota,
-        COALESCE(SUM(CASE WHEN a.afecta_saldo_socio = "resta" THEN ABS(m.valor) ELSE 0 END), 0) AS deducciones
+        COALESCE(SUM(CASE WHEN a.afecta_saldo_socio = "suma" THEN m.valor ELSE 0 END), 0) AS pago_cuota,
+        COALESCE(SUM(CASE WHEN a.afecta_saldo_socio = "resta" THEN m.valor ELSE 0 END), 0) AS deducciones
      FROM movimientos m
      LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
      WHERE m.id_socio = :id'
