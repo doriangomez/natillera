@@ -273,7 +273,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <a class="nav-link-sidebar<?php echo in_array($currentPage, ['liquidaciones.php', 'liquidacion_anticipada.php', 'liquidacion_definitiva.php'], true) ? ' active' : ''; ?>" href="liquidaciones.php"><i class="bi bi-calculator-fill"></i><span>Liquidaciones</span></a>
             <div class="nav-submenu">
                 <a class="nav-link-submenu<?php echo $currentPage === 'liquidacion_anticipada.php' ? ' active' : ''; ?>" href="liquidacion_anticipada.php">Liquidación anticipada</a>
-                <a class="nav-link-submenu<?php echo $currentPage === 'liquidacion_definitiva.php' ? ' active' : ''; ?>" href="liquidacion_definitiva.php">Liquidación definitiva <small class="text-warning">(en construcción)</small></a>
+                <a class="nav-link-submenu<?php echo $currentPage === 'liquidacion_definitiva.php' ? ' active' : ''; ?>" href="liquidacion_definitiva.php">Liquidación definitiva</a>
             </div>
             <a class="nav-link-sidebar<?php echo $currentPage === 'reportes.php' ? ' active' : ''; ?>" href="reportes.php"><i class="bi bi-file-earmark-bar-graph"></i><span>Reportes</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'estadisticas.php' ? ' active' : ''; ?>" href="estadisticas.php"><i class="bi bi-pie-chart"></i><span>Estadísticas</span></a>

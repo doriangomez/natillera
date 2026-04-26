@@ -223,6 +223,91 @@ function asegurarEsquemaRetirosCaja(PDO $pdo): void {
     $creada = true;
 }
 
+function asegurarEsquemaLiquidaciones(PDO $pdo): void {
+    static $creada = false;
+    if ($creada) {
+        return;
+    }
+
+    $sql = "CREATE TABLE IF NOT EXISTS liquidaciones (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        socio_id INT NOT NULL,
+        tipo_liquidacion VARCHAR(20) NOT NULL,
+        saldo_base DECIMAL(12,2) DEFAULT 0,
+        valor_pollas DECIMAL(12,2) DEFAULT 0,
+        valor_prestamos DECIMAL(12,2) DEFAULT 0,
+        valor_cuota_manejo DECIMAL(12,2) DEFAULT 0,
+        valor_bruto DECIMAL(12,2) DEFAULT 0,
+        valor_neto DECIMAL(12,2) DEFAULT 0,
+        actividad_liquidacion_id INT DEFAULT NULL,
+        actividad_cuota_id INT DEFAULT NULL,
+        actividad_fondo_id INT DEFAULT NULL,
+        movimiento_liquidacion_id INT DEFAULT NULL,
+        movimiento_cuota_id INT DEFAULT NULL,
+        movimiento_fondo_id INT DEFAULT NULL,
+        observaciones TEXT,
+        fecha DATE NOT NULL,
+        usuario_id VARCHAR(50) DEFAULT NULL,
+        estado VARCHAR(20) DEFAULT 'activa',
+        creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+        actualizado_en DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT fk_liquidaciones_socio FOREIGN KEY (socio_id) REFERENCES socios(id_socio) ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    $pdo->exec($sql);
+    $creada = true;
+}
+
+function obtenerTiposLiquidacion(): array {
+    return [
+        'parcial' => 'Liquidación parcial',
+        'anticipada' => 'Liquidación definitiva anticipada',
+        'definitiva' => 'Liquidación definitiva',
+    ];
+}
+
+function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo): ?array {
+    asegurarEsquemaLiquidaciones($pdo);
+
+    $stmtSocio = $pdo->prepare('SELECT id_socio, nombre_completo, saldo_socio, activo FROM socios WHERE id_socio = :id');
+    $stmtSocio->execute([':id' => $idSocio]);
+    $socio = $stmtSocio->fetch(PDO::FETCH_ASSOC);
+    if (!$socio || (int) ($socio['activo'] ?? 0) !== 1) {
+        return null;
+    }
+
+    $stmtPollas = $pdo->prepare(
+        "SELECT COALESCE(SUM(ABS(m.valor)),0)
+         FROM movimientos m
+         JOIN actividades_maestro a ON a.id_actividad = m.id_actividad
+         WHERE m.id_socio = :id AND COALESCE(a.es_polla,0) = 1"
+    );
+    $stmtPollas->execute([':id' => $idSocio]);
+    $valorPollas = (float) $stmtPollas->fetchColumn();
+
+    $stmtPrestamos = $pdo->prepare(
+        "SELECT COALESCE(SUM(saldo_capital_actual),0) + COALESCE(SUM(saldo_intereses_actual),0)
+         FROM prestamos
+         WHERE id_socio = :id AND estado = 'vigente'"
+    );
+    $stmtPrestamos->execute([':id' => $idSocio]);
+    $valorPrestamos = (float) $stmtPrestamos->fetchColumn();
+
+    $saldoBase = (float) ($socio['saldo_socio'] ?? 0);
+    $valorBruto = max(0, $saldoBase - $valorPrestamos);
+    $valorNeto = $valorBruto - max(0, $cuotaManejo);
+
+    return [
+        'socio' => $socio,
+        'saldo_base' => $saldoBase,
+        'valor_pollas' => $valorPollas,
+        'valor_prestamos' => $valorPrestamos,
+        'valor_cuota_manejo' => max(0, $cuotaManejo),
+        'valor_bruto' => $valorBruto,
+        'valor_neto' => $valorNeto,
+    ];
+}
+
 function registrarRetiroCaja(PDO $pdo, array $data): void {
     asegurarEsquemaRetirosCaja($pdo);
 
