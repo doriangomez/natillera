@@ -15,8 +15,9 @@ $idSocio = isset($_GET['id_socio']) ? (int) $_GET['id_socio'] : 0;
 $tipoLiquidacion = trim((string) ($_GET['tipo_liquidacion'] ?? 'anticipada'));
 $cuotaManejo = isset($_GET['cuota_manejo']) ? (float) $_GET['cuota_manejo'] : 0.0;
 $idActividadLiquidacion = isset($_GET['id_actividad_liquidacion']) ? (int) $_GET['id_actividad_liquidacion'] : 0;
-$idActividadCuota = isset($_GET['id_actividad_cuota']) ? (int) $_GET['id_actividad_cuota'] : 0;
-$idActividadFondo = isset($_GET['id_actividad_fondo']) ? (int) $_GET['id_actividad_fondo'] : 0;
+$idActividadRetencion = isset($_GET['id_actividad_retencion'])
+    ? (int) $_GET['id_actividad_retencion']
+    : (isset($_GET['id_actividad_cuota']) ? (int) $_GET['id_actividad_cuota'] : 0);
 $editarId = isset($_GET['editar']) ? (int) $_GET['editar'] : 0;
 
 if (!isset($tipos[$tipoLiquidacion])) {
@@ -92,8 +93,8 @@ if ($editarId > 0) {
                 <button class="btn btn-primary" type="submit"><i class="bi bi-lightning-charge"></i> Precalcular</button>
             </div>
 
-            <div class="col-md-4">
-                <label class="form-label" for="id_actividad_liquidacion">Actividad movimiento principal</label>
+            <div class="col-md-6">
+                <label class="form-label" for="id_actividad_liquidacion">Actividad principal (pago al socio)</label>
                 <select class="form-select" name="id_actividad_liquidacion" id="id_actividad_liquidacion" required>
                     <option value="">Seleccione...</option>
                     <?php foreach ($actividades as $actividad): ?>
@@ -101,21 +102,12 @@ if ($editarId > 0) {
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-4">
-                <label class="form-label" for="id_actividad_cuota">Actividad cuota administración (socio)</label>
-                <select class="form-select" name="id_actividad_cuota" id="id_actividad_cuota">
+            <div class="col-md-6">
+                <label class="form-label" for="id_actividad_retencion">Actividad retención administración</label>
+                <select class="form-select" name="id_actividad_retencion" id="id_actividad_retencion">
                     <option value="">Seleccione...</option>
                     <?php foreach ($actividades as $actividad): ?>
-                        <option value="<?php echo (int) $actividad['id_actividad']; ?>" <?php echo $idActividadCuota === (int) $actividad['id_actividad'] ? 'selected' : ''; ?>><?php echo clean($actividad['nombre_actividad']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label" for="id_actividad_fondo">Actividad fondo administración (natillera)</label>
-                <select class="form-select" name="id_actividad_fondo" id="id_actividad_fondo">
-                    <option value="">Seleccione...</option>
-                    <?php foreach ($actividades as $actividad): ?>
-                        <option value="<?php echo (int) $actividad['id_actividad']; ?>" <?php echo $idActividadFondo === (int) $actividad['id_actividad'] ? 'selected' : ''; ?>><?php echo clean($actividad['nombre_actividad']); ?></option>
+                        <option value="<?php echo (int) $actividad['id_actividad']; ?>" <?php echo $idActividadRetencion === (int) $actividad['id_actividad'] ? 'selected' : ''; ?>><?php echo clean($actividad['nombre_actividad']); ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -141,14 +133,19 @@ if ($editarId > 0) {
                 </table>
             </div>
             <p class="small text-muted mb-2">Fórmula: neto = (saldo base - préstamos) - cuota administración. Las pollas no se incluyen en la devolución.</p>
+            <?php if ($resultado['valor_cuota_manejo'] > 0): ?>
+                <div class="alert alert-info py-2">
+                    Se entregan <strong>$<?php echo number_format((float) $resultado['valor_neto'], 0, ',', '.'); ?></strong> al socio y
+                    <strong>$<?php echo number_format((float) $resultado['valor_cuota_manejo'], 0, ',', '.'); ?></strong> pasan a administración.
+                </div>
+            <?php endif; ?>
             <form method="post" action="../actions/liquidaciones_save.php" onsubmit="return confirm('¿Registrar definitivamente esta liquidación?');">
                 <input type="hidden" name="accion" value="crear">
                 <input type="hidden" name="tipo_liquidacion" value="<?php echo clean($tipoLiquidacion); ?>">
                 <input type="hidden" name="id_socio" value="<?php echo (int) $idSocio; ?>">
                 <input type="hidden" name="cuota_manejo" value="<?php echo number_format($cuotaManejo, 2, '.', ''); ?>">
                 <input type="hidden" name="id_actividad_liquidacion" value="<?php echo (int) $idActividadLiquidacion; ?>">
-                <input type="hidden" name="id_actividad_cuota" value="<?php echo (int) $idActividadCuota; ?>">
-                <input type="hidden" name="id_actividad_fondo" value="<?php echo (int) $idActividadFondo; ?>">
+                <input type="hidden" name="id_actividad_retencion" value="<?php echo (int) $idActividadRetencion; ?>">
                 <input type="hidden" name="observaciones" value="Liquidación <?php echo clean($tipoLiquidacion); ?> desde módulo central.">
                 <button class="btn btn-success" type="submit"><i class="bi bi-check-circle"></i> Registrar liquidación</button>
             </form>
@@ -177,15 +174,25 @@ if ($editarId > 0) {
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Actividad principal</label>
-                    <input class="form-control" type="number" name="id_actividad_liquidacion" value="<?php echo (int) $liquidacionEditar['actividad_liquidacion_id']; ?>" required>
+                    <select class="form-select" name="id_actividad_liquidacion" required>
+                        <option value="">Seleccione...</option>
+                        <?php foreach ($actividades as $actividad): ?>
+                            <option value="<?php echo (int) $actividad['id_actividad']; ?>" <?php echo (int) $liquidacionEditar['actividad_liquidacion_id'] === (int) $actividad['id_actividad'] ? 'selected' : ''; ?>>
+                                <?php echo clean($actividad['nombre_actividad']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Actividad cuota</label>
-                    <input class="form-control" type="number" name="id_actividad_cuota" value="<?php echo (int) $liquidacionEditar['actividad_cuota_id']; ?>">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Actividad fondo</label>
-                    <input class="form-control" type="number" name="id_actividad_fondo" value="<?php echo (int) $liquidacionEditar['actividad_fondo_id']; ?>">
+                    <label class="form-label">Actividad retención administración</label>
+                    <select class="form-select" name="id_actividad_retencion">
+                        <option value="">Seleccione...</option>
+                        <?php foreach ($actividades as $actividad): ?>
+                            <option value="<?php echo (int) $actividad['id_actividad']; ?>" <?php echo (int) $liquidacionEditar['actividad_cuota_id'] === (int) $actividad['id_actividad'] ? 'selected' : ''; ?>>
+                                <?php echo clean($actividad['nombre_actividad']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="col-md-9">
                     <label class="form-label">Observaciones</label>

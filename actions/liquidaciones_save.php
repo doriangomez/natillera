@@ -24,6 +24,32 @@ function borrarMovimientoSiExiste(PDO $pdo, ?int $idMovimiento): void {
     $stmt->execute([':id' => $idMovimiento]);
 }
 
+function extraerIdsMovimientosLiquidacion(array $liquidacion): array {
+    $ids = [
+        isset($liquidacion['movimiento_liquidacion_id']) ? (int) $liquidacion['movimiento_liquidacion_id'] : 0,
+        isset($liquidacion['movimiento_cuota_id']) ? (int) $liquidacion['movimiento_cuota_id'] : 0,
+        isset($liquidacion['movimiento_fondo_id']) ? (int) $liquidacion['movimiento_fondo_id'] : 0,
+    ];
+
+    $movimientosGenerados = isset($liquidacion['movimientos_generados']) ? (string) $liquidacion['movimientos_generados'] : '';
+    if ($movimientosGenerados !== '') {
+        $detalle = json_decode($movimientosGenerados, true);
+        if (is_array($detalle)) {
+            foreach ($detalle as $mov) {
+                if (is_array($mov) && isset($mov['id_movimiento'])) {
+                    $ids[] = (int) $mov['id_movimiento'];
+                }
+            }
+        }
+    }
+
+    $ids = array_values(array_filter(array_unique($ids), static function ($id) {
+        return (int) $id > 0;
+    }));
+
+    return array_map('intval', $ids);
+}
+
 if ($accion === 'anular') {
     if ($idLiquidacion <= 0) {
         $_SESSION['error'] = 'Liquidación inválida para anular.';
@@ -43,9 +69,9 @@ if ($accion === 'anular') {
 
     $pdo->beginTransaction();
     try {
-        borrarMovimientoSiExiste($pdo, isset($liq['movimiento_liquidacion_id']) ? (int) $liq['movimiento_liquidacion_id'] : 0);
-        borrarMovimientoSiExiste($pdo, isset($liq['movimiento_cuota_id']) ? (int) $liq['movimiento_cuota_id'] : 0);
-        borrarMovimientoSiExiste($pdo, isset($liq['movimiento_fondo_id']) ? (int) $liq['movimiento_fondo_id'] : 0);
+        foreach (extraerIdsMovimientosLiquidacion($liq) as $idMovimiento) {
+            borrarMovimientoSiExiste($pdo, $idMovimiento);
+        }
 
         $pdo->prepare('UPDATE liquidaciones SET estado = "anulada" WHERE id = :id')->execute([':id' => $idLiquidacion]);
         recalcularSaldosDesdeMovimientos($pdo);
@@ -73,8 +99,9 @@ if (!isset($tipos[$tipoLiquidacion])) {
 $idSocio = isset($_POST['id_socio']) ? (int) $_POST['id_socio'] : 0;
 $cuotaManejo = isset($_POST['cuota_manejo']) ? (float) $_POST['cuota_manejo'] : 0.0;
 $idActividadLiquidacion = isset($_POST['id_actividad_liquidacion']) ? (int) $_POST['id_actividad_liquidacion'] : 0;
-$idActividadCuota = isset($_POST['id_actividad_cuota']) ? (int) $_POST['id_actividad_cuota'] : 0;
-$idActividadFondo = isset($_POST['id_actividad_fondo']) ? (int) $_POST['id_actividad_fondo'] : 0;
+$idActividadRetencion = isset($_POST['id_actividad_retencion'])
+    ? (int) $_POST['id_actividad_retencion']
+    : (isset($_POST['id_actividad_cuota']) ? (int) $_POST['id_actividad_cuota'] : 0);
 $observaciones = trim((string) ($_POST['observaciones'] ?? ''));
 
 $liquidacionBase = null;
@@ -97,15 +124,14 @@ if ($idSocio <= 0 || $idActividadLiquidacion <= 0) {
     exit;
 }
 
-if ($cuotaManejo > 0 && ($idActividadCuota <= 0 || $idActividadFondo <= 0)) {
-    $_SESSION['error'] = 'Para cuota de administración debe seleccionar actividad de cuota y de fondo.';
+if ($cuotaManejo > 0 && $idActividadRetencion <= 0) {
+    $_SESSION['error'] = 'Para cuota de administración debe seleccionar la actividad de retención.';
     header('Location: ' . $redirect);
     exit;
 }
 
 $actividadLiquidacion = obtenerActividadValida($pdo, $idActividadLiquidacion);
-$actividadCuota = $idActividadCuota > 0 ? obtenerActividadValida($pdo, $idActividadCuota) : null;
-$actividadFondo = $idActividadFondo > 0 ? obtenerActividadValida($pdo, $idActividadFondo) : null;
+$actividadRetencion = $idActividadRetencion > 0 ? obtenerActividadValida($pdo, $idActividadRetencion) : null;
 
 if (!$actividadLiquidacion) {
     $_SESSION['error'] = 'La actividad principal de liquidación no es válida.';
@@ -113,8 +139,8 @@ if (!$actividadLiquidacion) {
     exit;
 }
 
-if ($cuotaManejo > 0 && (!$actividadCuota || !$actividadFondo)) {
-    $_SESSION['error'] = 'Las actividades de cuota/fondo de administración no son válidas.';
+if ($cuotaManejo > 0 && !$actividadRetencion) {
+    $_SESSION['error'] = 'La actividad de retención de administración no es válida.';
     header('Location: ' . $redirect);
     exit;
 }
@@ -128,17 +154,10 @@ if ($reglaSocioPrincipal !== 'resta' || $reglaNatilleraPrincipal !== 'resta') {
 }
 
 if ($cuotaManejo > 0) {
-    $reglaSocioCuota = normalizarReglaAfectacion($actividadCuota['afecta_saldo_socio'] ?? 'neutral');
-    $reglaNatilleraCuota = normalizarReglaAfectacion($actividadCuota['afecta_saldo_natillera'] ?? 'neutral');
-    $reglaSocioFondo = normalizarReglaAfectacion($actividadFondo['afecta_saldo_socio'] ?? 'neutral');
-    $reglaNatilleraFondo = normalizarReglaAfectacion($actividadFondo['afecta_saldo_natillera'] ?? 'neutral');
-    if ($reglaSocioCuota !== 'resta' || $reglaNatilleraCuota !== 'neutral') {
-        $_SESSION['error'] = 'Actividad cuota inválida: debe restar socio y ser neutral en natillera.';
-        header('Location: ' . $redirect);
-        exit;
-    }
-    if ($reglaSocioFondo !== 'neutral' || $reglaNatilleraFondo !== 'resta') {
-        $_SESSION['error'] = 'Actividad fondo inválida: debe ser neutral en socio y restar natillera.';
+    $reglaSocioRetencion = normalizarReglaAfectacion($actividadRetencion['afecta_saldo_socio'] ?? 'neutral');
+    $reglaNatilleraRetencion = normalizarReglaAfectacion($actividadRetencion['afecta_saldo_natillera'] ?? 'neutral');
+    if ($reglaSocioRetencion !== 'resta' || $reglaNatilleraRetencion !== 'resta') {
+        $_SESSION['error'] = 'Actividad retención inválida: debe restar saldo socio y saldo natillera.';
         header('Location: ' . $redirect);
         exit;
     }
@@ -166,15 +185,15 @@ $usuario = $_SESSION['usuario'] ?? null;
 $insertMov = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo)
 VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_actividad, :motivo, :valor, :medio, :ingreso, :egreso, :obs, :usuario, NOW(), :modulo)');
 
-$insertLiq = $pdo->prepare('INSERT INTO liquidaciones (socio_id, tipo_liquidacion, saldo_base, valor_pollas, valor_prestamos, valor_cuota_manejo, valor_bruto, valor_neto, actividad_liquidacion_id, actividad_cuota_id, actividad_fondo_id, movimiento_liquidacion_id, movimiento_cuota_id, movimiento_fondo_id, observaciones, fecha, usuario_id, estado)
-VALUES (:socio, :tipo, :saldo_base, :pollas, :prestamos, :cuota, :bruto, :neto, :act_liq, :act_cuota, :act_fondo, :mov_liq, :mov_cuota, :mov_fondo, :obs, :fecha, :usuario, :estado)');
+$insertLiq = $pdo->prepare('INSERT INTO liquidaciones (socio_id, tipo_liquidacion, saldo_base, valor_pollas, valor_prestamos, valor_cuota_manejo, valor_bruto, valor_neto, actividad_liquidacion_id, actividad_cuota_id, actividad_fondo_id, movimiento_liquidacion_id, movimiento_cuota_id, movimiento_fondo_id, movimientos_generados, observaciones, fecha, usuario_id, estado)
+VALUES (:socio, :tipo, :saldo_base, :pollas, :prestamos, :cuota, :bruto, :neto, :act_liq, :act_cuota, :act_fondo, :mov_liq, :mov_cuota, :mov_fondo, :movs_json, :obs, :fecha, :usuario, :estado)');
 
 $pdo->beginTransaction();
 try {
     if ($accion === 'editar' && $liquidacionBase) {
-        borrarMovimientoSiExiste($pdo, (int) ($liquidacionBase['movimiento_liquidacion_id'] ?? 0));
-        borrarMovimientoSiExiste($pdo, (int) ($liquidacionBase['movimiento_cuota_id'] ?? 0));
-        borrarMovimientoSiExiste($pdo, (int) ($liquidacionBase['movimiento_fondo_id'] ?? 0));
+        foreach (extraerIdsMovimientosLiquidacion($liquidacionBase) as $idMovimiento) {
+            borrarMovimientoSiExiste($pdo, $idMovimiento);
+        }
         $pdo->prepare('UPDATE liquidaciones SET estado = "editada" WHERE id = :id')->execute([':id' => $idLiquidacion]);
     }
 
@@ -195,9 +214,14 @@ try {
         ':modulo' => 'liquidaciones',
     ]);
     $movPrincipalId = (int) $pdo->lastInsertId();
+    $movimientosGenerados = [[
+        'tipo' => 'pago_socio',
+        'id_movimiento' => $movPrincipalId,
+        'id_actividad' => $idActividadLiquidacion,
+        'valor' => abs((float) $calculo['valor_neto']),
+    ]];
 
-    $movCuotaId = null;
-    $movFondoId = null;
+    $movRetencionId = null;
     if ($cuotaManejo > 0) {
         $insertMov->execute([
             ':fecha' => $fecha,
@@ -205,35 +229,23 @@ try {
             ':mes' => $mes,
             ':quincena' => $quincena,
             ':id_socio' => $idSocio,
-            ':id_actividad' => $idActividadCuota,
-            ':motivo' => 'Cuota administración liquidación - ' . $calculo['socio']['nombre_completo'],
-            ':valor' => abs($cuotaManejo),
-            ':medio' => 'Liquidaciones',
-            ':ingreso' => 0,
-            ':egreso' => 0,
-            ':obs' => 'Descuento al socio por cuota de administración.',
-            ':usuario' => $usuario,
-            ':modulo' => 'liquidaciones',
-        ]);
-        $movCuotaId = (int) $pdo->lastInsertId();
-
-        $insertMov->execute([
-            ':fecha' => $fecha,
-            ':anio' => $anio,
-            ':mes' => $mes,
-            ':quincena' => $quincena,
-            ':id_socio' => null,
-            ':id_actividad' => $idActividadFondo,
-            ':motivo' => 'Fondo administración liquidaciones - ' . $calculo['socio']['nombre_completo'],
+            ':id_actividad' => $idActividadRetencion,
+            ':motivo' => 'Retención administración liquidación - ' . $calculo['socio']['nombre_completo'],
             ':valor' => -abs($cuotaManejo),
             ':medio' => 'Liquidaciones',
             ':ingreso' => 0,
             ':egreso' => 1,
-            ':obs' => 'Traslado de cuota de administración al fondo.',
+            ':obs' => 'Retención de administración: descuento al socio y salida a bolsa administrativa.',
             ':usuario' => $usuario,
             ':modulo' => 'liquidaciones',
         ]);
-        $movFondoId = (int) $pdo->lastInsertId();
+        $movRetencionId = (int) $pdo->lastInsertId();
+        $movimientosGenerados[] = [
+            'tipo' => 'retencion_administracion',
+            'id_movimiento' => $movRetencionId,
+            'id_actividad' => $idActividadRetencion,
+            'valor' => abs((float) $cuotaManejo),
+        ];
     }
 
     $insertLiq->execute([
@@ -246,11 +258,12 @@ try {
         ':bruto' => $calculo['valor_bruto'],
         ':neto' => $calculo['valor_neto'],
         ':act_liq' => $idActividadLiquidacion,
-        ':act_cuota' => $idActividadCuota ?: null,
-        ':act_fondo' => $idActividadFondo ?: null,
+        ':act_cuota' => $idActividadRetencion ?: null,
+        ':act_fondo' => null,
         ':mov_liq' => $movPrincipalId,
-        ':mov_cuota' => $movCuotaId,
-        ':mov_fondo' => $movFondoId,
+        ':mov_cuota' => $movRetencionId,
+        ':mov_fondo' => null,
+        ':movs_json' => json_encode($movimientosGenerados),
         ':obs' => $observaciones,
         ':fecha' => $fecha,
         ':usuario' => $usuario,
