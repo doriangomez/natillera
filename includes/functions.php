@@ -245,6 +245,7 @@ function asegurarEsquemaLiquidaciones(PDO $pdo): void {
         movimiento_liquidacion_id INT DEFAULT NULL,
         movimiento_cuota_id INT DEFAULT NULL,
         movimiento_fondo_id INT DEFAULT NULL,
+        movimientos_generados TEXT DEFAULT NULL,
         observaciones TEXT,
         fecha DATE NOT NULL,
         usuario_id VARCHAR(50) DEFAULT NULL,
@@ -255,6 +256,16 @@ function asegurarEsquemaLiquidaciones(PDO $pdo): void {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     $pdo->exec($sql);
+
+    try {
+        $columnaMovimientos = $pdo->query("SHOW COLUMNS FROM liquidaciones LIKE 'movimientos_generados'");
+        if ($columnaMovimientos && $columnaMovimientos->rowCount() === 0) {
+            $pdo->exec("ALTER TABLE liquidaciones ADD COLUMN movimientos_generados TEXT DEFAULT NULL AFTER movimiento_fondo_id");
+        }
+    } catch (Exception $e) {
+        // Continuar sin bloquear el módulo si no es posible alterar estructura.
+    }
+
     $creada = true;
 }
 
