@@ -12,14 +12,14 @@ $movimientosContablesStmt = $pdo->query("
             m.valor,
             CASE WHEN a.es_polla = 1 THEN 0 ELSE
                 CASE a.afecta_saldo_socio
-                    WHEN 'suma' THEN m.valor
-                    WHEN 'resta' THEN -m.valor
+                    WHEN 'suma' THEN ABS(m.valor)
+                    WHEN 'resta' THEN -ABS(m.valor)
                     ELSE 0
                 END
             END AS valor_socio,
             CASE a.afecta_saldo_natillera
-                WHEN 'suma' THEN m.valor
-                WHEN 'resta' THEN -m.valor
+                WHEN 'suma' THEN ABS(m.valor)
+                WHEN 'resta' THEN -ABS(m.valor)
                 ELSE 0
             END AS valor_natillera,
             a.es_prestamo,
@@ -178,7 +178,7 @@ $chartDataset = [
 $resumenActividadStmt = $pdo->query("
     WITH mov_signado AS (
         SELECT m.modulo,
-               CASE a.afecta_saldo_natillera WHEN 'suma' THEN m.valor WHEN 'resta' THEN -m.valor ELSE 0 END AS valor_natillera,
+               CASE a.afecta_saldo_natillera WHEN 'suma' THEN ABS(m.valor) WHEN 'resta' THEN -ABS(m.valor) ELSE 0 END AS valor_natillera,
                a.es_prestamo, a.es_pago_prestamo, a.es_pago_interes, a.es_polla, a.es_rifa
         FROM movimientos m
         JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
@@ -248,14 +248,14 @@ $movimientosStmt = $pdo->prepare("
         SELECT mov_filtrado.*,
                CASE WHEN mov_filtrado.es_polla = 1 THEN 0 ELSE
                     CASE mov_filtrado.afecta_saldo_socio
-                        WHEN 'suma' THEN mov_filtrado.valor
-                        WHEN 'resta' THEN -mov_filtrado.valor
+                        WHEN 'suma' THEN ABS(mov_filtrado.valor)
+                        WHEN 'resta' THEN -ABS(mov_filtrado.valor)
                         ELSE 0
                     END
                END AS valor_socio,
                CASE mov_filtrado.afecta_saldo_natillera
-                    WHEN 'suma' THEN mov_filtrado.valor
-                    WHEN 'resta' THEN -mov_filtrado.valor
+                    WHEN 'suma' THEN ABS(mov_filtrado.valor)
+                    WHEN 'resta' THEN -ABS(mov_filtrado.valor)
                     ELSE 0 END AS valor_natillera
         FROM mov_filtrado
     ), calculado AS (
@@ -269,8 +269,8 @@ $movimientosStmt = $pdo->prepare("
                         SUM(mov_signado.valor_natillera) OVER (ORDER BY mov_signado.fecha, mov_signado.id_movimiento ROWS UNBOUNDED PRECEDING)
                     ELSE
                         SUM(CASE mov_signado.afecta_saldo_socio
-                                WHEN 'suma' THEN mov_signado.valor
-                                WHEN 'resta' THEN -mov_signado.valor
+                                WHEN 'suma' THEN ABS(mov_signado.valor)
+                                WHEN 'resta' THEN -ABS(mov_signado.valor)
                                 ELSE 0
                             END) OVER (ORDER BY mov_signado.fecha, mov_signado.id_movimiento ROWS UNBOUNDED PRECEDING)
                END AS saldo_general

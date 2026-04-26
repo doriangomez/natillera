@@ -38,19 +38,20 @@ foreach ($movs as &$m) {
     $reglaSocio = normalizarReglaAfectacion($m['afecta_saldo_socio'] ?? 'neutral');
     $afectaSocio = $m['es_polla'] ? 'neutral' : $reglaSocio;
     $valorSocio = 0;
+    $valorMovimiento = abs((float) ($m['valor'] ?? 0));
     if ($afectaSocio === 'suma') {
-        $valorSocio = $m['valor'];
+        $valorSocio = $valorMovimiento;
     } elseif ($afectaSocio === 'resta') {
-        $valorSocio = -$m['valor'];
+        $valorSocio = -$valorMovimiento;
     }
     $m['valor_socio'] = $valorSocio;
 
     $reglaNatillera = normalizarReglaAfectacion($m['afecta_saldo_natillera'] ?? 'neutral');
     $valorNatillera = 0;
     if ($reglaNatillera === 'suma') {
-        $valorNatillera = $m['valor'];
+        $valorNatillera = $valorMovimiento;
     } elseif ($reglaNatillera === 'resta') {
-        $valorNatillera = -$m['valor'];
+        $valorNatillera = -$valorMovimiento;
     }
     $m['valor_natillera'] = $valorNatillera;
 
