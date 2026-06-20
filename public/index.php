@@ -81,6 +81,7 @@ $estadoResultados = [
         'intereses' => 0.0,
         'pollas' => 0.0,
         'rifas' => 0.0,
+        'capital_recuperado' => 0.0,
         'otros' => 0.0,
     ],
     'egresos' => [
@@ -126,6 +127,10 @@ foreach ($movimientosContables as $mov) {
             $estadoResultados['ingresos']['intereses'] += $valorAbsoluto;
             continue;
         }
+        if ((int) $mov['es_pago_prestamo'] === 1 && (float) $mov['valor_socio'] !== 0.0) {
+            $estadoResultados['ingresos']['capital_recuperado'] += $valorAbsoluto;
+            continue;
+        }
 
         if ($actividad === 'natillera'
             && (int) $mov['es_prestamo'] === 0
@@ -168,19 +173,13 @@ $totalCuotas = $estadoResultados['ingresos']['cuotas'];
 $totalInteresesPrestamo = $estadoResultados['ingresos']['intereses'];
 $totalPollas = $estadoResultados['ingresos']['pollas'];
 $totalRifasIngresos = $estadoResultados['ingresos']['rifas'];
+$totalPrestamoRecuperado = $estadoResultados['ingresos']['capital_recuperado'];
 $otrosIngresos = $estadoResultados['ingresos']['otros'];
 
 $totalPrestado = $estadoResultados['egresos']['prestamos'];
 $totalPremiosRifas = $estadoResultados['egresos']['premios_rifas'];
 $totalGastos = $estadoResultados['egresos']['gastos'];
 $otrosEgresos = $estadoResultados['egresos']['otros'];
-
-$totalPrestamoRecuperado = 0.0;
-foreach ($movimientosContables as $mov) {
-    if ((int) $mov['es_pago_prestamo'] === 1 && (float) $mov['valor_socio'] !== 0.0 && (float) $mov['valor_natillera'] > 0) {
-        $totalPrestamoRecuperado += (float) $mov['valor_natillera'];
-    }
-}
 
 $resultadoNeto = $totalIngresos - $totalEgresos;
 $saldoNatilleraGuardado = getSaldoNatillera($pdo);
@@ -192,12 +191,13 @@ foreach ($flujoActividades as $totalesActividad) {
 }
 $validacionActividad = abs($resultadoPorActividadSuma - $resultadoNeto) < 0.01;
 
-$chartLabels = ['Cuotas', 'Pollas', 'Rifas (ingresos)', 'Intereses', 'Premios rifas (egreso)', 'Otros ingresos'];
+$chartLabels = ['Cuotas', 'Pollas', 'Rifas (ingresos)', 'Intereses', 'Capital recuperado', 'Premios rifas (egreso)', 'Otros ingresos'];
 $chartDataset = [
     $totalCuotas,
     $totalPollas,
     $totalRifasIngresos,
     $totalInteresesPrestamo,
+    $totalPrestamoRecuperado,
     -$totalPremiosRifas,
     $otrosIngresos,
 ];
@@ -516,6 +516,7 @@ foreach ($movimientos as $movimientoConsolidado) {
                     <ul class="list-unstyled mb-3 small">
                         <li>Cuotas acumuladas: <strong>$<?php echo number_format($totalCuotas,0,',','.'); ?></strong></li>
                         <li>Intereses préstamos: <strong>$<?php echo number_format($totalInteresesPrestamo,0,',','.'); ?></strong></li>
+                        <li>Capital recuperado: <strong>$<?php echo number_format($totalPrestamoRecuperado,0,',','.'); ?></strong></li>
                         <li>Ingresos de pollas: <strong>$<?php echo number_format($totalPollas,0,',','.'); ?></strong></li>
                         <li>Ingresos de rifas: <strong>$<?php echo number_format($totalRifasIngresos,0,',','.'); ?></strong></li>
                         <li>Otros ingresos: <strong>$<?php echo number_format($otrosIngresos,0,',','.'); ?></strong></li>
@@ -556,7 +557,12 @@ foreach ($movimientos as $movimientoConsolidado) {
                                         $nombreActividadLabel = ucfirst($nombreActividad);
                                     ?>
                                     <tr>
-                                        <td><?php echo clean($nombreActividadLabel); ?></td>
+                                        <td>
+                                            <?php echo clean($nombreActividadLabel); ?>
+                                            <?php if ($nombreActividad === 'prestamos'): ?>
+                                                <div class="small text-muted">Intereses: $<?php echo number_format($totalInteresesPrestamo,0,',','.'); ?> · Capital recuperado: $<?php echo number_format($totalPrestamoRecuperado,0,',','.'); ?></div>
+                                            <?php endif; ?>
+                                        </td>
                                         <td class="text-end">$<?php echo number_format($totalesActividad['ingresos'],0,',','.'); ?></td>
                                         <td class="text-end">$<?php echo number_format($totalesActividad['egresos'],0,',','.'); ?></td>
                                         <td class="text-end <?php echo $resultadoActividad >= 0 ? 'text-success' : 'text-danger'; ?>">$<?php echo number_format($resultadoActividad,0,',','.'); ?></td>
@@ -565,7 +571,7 @@ foreach ($movimientos as $movimientoConsolidado) {
                             </tbody>
                         </table>
                     </div>
-                    <p class="small text-muted mt-2 mb-0"><i class="bi bi-info-circle"></i> La fila <strong>Préstamos</strong> agrupa los ingresos por intereses y los pagos a capital recuperado; el Estado de resultados los muestra separados para facilitar la lectura.</p>
+                    <p class="small text-muted mt-2 mb-0"><i class="bi bi-info-circle"></i> La fila <strong>Préstamos</strong> conserva el total general de esa actividad y muestra el desglose visible de intereses y capital recuperado para compararlo con el Estado de resultados y el detalle individual.</p>
                 </div>
             </div>
         </div>
