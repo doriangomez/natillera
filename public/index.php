@@ -245,12 +245,16 @@ $detalleActividadesStmt = $pdo->query("
             WHEN a.afecta_saldo_natillera = 'resta' THEN ABS(m.valor)
             ELSE 0
         END), 0) AS egresos,
-        COUNT(m.id_movimiento) AS movimientos
+        COUNT(m.id_movimiento) AS movimientos,
+        COALESCE(SUM(CASE
+            WHEN a.afecta_saldo_natillera IN ('suma', 'resta') THEN ABS(m.valor)
+            ELSE 0
+        END), 0) AS total_movimiento
     FROM actividades_maestro a
     LEFT JOIN movimientos m ON m.id_actividad = a.id_actividad
     WHERE a.activo = 1
-    GROUP BY a.id_actividad, a.nombre_actividad
-    ORDER BY (ingresos + egresos) DESC, a.nombre_actividad ASC
+    GROUP BY a.id_actividad, a.nombre_actividad, a.afecta_saldo_natillera
+    ORDER BY total_movimiento DESC, a.nombre_actividad ASC
 ");
 $detalleActividades = $detalleActividadesStmt->fetchAll(PDO::FETCH_ASSOC);
 
