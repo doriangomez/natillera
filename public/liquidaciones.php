@@ -119,35 +119,95 @@ if ($editarId > 0) {
 
         <?php if ($resultado): ?>
             <hr>
-            <h5><?php echo clean($socioSeleccionado['nombre_completo']); ?></h5>
-            <div class="table-responsive">
+            <?php
+            $identificacionSocio = $socioSeleccionado['id_interno'] !== null && $socioSeleccionado['id_interno'] !== ''
+                ? str_pad((string) $socioSeleccionado['id_interno'], 2, '0', STR_PAD_LEFT)
+                : (string) $socioSeleccionado['id_socio'];
+            ?>
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                <div>
+                    <h5 class="mb-1">Tirilla de preliquidación</h5>
+                    <div class="fw-semibold"><?php echo clean($socioSeleccionado['nombre_completo']); ?></div>
+                    <div class="text-muted small">Identificación: <?php echo clean($identificacionSocio); ?></div>
+                </div>
+                <div class="text-muted small text-md-end">
+                    Fecha y hora: <?php echo clean($resultado['fecha_preliquidacion']); ?>
+                </div>
+            </div>
+
+            <?php if ($resultado['deficit'] > 0): ?>
+                <div class="alert alert-warning">
+                    <strong>El saldo del socio no cubre la totalidad de la deuda.</strong>
+                    El déficit restante deberá ser gestionado manualmente en el módulo de préstamos.
+                </div>
+            <?php endif; ?>
+
+            <div class="table-responsive mb-3">
                 <table class="table table-sm table-bordered align-middle">
                     <tbody>
-                    <tr><th>Saldo base socio</th><td>$<?php echo number_format($resultado['saldo_base'], 0, ',', '.'); ?></td></tr>
-                    <tr><th>Pollas (informativo, no retornable)</th><td>$<?php echo number_format($resultado['valor_pollas'], 0, ',', '.'); ?></td></tr>
-                    <tr><th>(-) Préstamos vigentes</th><td>$<?php echo number_format($resultado['valor_prestamos'], 0, ',', '.'); ?></td></tr>
-                    <tr><th>= Liquidación bruta</th><td>$<?php echo number_format($resultado['valor_bruto'], 0, ',', '.'); ?></td></tr>
-                    <tr><th>(-) Cuota administración</th><td>$<?php echo number_format($resultado['valor_cuota_manejo'], 0, ',', '.'); ?></td></tr>
-                    <tr class="table-light"><th>Valor neto a entregar</th><td class="fw-bold"><?php echo '$' . number_format($resultado['valor_neto'], 0, ',', '.'); ?></td></tr>
+                    <tr><th>Saldo base</th><td>$<?php echo number_format($resultado['saldo_base'], 0, ',', '.'); ?></td></tr>
+                    <tr><th>Total préstamos</th><td>$<?php echo number_format($resultado['valor_prestamos'], 0, ',', '.'); ?></td></tr>
+                    <tr><th>Valor aplicado a la deuda</th><td>$<?php echo number_format($resultado['valor_aplicado_deuda'], 0, ',', '.'); ?></td></tr>
+                    <?php if ($resultado['deficit'] > 0): ?>
+                        <tr class="table-warning"><th>Déficit restante</th><td class="fw-bold">$<?php echo number_format($resultado['deficit'], 0, ',', '.'); ?></td></tr>
+                    <?php endif; ?>
+                    <tr><th>Valor de pollas informativo</th><td>$<?php echo number_format($resultado['valor_pollas'], 0, ',', '.'); ?></td></tr>
+                    <tr><th>Cuota de administración</th><td>$<?php echo number_format($resultado['valor_cuota_manejo'], 0, ',', '.'); ?></td></tr>
+                    <tr><th>Valor bruto</th><td>$<?php echo number_format($resultado['valor_bruto'], 0, ',', '.'); ?></td></tr>
+                    <tr class="table-light"><th>Valor neto a entregar al socio</th><td class="fw-bold">$<?php echo number_format($resultado['valor_neto'], 0, ',', '.'); ?></td></tr>
                     </tbody>
                 </table>
             </div>
-            <p class="small text-muted mb-2">Fórmula: neto = (saldo base - préstamos) - cuota administración. Las pollas no se incluyen en la devolución.</p>
-            <?php if ($resultado['valor_cuota_manejo'] > 0): ?>
+
+            <h6>Relación de préstamos descontados</h6>
+            <div class="table-responsive mb-3">
+                <table class="table table-sm table-striped table-bordered align-middle">
+                    <thead>
+                    <tr>
+                        <th>ID préstamo</th>
+                        <th>Estado</th>
+                        <th class="text-end">Capital pendiente</th>
+                        <th class="text-end">Intereses pendientes</th>
+                        <th class="text-end">Total pendiente</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($resultado['prestamos_descontados'])): ?>
+                        <tr><td colspan="5" class="text-center text-muted">No hay préstamos activos o en mora para descontar.</td></tr>
+                    <?php else: ?>
+                        <?php foreach ($resultado['prestamos_descontados'] as $prestamo): ?>
+                            <tr>
+                                <td><?php echo (int) $prestamo['id_prestamo']; ?></td>
+                                <td><?php echo clean($prestamo['estado']); ?></td>
+                                <td class="text-end">$<?php echo number_format($prestamo['capital_pendiente'], 0, ',', '.'); ?></td>
+                                <td class="text-end">$<?php echo number_format($prestamo['intereses_pendientes'], 0, ',', '.'); ?></td>
+                                <td class="text-end fw-semibold">$<?php echo number_format($prestamo['total_pendiente'], 0, ',', '.'); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <p class="small text-muted mb-2">Fórmula: neto = (saldo base - préstamos) - cuota administración. Las pollas no se incluyen en la devolución. El déficit es informativo y no genera abonos automáticos a préstamos.</p>
+            <?php if ($resultado['valor_cuota_manejo'] > 0 && $resultado['deficit'] <= 0): ?>
                 <div class="alert alert-info py-2">
                     Se entregan <strong>$<?php echo number_format((float) $resultado['valor_neto'], 0, ',', '.'); ?></strong> al socio y
                     <strong>$<?php echo number_format((float) $resultado['valor_cuota_manejo'], 0, ',', '.'); ?></strong> pasan a administración.
                 </div>
             <?php endif; ?>
-            <form method="post" action="../actions/liquidaciones_save.php" onsubmit="return confirm('¿Registrar definitivamente esta liquidación?');">
+            <div class="alert alert-secondary py-2">¿Confirma registrar esta liquidación?</div>
+            <form method="post" action="../actions/liquidaciones_save.php" onsubmit="return confirm('¿Confirma registrar esta liquidación?');">
                 <input type="hidden" name="accion" value="crear">
+                <input type="hidden" name="confirmar_liquidacion" value="1">
                 <input type="hidden" name="tipo_liquidacion" value="<?php echo clean($tipoLiquidacion); ?>">
                 <input type="hidden" name="id_socio" value="<?php echo (int) $idSocio; ?>">
                 <input type="hidden" name="cuota_manejo" value="<?php echo number_format($cuotaManejo, 2, '.', ''); ?>">
                 <input type="hidden" name="id_actividad_liquidacion" value="<?php echo (int) $idActividadLiquidacion; ?>">
                 <input type="hidden" name="id_actividad_retencion" value="<?php echo (int) $idActividadRetencion; ?>">
                 <input type="hidden" name="observaciones" value="Liquidación <?php echo clean($tipoLiquidacion); ?> desde módulo central.">
-                <button class="btn btn-success" type="submit"><i class="bi bi-check-circle"></i> Registrar liquidación</button>
+                <button class="btn btn-success" type="submit"><i class="bi bi-check-circle"></i> Confirmar</button>
+                <a class="btn btn-outline-secondary" href="liquidaciones.php">Cancelar</a>
             </form>
         <?php endif; ?>
     </div>

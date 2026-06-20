@@ -237,6 +237,8 @@ function asegurarEsquemaLiquidaciones(PDO $pdo): void {
         valor_pollas DECIMAL(12,2) DEFAULT 0,
         valor_prestamos DECIMAL(12,2) DEFAULT 0,
         valor_cuota_manejo DECIMAL(12,2) DEFAULT 0,
+        valor_aplicado_deuda DECIMAL(12,2) DEFAULT 0,
+        deficit DECIMAL(12,2) DEFAULT 0,
         valor_bruto DECIMAL(12,2) DEFAULT 0,
         valor_neto DECIMAL(12,2) DEFAULT 0,
         actividad_liquidacion_id INT DEFAULT NULL,
@@ -246,6 +248,8 @@ function asegurarEsquemaLiquidaciones(PDO $pdo): void {
         movimiento_cuota_id INT DEFAULT NULL,
         movimiento_fondo_id INT DEFAULT NULL,
         movimientos_generados TEXT DEFAULT NULL,
+        detalle_preliquidacion TEXT DEFAULT NULL,
+        fecha_preliquidacion DATETIME DEFAULT NULL,
         observaciones TEXT,
         fecha DATE NOT NULL,
         usuario_id VARCHAR(50) DEFAULT NULL,
@@ -258,9 +262,18 @@ function asegurarEsquemaLiquidaciones(PDO $pdo): void {
     $pdo->exec($sql);
 
     try {
-        $columnaMovimientos = $pdo->query("SHOW COLUMNS FROM liquidaciones LIKE 'movimientos_generados'");
-        if ($columnaMovimientos && $columnaMovimientos->rowCount() === 0) {
-            $pdo->exec("ALTER TABLE liquidaciones ADD COLUMN movimientos_generados TEXT DEFAULT NULL AFTER movimiento_fondo_id");
+        $columnas = [
+            'movimientos_generados' => "ALTER TABLE liquidaciones ADD COLUMN movimientos_generados TEXT DEFAULT NULL AFTER movimiento_fondo_id",
+            'detalle_preliquidacion' => "ALTER TABLE liquidaciones ADD COLUMN detalle_preliquidacion TEXT DEFAULT NULL AFTER movimientos_generados",
+            'fecha_preliquidacion' => "ALTER TABLE liquidaciones ADD COLUMN fecha_preliquidacion DATETIME DEFAULT NULL AFTER detalle_preliquidacion",
+            'valor_aplicado_deuda' => "ALTER TABLE liquidaciones ADD COLUMN valor_aplicado_deuda DECIMAL(12,2) DEFAULT 0 AFTER valor_cuota_manejo",
+            'deficit' => "ALTER TABLE liquidaciones ADD COLUMN deficit DECIMAL(12,2) DEFAULT 0 AFTER valor_aplicado_deuda",
+        ];
+        foreach ($columnas as $columna => $alterSql) {
+            $resultado = $pdo->query("SHOW COLUMNS FROM liquidaciones LIKE '" . $columna . "'");
+            if ($resultado && $resultado->rowCount() === 0) {
+                $pdo->exec($alterSql);
+            }
         }
     } catch (Exception $e) {
         // Continuar sin bloquear el módulo si no es posible alterar estructura.
@@ -280,7 +293,7 @@ function obtenerTiposLiquidacion(): array {
 function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo): ?array {
     asegurarEsquemaLiquidaciones($pdo);
 
-    $stmtSocio = $pdo->prepare('SELECT id_socio, nombre_completo, saldo_socio, activo FROM socios WHERE id_socio = :id');
+    $stmtSocio = $pdo->prepare('SELECT id_socio, id_interno, nombre_completo, saldo_socio, activo FROM socios WHERE id_socio = :id');
     $stmtSocio->execute([':id' => $idSocio]);
     $socio = $stmtSocio->fetch(PDO::FETCH_ASSOC);
     if (!$socio || (int) ($socio['activo'] ?? 0) !== 1) {
@@ -297,25 +310,48 @@ function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo): ?
     $valorPollas = (float) $stmtPollas->fetchColumn();
 
     $stmtPrestamos = $pdo->prepare(
-        "SELECT COALESCE(SUM(saldo_capital_actual),0) + COALESCE(SUM(saldo_intereses_actual),0)
+        "SELECT id_prestamo, estado, saldo_capital_actual, saldo_intereses_actual
          FROM prestamos
-         WHERE id_socio = :id AND estado = 'vigente'"
+         WHERE id_socio = :id AND estado IN ('Activo','En mora')
+         ORDER BY id_prestamo ASC"
     );
     $stmtPrestamos->execute([':id' => $idSocio]);
-    $valorPrestamos = (float) $stmtPrestamos->fetchColumn();
+    $prestamos = [];
+    $valorPrestamos = 0.0;
+    foreach ($stmtPrestamos->fetchAll(PDO::FETCH_ASSOC) as $prestamo) {
+        $capital = (float) ($prestamo['saldo_capital_actual'] ?? 0);
+        $intereses = (float) ($prestamo['saldo_intereses_actual'] ?? 0);
+        $total = $capital + $intereses;
+        $prestamos[] = [
+            'id_prestamo' => (int) $prestamo['id_prestamo'],
+            'estado' => (string) $prestamo['estado'],
+            'capital_pendiente' => $capital,
+            'intereses_pendientes' => $intereses,
+            'total_pendiente' => $total,
+        ];
+        $valorPrestamos += $total;
+    }
 
     $saldoBase = (float) ($socio['saldo_socio'] ?? 0);
+    $cuotaManejo = max(0, $cuotaManejo);
+    $valorAplicadoDeuda = min($saldoBase, $valorPrestamos);
+    $deficit = max(0, $valorPrestamos - $saldoBase);
     $valorBruto = max(0, $saldoBase - $valorPrestamos);
-    $valorNeto = $valorBruto - max(0, $cuotaManejo);
+    $valorNeto = $deficit > 0 ? 0.0 : ($valorBruto - $cuotaManejo);
+    $fechaPreliquidacion = date('Y-m-d H:i:s');
 
     return [
         'socio' => $socio,
         'saldo_base' => $saldoBase,
         'valor_pollas' => $valorPollas,
         'valor_prestamos' => $valorPrestamos,
-        'valor_cuota_manejo' => max(0, $cuotaManejo),
+        'prestamos_descontados' => $prestamos,
+        'valor_cuota_manejo' => $cuotaManejo,
+        'valor_aplicado_deuda' => $valorAplicadoDeuda,
+        'deficit' => $deficit,
         'valor_bruto' => $valorBruto,
         'valor_neto' => $valorNeto,
+        'fecha_preliquidacion' => $fechaPreliquidacion,
     ];
 }
 
