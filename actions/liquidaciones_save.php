@@ -26,6 +26,7 @@ function borrarMovimientoSiExiste(PDO $pdo, ?int $idMovimiento): void {
 
 function extraerIdsMovimientosLiquidacion(array $liquidacion): array {
     $ids = [
+        isset($liquidacion['id_movimiento_compensacion']) ? (int) $liquidacion['id_movimiento_compensacion'] : 0,
         isset($liquidacion['movimiento_liquidacion_id']) ? (int) $liquidacion['movimiento_liquidacion_id'] : 0,
         isset($liquidacion['movimiento_cuota_id']) ? (int) $liquidacion['movimiento_cuota_id'] : 0,
         isset($liquidacion['movimiento_fondo_id']) ? (int) $liquidacion['movimiento_fondo_id'] : 0,
@@ -75,6 +76,14 @@ if ($accion === 'anular') {
 
         $pdo->prepare('UPDATE liquidaciones SET estado = "anulada" WHERE id = :id')->execute([':id' => $idLiquidacion]);
         recalcularSaldosDesdeMovimientos($pdo);
+        $idsPrestamos = json_decode((string) ($liq['ids_prestamos_afectados'] ?? '[]'), true);
+        if (is_array($idsPrestamos)) {
+            foreach (array_unique(array_map('intval', $idsPrestamos)) as $idPrestamoAfectado) {
+                if ($idPrestamoAfectado > 0) {
+                    recalcularPrestamoDesdeMovimientos($pdo, $idPrestamoAfectado);
+                }
+            }
+        }
         $pdo->commit();
         $_SESSION['exito'] = 'Liquidación anulada y movimientos revertidos correctamente.';
     } catch (Throwable $e) {
@@ -186,11 +195,11 @@ $mes = (int) date('n');
 $quincena = (int) ((int) date('j') <= 15 ? 1 : 2);
 $usuario = $_SESSION['usuario'] ?? null;
 
-$insertMov = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo)
-VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_actividad, :motivo, :valor, :medio, :ingreso, :egreso, :obs, :usuario, NOW(), :modulo)');
+$insertMov = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_prestamo, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo)
+VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_prestamo, :id_actividad, :motivo, :valor, :medio, :ingreso, :egreso, :obs, :usuario, NOW(), :modulo)');
 
-$insertLiq = $pdo->prepare('INSERT INTO liquidaciones (socio_id, tipo_liquidacion, saldo_base, valor_pollas, valor_prestamos, valor_cuota_manejo, valor_aplicado_deuda, deficit, valor_bruto, valor_neto, actividad_liquidacion_id, actividad_cuota_id, actividad_fondo_id, movimiento_liquidacion_id, movimiento_cuota_id, movimiento_fondo_id, movimientos_generados, detalle_preliquidacion, fecha_preliquidacion, observaciones, fecha, usuario_id, estado)
-VALUES (:socio, :tipo, :saldo_base, :pollas, :prestamos, :cuota, :aplicado_deuda, :deficit, :bruto, :neto, :act_liq, :act_cuota, :act_fondo, :mov_liq, :mov_cuota, :mov_fondo, :movs_json, :detalle_preliquidacion, :fecha_preliquidacion, :obs, :fecha, :usuario, :estado)');
+$insertLiq = $pdo->prepare('INSERT INTO liquidaciones (socio_id, tipo_liquidacion, saldo_base, valor_pollas, valor_prestamos, valor_cuota_manejo, valor_aplicado_deuda, deficit, intereses_cubiertos, capital_cubierto, valor_bruto, valor_neto, actividad_liquidacion_id, actividad_cuota_id, actividad_fondo_id, movimiento_liquidacion_id, movimiento_cuota_id, movimiento_fondo_id, id_movimiento_compensacion, ids_prestamos_afectados, movimientos_generados, detalle_preliquidacion, fecha_preliquidacion, observaciones, fecha, usuario_id, estado)
+VALUES (:socio, :tipo, :saldo_base, :pollas, :prestamos, :cuota, :aplicado_deuda, :deficit, :intereses_cubiertos, :capital_cubierto, :bruto, :neto, :act_liq, :act_cuota, :act_fondo, :mov_liq, :mov_cuota, :mov_fondo, :mov_comp, :ids_prestamos, :movs_json, :detalle_preliquidacion, :fecha_preliquidacion, :obs, :fecha, :usuario, :estado)');
 
 $pdo->beginTransaction();
 try {
@@ -202,7 +211,53 @@ try {
     }
 
     $movPrincipalId = null;
+    $movCompensacionId = null;
+    $idsPrestamosAfectados = [];
+    $interesesCubiertos = 0.0;
+    $capitalCubierto = 0.0;
     $movimientosGenerados = [];
+
+    if ((float) $calculo['valor_aplicado_deuda'] > 0) {
+        $actividadCompensacion = obtenerActividadCompensacionLiquidacionPrestamo($pdo);
+        $saldoDisponibleDeuda = (float) $calculo['valor_aplicado_deuda'];
+        foreach ($calculo['prestamos_descontados'] as $prestamo) {
+            if ($saldoDisponibleDeuda <= 0.01) {
+                break;
+            }
+            $interesPendiente = (float) $prestamo['intereses_pendientes'];
+            $capitalPendiente = (float) $prestamo['capital_pendiente'];
+            $interesCubierto = min($saldoDisponibleDeuda, $interesPendiente);
+            $saldoDisponibleDeuda -= $interesCubierto;
+            $capitalCubiertoPrestamo = min($saldoDisponibleDeuda, $capitalPendiente);
+            $saldoDisponibleDeuda -= $capitalCubiertoPrestamo;
+            $totalCubiertoPrestamo = $interesCubierto + $capitalCubiertoPrestamo;
+            if ($totalCubiertoPrestamo <= 0) {
+                continue;
+            }
+
+            $nuevoInteres = max(0, $interesPendiente - $interesCubierto);
+            $nuevoCapital = max(0, $capitalPendiente - $capitalCubiertoPrestamo);
+            $nuevoEstado = $nuevoCapital <= 0.01 && $nuevoInteres <= 0.01 ? 'Finalizado' : ($nuevoInteres > 0.01 ? 'En mora' : 'Activo');
+            $idPrestamo = (int) $prestamo['id_prestamo'];
+
+            $insertMov->execute([
+                ':fecha' => $fecha, ':anio' => $anio, ':mes' => $mes, ':quincena' => $quincena,
+                ':id_socio' => $idSocio, ':id_prestamo' => $idPrestamo, ':id_actividad' => (int) $actividadCompensacion['id_actividad'],
+                ':motivo' => 'Compensación liquidación a préstamo #' . $idPrestamo . ' - ' . $calculo['socio']['nombre_completo'],
+                ':valor' => -abs($totalCubiertoPrestamo), ':medio' => 'Liquidaciones', ':ingreso' => 0, ':egreso' => 1,
+                ':obs' => 'Compensación automática. Intereses cubiertos: ' . $interesCubierto . '; capital cubierto: ' . $capitalCubiertoPrestamo . '.',
+                ':usuario' => $usuario, ':modulo' => 'liquidaciones',
+            ]);
+            $idMovComp = (int) $pdo->lastInsertId();
+            $movCompensacionId = $movCompensacionId ?: $idMovComp;
+            $idsPrestamosAfectados[] = $idPrestamo;
+            $interesesCubiertos += $interesCubierto;
+            $capitalCubierto += $capitalCubiertoPrestamo;
+            $pdo->prepare('UPDATE prestamos SET saldo_capital_actual = :cap, saldo_intereses_actual = :int, estado = :estado WHERE id_prestamo = :id')
+                ->execute([':cap' => $nuevoCapital, ':int' => $nuevoInteres, ':estado' => $nuevoEstado, ':id' => $idPrestamo]);
+            $movimientosGenerados[] = ['tipo' => 'compensacion_prestamo', 'id_movimiento' => $idMovComp, 'id_prestamo' => $idPrestamo, 'valor' => $totalCubiertoPrestamo, 'intereses_cubiertos' => $interesCubierto, 'capital_cubierto' => $capitalCubiertoPrestamo];
+        }
+    }
     if ((float) $calculo['valor_neto'] > 0) {
         $insertMov->execute([
             ':fecha' => $fecha,
@@ -210,6 +265,7 @@ try {
             ':mes' => $mes,
             ':quincena' => $quincena,
             ':id_socio' => $idSocio,
+            ':id_prestamo' => null,
             ':id_actividad' => $idActividadLiquidacion,
             ':motivo' => 'Liquidación ' . $tipoLiquidacion . ' - ' . $calculo['socio']['nombre_completo'],
             ':valor' => -abs((float) $calculo['valor_neto']),
@@ -237,6 +293,7 @@ try {
             ':mes' => $mes,
             ':quincena' => $quincena,
             ':id_socio' => $idSocio,
+            ':id_prestamo' => null,
             ':id_actividad' => $idActividadRetencion,
             ':motivo' => 'Retención administración liquidación - ' . $calculo['socio']['nombre_completo'],
             ':valor' => -abs($cuotaManejo),
@@ -265,6 +322,8 @@ try {
         ':cuota' => $calculo['valor_cuota_manejo'],
         ':aplicado_deuda' => $calculo['valor_aplicado_deuda'],
         ':deficit' => $calculo['deficit'],
+        ':intereses_cubiertos' => $interesesCubiertos,
+        ':capital_cubierto' => $capitalCubierto,
         ':bruto' => $calculo['valor_bruto'],
         ':neto' => $calculo['valor_neto'],
         ':act_liq' => $idActividadLiquidacion,
@@ -273,6 +332,8 @@ try {
         ':mov_liq' => $movPrincipalId,
         ':mov_cuota' => $movRetencionId,
         ':mov_fondo' => null,
+        ':mov_comp' => $movCompensacionId,
+        ':ids_prestamos' => json_encode(array_values(array_unique($idsPrestamosAfectados))),
         ':movs_json' => json_encode($movimientosGenerados),
         ':detalle_preliquidacion' => json_encode([
             'socio' => $calculo['socio'],
@@ -281,6 +342,9 @@ try {
             'prestamos_descontados' => $calculo['prestamos_descontados'],
             'valor_prestamos' => $calculo['valor_prestamos'],
             'valor_aplicado_deuda' => $calculo['valor_aplicado_deuda'],
+            'intereses_cubiertos' => $interesesCubiertos,
+            'capital_cubierto' => $capitalCubierto,
+            'ids_prestamos_afectados' => array_values(array_unique($idsPrestamosAfectados)),
             'deficit' => $calculo['deficit'],
             'valor_cuota_manejo' => $calculo['valor_cuota_manejo'],
             'valor_bruto' => $calculo['valor_bruto'],
