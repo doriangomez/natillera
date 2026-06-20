@@ -157,6 +157,7 @@ foreach ($movimientosContables as $mov) {
 }
 
 $resultadoNeto = $totalIngresos - $totalEgresos;
+$saldoNatilleraGuardado = getSaldoNatillera($pdo);
 $validacionSaldo = abs($saldoNatillera - $resultadoNeto) < 0.01;
 
 $resultadoPorActividadSuma = 0.0;
@@ -333,6 +334,9 @@ $movimientos = $movimientosStmt->fetchAll();
                     <button class="btn btn-link p-0 text-decoration-none" type="button" data-bs-toggle="collapse" data-bs-target="#saldoNatilleraDetalle" aria-expanded="false" aria-controls="saldoNatilleraDetalle">
                         <h2 class="display-6 mb-0 text-start">$<?php echo number_format($saldoNatillera, 0, ',', '.'); ?></h2>
                     </button>
+                    <?php if ($isAdmin): ?>
+                        <div class="small text-muted mt-2">Debug saldo guardado: <strong>$<?php echo number_format($saldoNatilleraGuardado, 0, ',', '.'); ?></strong></div>
+                    <?php endif; ?>
                     <div class="collapse mt-2" id="saldoNatilleraDetalle">
                         <div class="small text-muted">Fórmula: <strong>Saldo = Total ingresos - Total egresos</strong></div>
                         <div class="small text-muted">$<?php echo number_format($totalIngresos, 0, ',', '.'); ?> - $<?php echo number_format($totalEgresos, 0, ',', '.'); ?> = $<?php echo number_format($resultadoNeto, 0, ',', '.'); ?></div>
