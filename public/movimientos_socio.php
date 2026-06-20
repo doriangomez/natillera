@@ -121,11 +121,10 @@ unset($m);
                 <th>Socio</th>
                 <th>Actividad</th>
                 <th>Medio</th>
-                <th>Valor</th>
-                <th>Ingreso</th>
-                <th>Egreso</th>
-                <th>Afectación saldo socio</th>
-                <th>Afectación natillera</th>
+                <th>Tipo</th>
+                <th class="text-end">Valor base</th>
+                <th class="text-end">Impacto socio</th>
+                <th class="text-end">Impacto natillera</th>
                 <th>Observaciones</th>
             </tr>
         </thead>
@@ -143,22 +142,26 @@ unset($m);
                     $claseNatillera = 'bg-secondary-subtle text-secondary';
                     if ($reglaNatillera === 'suma') { $etiquetaNatillera = 'Suma'; $claseNatillera = 'bg-success-subtle text-success'; }
                     if ($reglaNatillera === 'resta') { $etiquetaNatillera = 'Resta'; $claseNatillera = 'bg-danger-subtle text-danger'; }
+
+                    $tipoMovimiento = 'Neutral';
+                    $claseTipo = 'bg-secondary-subtle text-secondary';
+                    if (($m['valor_natillera'] ?? 0) > 0) { $tipoMovimiento = 'Ingreso'; $claseTipo = 'bg-success-subtle text-success'; }
+                    elseif (($m['valor_natillera'] ?? 0) < 0) { $tipoMovimiento = 'Egreso'; $claseTipo = 'bg-danger-subtle text-danger'; }
                 ?>
                 <tr>
                     <td><?php echo $m['fecha']; ?></td>
                     <td><?php echo clean($m['nombre_completo'] ?? 'General'); ?></td>
                     <td><?php echo clean($m['nombre_actividad']); ?></td>
                     <td><?php echo clean($m['medio'] ?: $m['medio_consignacion']); ?></td>
-                    <td>$<?php echo number_format($m['valor'],0,',','.'); ?></td>
-                    <td><?php echo $m['es_ingreso'] ? 'Sí' : ''; ?></td>
-                    <td><?php echo $m['es_egreso'] ? 'Sí' : ''; ?></td>
-                    <td>
-                        <div><span class="badge <?php echo $claseAfectacion; ?>"><?php echo $etiquetaAfectacion; ?></span></div>
-                        <div class="small text-muted">$<?php echo number_format($m['valor_socio'],0,',','.'); ?></div>
+                    <td><span class="badge <?php echo $claseTipo; ?>"><?php echo $tipoMovimiento; ?></span></td>
+                    <td class="text-end">$<?php echo number_format(abs((float) $m['valor']),0,',','.'); ?></td>
+                    <td class="text-end">
+                        <div>$<?php echo number_format($m['valor_socio'],0,',','.'); ?></div>
+                        <div class="small"><span class="badge <?php echo $claseAfectacion; ?>"><?php echo $etiquetaAfectacion; ?></span></div>
                     </td>
-                    <td>
-                        <div><span class="badge <?php echo $claseNatillera; ?>"><?php echo $etiquetaNatillera; ?></span></div>
-                        <div class="small text-muted">$<?php echo number_format($m['valor_natillera'],0,',','.'); ?></div>
+                    <td class="text-end">
+                        <div>$<?php echo number_format($m['valor_natillera'],0,',','.'); ?></div>
+                        <div class="small"><span class="badge <?php echo $claseNatillera; ?>"><?php echo $etiquetaNatillera; ?></span></div>
                     </td>
                     <td class="small text-muted"><?php echo clean($m['observaciones']); ?></td>
                 </tr>

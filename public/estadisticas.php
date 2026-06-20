@@ -21,8 +21,8 @@ $baseWhere = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
 // Ingresos vs egresos por mes
 $sqlBar = "SELECT DATE_FORMAT(m.fecha, '%Y-%m') AS mes,
-    SUM(CASE WHEN m.es_ingreso = 1 THEN m.valor ELSE 0 END) AS ingresos,
-    SUM(CASE WHEN m.es_egreso = 1 THEN m.valor ELSE 0 END) AS egresos
+    SUM(CASE WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor) ELSE 0 END) AS ingresos,
+    SUM(CASE WHEN a.afecta_saldo_natillera = 'resta' THEN ABS(m.valor) ELSE 0 END) AS egresos
     FROM movimientos m
     LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
     $baseWhere
@@ -33,10 +33,10 @@ $stmtBar->execute($params);
 $ingVsEgr = $stmtBar->fetchAll();
 
 // Distribución de ingresos por actividad
-$sqlPie = "SELECT a.nombre_actividad, SUM(m.valor) AS total
+$sqlPie = "SELECT a.nombre_actividad, SUM(ABS(m.valor)) AS total
     FROM movimientos m
     JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
-    WHERE m.es_ingreso = 1 " . ($baseWhere ? 'AND ' . substr($baseWhere, 6) : '') . "
+    WHERE a.afecta_saldo_natillera = 'suma' " . ($baseWhere ? 'AND ' . substr($baseWhere, 6) : '') . "
     GROUP BY a.id_actividad
     ORDER BY total DESC";
 $stmtPie = $pdo->prepare($sqlPie);
@@ -44,10 +44,10 @@ $stmtPie->execute($params);
 $ingresosPorActividad = $stmtPie->fetchAll();
 
 // Distribución de egresos por actividad
-$sqlEgresosActividad = "SELECT a.nombre_actividad, SUM(m.valor) AS total
+$sqlEgresosActividad = "SELECT a.nombre_actividad, SUM(ABS(m.valor)) AS total
     FROM movimientos m
     JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
-    WHERE m.es_egreso = 1 " . ($baseWhere ? 'AND ' . substr($baseWhere, 6) : '') . "
+    WHERE a.afecta_saldo_natillera = 'resta' " . ($baseWhere ? 'AND ' . substr($baseWhere, 6) : '') . "
     GROUP BY a.id_actividad
     ORDER BY total DESC";
 $stmtEgresosActividad = $pdo->prepare($sqlEgresosActividad);
@@ -86,10 +86,11 @@ $prestamoData = $stmtPrestamos->fetch();
 // Movimientos por medio de pago
 $sqlMedios = "SELECT
     COALESCE(mp.nombre, 'Sin medio') AS medio,
-    SUM(CASE WHEN m.es_ingreso = 1 THEN m.valor ELSE 0 END) AS ingresos,
-    SUM(CASE WHEN m.es_egreso = 1 THEN m.valor ELSE 0 END) AS egresos
+    SUM(CASE WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor) ELSE 0 END) AS ingresos,
+    SUM(CASE WHEN a.afecta_saldo_natillera = 'resta' THEN ABS(m.valor) ELSE 0 END) AS egresos
     FROM movimientos m
     LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id
+    LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
     $baseWhere
     GROUP BY medio
     ORDER BY medio";

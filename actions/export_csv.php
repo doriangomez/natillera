@@ -21,7 +21,7 @@ switch ($tipo) {
         if ($fSocio) { $where[] = 'm.id_socio = :s'; $params[':s'] = $fSocio; }
         if ($fDesde) { $where[] = 'm.fecha >= :d'; $params[':d'] = $fDesde; }
         if ($fHasta) { $where[] = 'm.fecha <= :h'; $params[':h'] = $fHasta; }
-        $sql = "SELECT m.fecha, s.nombre_completo, COALESCE(p.nombre_deudor, s.nombre_completo) AS deudor, a.nombre_actividad, COALESCE(mp.nombre, m.medio_consignacion) medio, m.motivo, m.valor, m.es_ingreso, m.es_egreso, m.observaciones
+        $sql = "SELECT m.fecha, s.nombre_completo, COALESCE(p.nombre_deudor, s.nombre_completo) AS deudor, a.nombre_actividad, COALESCE(mp.nombre, m.medio_consignacion) medio, m.motivo, CASE a.afecta_saldo_natillera WHEN 'suma' THEN ABS(m.valor) WHEN 'resta' THEN -ABS(m.valor) ELSE 0 END AS valor_contable, CASE WHEN a.afecta_saldo_natillera = 'suma' THEN 'Ingreso' WHEN a.afecta_saldo_natillera = 'resta' THEN 'Egreso' ELSE 'Neutral' END AS tipo_movimiento, m.observaciones
                 FROM movimientos m
                 LEFT JOIN socios s ON m.id_socio = s.id_socio
                 LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
@@ -32,17 +32,17 @@ switch ($tipo) {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_NUM);
-        generarCSV(['Fecha','Socio','Deudor','Actividad','Medio','Motivo','Valor','Ingreso','Egreso','Observaciones'],$rows);
+        generarCSV(['Fecha','Socio','Deudor','Actividad','Medio','Motivo','Valor contable','Tipo','Observaciones'],$rows);
         break;
     case 'saldos':
         $rows = $pdo->query('SELECT nombre_completo, saldo_socio FROM socios WHERE activo=1')->fetchAll(PDO::FETCH_NUM);
         generarCSV(['Socio','Saldo'],$rows);
         break;
     case 'aportes_socios':
-        $condicionAporte = "m.es_ingreso = 1 AND COALESCE(a.es_prestamo,0) = 0 AND COALESCE(a.es_pago_prestamo,0) = 0 AND COALESCE(a.es_pago_interes,0) = 0 AND COALESCE(a.es_polla,0) = 0";
+        $condicionAporte = "a.afecta_saldo_socio = 'suma' AND COALESCE(a.es_prestamo,0) = 0 AND COALESCE(a.es_pago_prestamo,0) = 0 AND COALESCE(a.es_pago_interes,0) = 0 AND COALESCE(a.es_polla,0) = 0";
         $rows = $pdo->query(
             "SELECT s.id_socio, s.nombre_completo, s.saldo_socio,\n"
-            . "       COALESCE(SUM(CASE WHEN $condicionAporte THEN m.valor ELSE 0 END),0) AS total_aportado,\n"
+            . "       COALESCE(SUM(CASE WHEN $condicionAporte THEN ABS(m.valor) ELSE 0 END),0) AS total_aportado,\n"
             . "       COALESCE(COUNT(DISTINCT CASE WHEN $condicionAporte THEN DATE_FORMAT(m.fecha, '%Y-%m') END),0) AS meses_aporte\n"
             . "FROM socios s\n"
             . "LEFT JOIN movimientos m ON m.id_socio = s.id_socio\n"
@@ -74,7 +74,7 @@ switch ($tipo) {
         generarCSV(['ID','Deudor','Saldo capital','Saldo intereses'],$rows);
         break;
     case 'pyg':
-        $rows = $pdo->query("SELECT a.nombre_actividad, SUM(CASE WHEN m.es_ingreso=1 THEN m.valor ELSE 0 END) ingresos, SUM(CASE WHEN m.es_egreso=1 THEN m.valor ELSE 0 END) egresos FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad GROUP BY a.id_actividad")->fetchAll(PDO::FETCH_NUM);
+        $rows = $pdo->query("SELECT a.nombre_actividad, SUM(CASE WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor) ELSE 0 END) ingresos, SUM(CASE WHEN a.afecta_saldo_natillera = 'resta' THEN ABS(m.valor) ELSE 0 END) egresos FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad GROUP BY a.id_actividad")->fetchAll(PDO::FETCH_NUM);
         generarCSV(['Actividad','Ingresos','Egresos'],$rows);
         break;
     case 'gastos':

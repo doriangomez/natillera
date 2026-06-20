@@ -64,27 +64,77 @@ if ($filtroSocio) { $where[] = 'm.id_socio = :s'; $params[':s'] = $filtroSocio; 
 if ($filtroActividad) { $where[] = 'm.id_actividad = :a'; $params[':a'] = $filtroActividad; }
 if ($filtroFechaIni) { $where[] = 'm.fecha >= :fi'; $params[':fi'] = $filtroFechaIni; }
 if ($filtroFechaFin) { $where[] = 'm.fecha <= :ff'; $params[':ff'] = $filtroFechaFin; }
-if ($filtroTipo === 'ingreso') { $where[] = 'm.es_ingreso = 1'; }
-if ($filtroTipo === 'egreso') { $where[] = 'm.es_egreso = 1'; }
 if ($filtroMedio) { $where[] = 'm.id_medio_pago = :mp'; $params[':mp'] = $filtroMedio; }
 
-$sql = "SELECT m.*, s.nombre_completo, a.nombre_actividad, mp.nombre AS medio_nombre FROM movimientos m
-        LEFT JOIN socios s ON m.id_socio = s.id_socio
-        LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
-        LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id";
-if ($where) {
-    $sql .= ' WHERE ' . implode(' AND ', $where);
+$sqlWhere = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+$sqlWhereTipo = '';
+if ($filtroTipo === 'ingreso') {
+    $sqlWhereTipo = 'WHERE valor_natillera > 0';
+} elseif ($filtroTipo === 'egreso') {
+    $sqlWhereTipo = 'WHERE valor_natillera < 0';
+} elseif ($filtroTipo === 'neutral') {
+    $sqlWhereTipo = 'WHERE valor_natillera = 0';
 }
-$sql .= ' ORDER BY m.id_movimiento DESC LIMIT 200';
+
+$sql = "WITH mov_base AS (
+            SELECT m.*, s.nombre_completo, a.nombre_actividad, a.afecta_saldo_natillera, mp.nombre AS medio_nombre
+            FROM movimientos m
+            LEFT JOIN socios s ON m.id_socio = s.id_socio
+            LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+            LEFT JOIN medios_pago mp ON m.id_medio_pago = mp.id
+            $sqlWhere
+        ), mov_clasificado AS (
+            SELECT mov_base.*,
+                   CASE mov_base.afecta_saldo_natillera
+                       WHEN 'suma' THEN ABS(mov_base.valor)
+                       WHEN 'resta' THEN -ABS(mov_base.valor)
+                       ELSE 0
+                   END AS valor_natillera,
+                   CASE
+                       WHEN mov_base.afecta_saldo_natillera = 'suma' THEN 'Ingreso'
+                       WHEN mov_base.afecta_saldo_natillera = 'resta' THEN 'Egreso'
+                       ELSE 'Neutral'
+                   END AS tipo_movimiento
+            FROM mov_base
+        )
+        SELECT * FROM mov_clasificado
+        $sqlWhereTipo
+        ORDER BY id_movimiento DESC
+        LIMIT 200";
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $movimientos = $stmt->fetchAll();
 
-$totales = ['ingresos'=>0,'egresos'=>0];
+$totales = ['ingresos'=>0,'egresos'=>0,'neutrales'=>0];
 foreach ($movimientos as $m) {
-    if ($m['es_ingreso']) { $totales['ingresos'] += $m['valor']; }
-    if ($m['es_egreso']) { $totales['egresos'] += $m['valor']; }
+    $valorNatillera = (float) ($m['valor_natillera'] ?? 0);
+    if ($valorNatillera > 0) { $totales['ingresos'] += $valorNatillera; }
+    elseif ($valorNatillera < 0) { $totales['egresos'] += abs($valorNatillera); }
+    else { $totales['neutrales']++; }
 }
+
+$inconsistenciasStmt = $pdo->query("
+    WITH mov_clasificado AS (
+        SELECT m.id_movimiento, m.fecha, m.valor, m.es_ingreso, m.es_egreso, m.modulo,
+               s.nombre_completo, a.nombre_actividad, a.afecta_saldo_natillera,
+               CASE a.afecta_saldo_natillera
+                   WHEN 'suma' THEN ABS(m.valor)
+                   WHEN 'resta' THEN -ABS(m.valor)
+                   ELSE 0
+               END AS valor_natillera
+        FROM movimientos m
+        LEFT JOIN socios s ON m.id_socio = s.id_socio
+        LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
+    )
+    SELECT *,
+           CASE WHEN valor_natillera > 0 THEN 'Ingreso' WHEN valor_natillera < 0 THEN 'Egreso' ELSE 'Neutral' END AS tipo_derivado
+    FROM mov_clasificado
+    WHERE es_ingreso <> CASE WHEN valor_natillera > 0 THEN 1 ELSE 0 END
+       OR es_egreso <> CASE WHEN valor_natillera < 0 THEN 1 ELSE 0 END
+    ORDER BY id_movimiento DESC
+    LIMIT 50
+");
+$movimientosInconsistentes = $inconsistenciasStmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <h2 class="mb-3 d-flex align-items-center gap-2"><i class="bi bi-arrows-left-right text-primary"></i><span>Movimientos</span></h2>
 <div class="card mb-3">
@@ -146,6 +196,7 @@ foreach ($movimientos as $m) {
                     <option value="">Todos</option>
                     <option value="ingreso" <?php echo $filtroTipo==='ingreso'?'selected':''; ?>>Ingreso</option>
                     <option value="egreso" <?php echo $filtroTipo==='egreso'?'selected':''; ?>>Egreso</option>
+                    <option value="neutral" <?php echo $filtroTipo==='neutral'?'selected':''; ?>>Neutral</option>
                 </select>
             </div>
             <div class="col-md-12">
@@ -272,7 +323,7 @@ foreach ($movimientos as $m) {
     <table class="table table-striped table-sm">
         <thead>
             <tr>
-                <th>Fecha</th><th>Periodo</th><th>Socio</th><th>Actividad</th><th>Valor</th><th>Medio</th><th>Módulo</th><th>Ingreso</th><th>Egreso</th><th></th>
+                <th>Fecha</th><th>Periodo</th><th>Socio</th><th>Actividad</th><th>Tipo</th><th>Valor contable</th><th>Medio</th><th>Módulo</th><th></th>
             </tr>
         </thead>
         <tbody>
@@ -283,17 +334,19 @@ foreach ($movimientos as $m) {
                         $nombreMovimiento = $m['observaciones'] ?: $nombreMovimiento;
                     }
                     $nombreMovimiento = $nombreMovimiento ?: 'General';
+                    $claseTipo = 'bg-secondary-subtle text-secondary';
+                    if (($m['valor_natillera'] ?? 0) > 0) { $claseTipo = 'bg-success-subtle text-success'; }
+                    elseif (($m['valor_natillera'] ?? 0) < 0) { $claseTipo = 'bg-danger-subtle text-danger'; }
                 ?>
                 <tr>
                     <td><?php echo $m['fecha']; ?></td>
                     <td><?php echo trim(($m['mes'] ?? '') . '/' . ($m['anio'] ?? '')); ?><?php echo $m['quincena'] ? ' - Q' . $m['quincena'] : ''; ?></td>
                     <td><?php echo clean($nombreMovimiento); ?></td>
-                    <td><?php echo $m['nombre_actividad']; ?></td>
-                    <td>$<?php echo number_format($m['valor'],0,',','.'); ?></td>
+                    <td><?php echo clean($m['nombre_actividad']); ?></td>
+                    <td><span class="badge <?php echo $claseTipo; ?>"><?php echo clean($m['tipo_movimiento']); ?></span></td>
+                    <td>$<?php echo number_format($m['valor_natillera'],0,',','.'); ?></td>
                     <td><?php echo clean($m['medio_nombre'] ?: $m['medio_consignacion']); ?></td>
                     <td><?php echo clean($m['modulo'] ?: 'movimientos'); ?></td>
-                    <td><?php echo $m['es_ingreso'] ? 'Sí' : ''; ?></td>
-                    <td><?php echo $m['es_egreso'] ? 'Sí' : ''; ?></td>
                     <td class="text-end">
                         <form method="POST" action="../actions/movimientos_save.php" class="d-inline" onsubmit="return confirm('Esta acción eliminará el movimiento seleccionado. ¿Deseas continuar?');">
                             <input type="hidden" name="accion" value="eliminar">
@@ -307,7 +360,35 @@ foreach ($movimientos as $m) {
         </tbody>
     </table>
 </div>
-<div class="alert alert-info">Totales mostrados: Ingresos $<?php echo number_format($totales['ingresos'],0,',','.'); ?> | Egresos $<?php echo number_format($totales['egresos'],0,',','.'); ?></div>
+<div class="alert alert-info">Totales mostrados: Ingresos $<?php echo number_format($totales['ingresos'],0,',','.'); ?> | Egresos $<?php echo number_format($totales['egresos'],0,',','.'); ?> | Neutrales <?php echo number_format($totales['neutrales'],0,',','.'); ?></div>
+<div class="card my-3">
+    <div class="card-header category-gastos"><i class="bi bi-exclamation-triangle"></i><span>Reporte de flags históricos inconsistentes</span></div>
+    <div class="card-body">
+        <p class="text-muted small">Estos registros conservan <code>es_ingreso</code>/<code>es_egreso</code> diferentes a la clasificación derivada desde <code>afecta_saldo_natillera</code>. Los flags se mantienen solo por compatibilidad histórica.</p>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead><tr><th>ID</th><th>Fecha</th><th>Socio/Tercero</th><th>Actividad</th><th>Tipo derivado</th><th>Ingreso legacy</th><th>Egreso legacy</th><th class="text-end">Valor contable</th></tr></thead>
+                <tbody>
+                    <?php if (!$movimientosInconsistentes): ?>
+                        <tr><td colspan="8" class="text-center text-muted">No se encontraron inconsistencias entre flags históricos y clasificación derivada.</td></tr>
+                    <?php endif; ?>
+                    <?php foreach ($movimientosInconsistentes as $inc): ?>
+                        <tr>
+                            <td><?php echo (int) $inc['id_movimiento']; ?></td>
+                            <td><?php echo clean($inc['fecha']); ?></td>
+                            <td><?php echo clean($inc['nombre_completo'] ?: 'General'); ?></td>
+                            <td><?php echo clean($inc['nombre_actividad']); ?></td>
+                            <td><?php echo clean($inc['tipo_derivado']); ?></td>
+                            <td><?php echo (int) $inc['es_ingreso'] === 1 ? 'Sí' : 'No'; ?></td>
+                            <td><?php echo (int) $inc['es_egreso'] === 1 ? 'Sí' : 'No'; ?></td>
+                            <td class="text-end">$<?php echo number_format($inc['valor_natillera'],0,',','.'); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 <script>
 const actividadSelect = document.querySelector('select[name="id_actividad"]');
 const socioSelect = document.querySelector('select[name="id_socio"]');

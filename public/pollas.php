@@ -26,10 +26,10 @@ $periodosColumnas = array_map(function ($p) use ($nombresMeses) {
 }, $periodosActivos);
 
 $pagosPolla = $pdo->query(
-    "SELECT m.id_socio, m.anio, m.mes, SUM(m.valor) AS valor_pagado
+    "SELECT m.id_socio, m.anio, m.mes, SUM(ABS(m.valor)) AS valor_pagado
      FROM movimientos m
      JOIN actividades_maestro a ON m.id_actividad=a.id_actividad
-     WHERE a.es_polla=1 AND m.es_ingreso=1 AND m.anio IS NOT NULL AND m.mes IS NOT NULL
+     WHERE a.es_polla=1 AND a.afecta_saldo_natillera = 'suma' AND m.anio IS NOT NULL AND m.mes IS NOT NULL
      GROUP BY m.id_socio, m.anio, m.mes"
 )->fetchAll();
 $pagosIndex = [];
@@ -41,10 +41,10 @@ asegurarTablaResultadosPolla($pdo);
 $resultadosPolla = obtenerResultadosPolla($pdo);
 $resultadosIndex = indexResultadosPollaPorMes($pdo);
 
-$ingresos = $pdo->query("SELECT SUM(valor) as total FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 AND m.es_ingreso=1")->fetch()['total'] ?? 0;
-$egresos = $pdo->query("SELECT SUM(valor) as total FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 AND m.es_egreso=1")->fetch()['total'] ?? 0;
-$porSocio = $pdo->query("SELECT s.nombre_completo, SUM(CASE WHEN m.es_ingreso=1 THEN m.valor ELSE 0 END) ingresos, SUM(CASE WHEN m.es_egreso=1 THEN m.valor ELSE 0 END) egresos FROM movimientos m JOIN socios s ON m.id_socio=s.id_socio JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 GROUP BY s.id_socio")->fetchAll();
-$porMes = $pdo->query("SELECT DATE_FORMAT(m.fecha, '%Y-%m') mes, SUM(CASE WHEN m.es_ingreso=1 THEN m.valor ELSE 0 END) ingresos, SUM(CASE WHEN m.es_egreso=1 THEN m.valor ELSE 0 END) egresos FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 GROUP BY DATE_FORMAT(m.fecha, '%Y-%m') ORDER BY mes DESC")->fetchAll();
+$ingresos = $pdo->query("SELECT SUM(ABS(valor)) as total FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 AND a.afecta_saldo_natillera = 'suma'")->fetch()['total'] ?? 0;
+$egresos = $pdo->query("SELECT SUM(ABS(valor)) as total FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 AND a.afecta_saldo_natillera = 'resta'")->fetch()['total'] ?? 0;
+$porSocio = $pdo->query("SELECT s.nombre_completo, SUM(CASE WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor) ELSE 0 END) ingresos, SUM(CASE WHEN a.afecta_saldo_natillera = 'resta' THEN ABS(m.valor) ELSE 0 END) egresos FROM movimientos m JOIN socios s ON m.id_socio=s.id_socio JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 GROUP BY s.id_socio")->fetchAll();
+$porMes = $pdo->query("SELECT DATE_FORMAT(m.fecha, '%Y-%m') mes, SUM(CASE WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor) ELSE 0 END) ingresos, SUM(CASE WHEN a.afecta_saldo_natillera = 'resta' THEN ABS(m.valor) ELSE 0 END) egresos FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_polla=1 GROUP BY DATE_FORMAT(m.fecha, '%Y-%m') ORDER BY mes DESC")->fetchAll();
 foreach ($porMes as &$detalleMes) {
     $detalleMes['numero_ganador'] = $resultadosIndex[$detalleMes['mes']]['numero_ganador'] ?? '';
     $detalleMes['id_resultado'] = $resultadosIndex[$detalleMes['mes']]['id_resultado'] ?? null;
