@@ -232,6 +232,32 @@ foreach ($resumenActividadStmt->fetchAll(PDO::FETCH_ASSOC) as $actividadItem) {
     $flujoActividades[$nombreActividad]['egresos'] = (float) ($actividadItem['egresos'] ?? 0);
 }
 
+
+$detalleActividadesStmt = $pdo->query("
+    SELECT
+        a.id_actividad,
+        a.nombre_actividad,
+        COALESCE(SUM(CASE
+            WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor)
+            ELSE 0
+        END), 0) AS ingresos,
+        COALESCE(SUM(CASE
+            WHEN a.afecta_saldo_natillera = 'resta' THEN ABS(m.valor)
+            ELSE 0
+        END), 0) AS egresos,
+        COUNT(m.id_movimiento) AS movimientos,
+        COALESCE(SUM(CASE
+            WHEN a.afecta_saldo_natillera IN ('suma', 'resta') THEN ABS(m.valor)
+            ELSE 0
+        END), 0) AS total_movimiento
+    FROM actividades_maestro a
+    LEFT JOIN movimientos m ON m.id_actividad = a.id_actividad
+    WHERE a.activo = 1
+    GROUP BY a.id_actividad, a.nombre_actividad, a.afecta_saldo_natillera
+    ORDER BY total_movimiento DESC, a.nombre_actividad ASC
+");
+$detalleActividades = $detalleActividadesStmt->fetchAll(PDO::FETCH_ASSOC);
+
 $socios = getSocios($pdo);
 $actividades = getActividades($pdo, false, true);
 
@@ -541,6 +567,45 @@ foreach ($movimientos as $movimientoConsolidado) {
                     </div>
                     <p class="small text-muted mt-2 mb-0"><i class="bi bi-info-circle"></i> La fila <strong>Préstamos</strong> agrupa los ingresos por intereses y los pagos a capital recuperado; el Estado de resultados los muestra separados para facilitar la lectura.</p>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header"><i class="bi bi-card-list"></i><span>Detalle financiero por actividad individual</span></div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">Desglose por cada actividad activa del maestro, usando la misma afectación al saldo de natillera de los movimientos registrados.</p>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Actividad</th>
+                            <th class="text-end">Ingresos</th>
+                            <th class="text-end">Egresos</th>
+                            <th class="text-end">Resultado neto</th>
+                            <th class="text-end">Movimientos</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($detalleActividades as $detalleActividad): ?>
+                            <?php
+                                $ingresosDetalle = (float) ($detalleActividad['ingresos'] ?? 0);
+                                $egresosDetalle = (float) ($detalleActividad['egresos'] ?? 0);
+                                $resultadoDetalle = $ingresosDetalle - $egresosDetalle;
+                            ?>
+                            <tr>
+                                <td><?php echo clean($detalleActividad['nombre_actividad']); ?></td>
+                                <td class="text-end">$<?php echo number_format($ingresosDetalle,0,',','.'); ?></td>
+                                <td class="text-end">$<?php echo number_format($egresosDetalle,0,',','.'); ?></td>
+                                <td class="text-end <?php echo $resultadoDetalle >= 0 ? 'text-success' : 'text-danger'; ?>">$<?php echo number_format($resultadoDetalle,0,',','.'); ?></td>
+                                <td class="text-end"><?php echo number_format((int) ($detalleActividad['movimientos'] ?? 0),0,',','.'); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if (!$detalleActividades): ?>
+                            <tr><td colspan="5" class="text-center text-muted">No hay actividades activas registradas.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
