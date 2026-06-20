@@ -221,7 +221,6 @@ if ($filtroSocio) { $where[] = 'm.id_socio = :s'; $params[':s'] = $filtroSocio; 
 if ($filtroActividad) { $where[] = 'm.id_actividad = :a'; $params[':a'] = $filtroActividad; }
 if ($filtroFechaIni) { $where[] = 'm.fecha >= :fi'; $params[':fi'] = $filtroFechaIni; }
 if ($filtroFechaFin) { $where[] = 'm.fecha <= :ff'; $params[':ff'] = $filtroFechaFin; }
-$params[':filtroSocioSeleccionado'] = $filtroSocio;
 
 $sqlWhere = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
@@ -265,16 +264,7 @@ $movimientosStmt = $pdo->prepare("
                CASE WHEN mov_signado.id_socio IS NOT NULL THEN
                     SUM(mov_signado.valor_socio) OVER (PARTITION BY mov_signado.id_socio ORDER BY mov_signado.fecha, mov_signado.id_movimiento ROWS UNBOUNDED PRECEDING)
                END AS saldo_socio,
-               CASE
-                    WHEN :filtroSocioSeleccionado = 0 THEN
-                        SUM(mov_signado.valor_natillera) OVER (ORDER BY mov_signado.fecha, mov_signado.id_movimiento ROWS UNBOUNDED PRECEDING)
-                    ELSE
-                        SUM(CASE mov_signado.afecta_saldo_socio
-                                WHEN 'suma' THEN ABS(mov_signado.valor)
-                                WHEN 'resta' THEN -ABS(mov_signado.valor)
-                                ELSE 0
-                            END) OVER (ORDER BY mov_signado.fecha, mov_signado.id_movimiento ROWS UNBOUNDED PRECEDING)
-               END AS saldo_general
+               SUM(mov_signado.valor_natillera) OVER (ORDER BY mov_signado.fecha, mov_signado.id_movimiento ROWS UNBOUNDED PRECEDING) AS saldo_general
         FROM mov_signado
     )
     SELECT * FROM calculado

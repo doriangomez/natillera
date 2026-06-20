@@ -5,10 +5,10 @@ require_once __DIR__ . '/../includes/functions.php';
 $saldoNatillera = getSaldoNatillera($pdo);
 $saldosSocios = $pdo->query("SELECT nombre_completo, saldo_socio FROM socios WHERE activo=1 ORDER BY nombre_completo")->fetchAll();
 
-$condicionAporte = "m.es_ingreso = 1 AND COALESCE(a.es_prestamo,0) = 0 AND COALESCE(a.es_pago_prestamo,0) = 0 AND COALESCE(a.es_pago_interes,0) = 0 AND COALESCE(a.es_polla,0) = 0";
+$condicionAporte = "a.afecta_saldo_socio = 'suma' AND COALESCE(a.es_prestamo,0) = 0 AND COALESCE(a.es_pago_prestamo,0) = 0 AND COALESCE(a.es_pago_interes,0) = 0 AND COALESCE(a.es_polla,0) = 0";
 $aportesTotal = (float) $pdo
     ->query(
-        "SELECT COALESCE(SUM(m.valor),0) FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE $condicionAporte"
+        "SELECT COALESCE(SUM(ABS(m.valor)),0) FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE $condicionAporte"
     )
     ->fetchColumn();
 $prestamosEntregados = (float) $pdo->query('SELECT COALESCE(SUM(monto_prestamo),0) FROM prestamos')->fetchColumn();
@@ -46,7 +46,7 @@ if ($anioPolla && $mesPolla) {
            AND NOT EXISTS (
                 SELECT 1 FROM movimientos m
                 JOIN actividades_maestro a ON m.id_actividad = a.id_actividad
-                WHERE a.es_polla = 1 AND m.es_ingreso = 1
+                WHERE a.es_polla = 1 AND a.afecta_saldo_natillera = 'suma'
                   AND m.id_socio = s.id_socio
                   AND m.anio = :anio AND m.mes = :mes
            )
@@ -59,7 +59,7 @@ if ($anioPolla && $mesPolla) {
 $aportesPorSocio = $pdo
     ->query(
         "SELECT s.id_socio, s.nombre_completo, s.saldo_socio,
-                COALESCE(SUM(CASE WHEN $condicionAporte THEN m.valor ELSE 0 END),0) AS total_aportado,
+                COALESCE(SUM(CASE WHEN $condicionAporte THEN ABS(m.valor) ELSE 0 END),0) AS total_aportado,
                 COALESCE(COUNT(DISTINCT CASE WHEN $condicionAporte THEN DATE_FORMAT(m.fecha, '%Y-%m') END),0) AS meses_aporte
          FROM socios s
          LEFT JOIN movimientos m ON m.id_socio = s.id_socio
@@ -70,7 +70,7 @@ $aportesPorSocio = $pdo
     )
     ->fetchAll();
 
-$pyg = $pdo->query("SELECT a.nombre_actividad, SUM(CASE WHEN m.es_ingreso=1 THEN m.valor ELSE 0 END) ingresos, SUM(CASE WHEN m.es_egreso=1 THEN m.valor ELSE 0 END) egresos FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad GROUP BY a.id_actividad")->fetchAll();
+$pyg = $pdo->query("SELECT a.nombre_actividad, SUM(CASE WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor) ELSE 0 END) ingresos, SUM(CASE WHEN a.afecta_saldo_natillera = 'resta' THEN ABS(m.valor) ELSE 0 END) egresos FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad GROUP BY a.id_actividad")->fetchAll();
 
 $gastos = $pdo->query("SELECT a.nombre_actividad, SUM(m.valor) total FROM movimientos m JOIN actividades_maestro a ON m.id_actividad=a.id_actividad WHERE a.es_gasto_general=1 GROUP BY a.id_actividad")->fetchAll();
 
