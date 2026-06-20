@@ -239,6 +239,8 @@ function asegurarEsquemaLiquidaciones(PDO $pdo): void {
         valor_cuota_manejo DECIMAL(12,2) DEFAULT 0,
         valor_aplicado_deuda DECIMAL(12,2) DEFAULT 0,
         deficit DECIMAL(12,2) DEFAULT 0,
+        intereses_cubiertos DECIMAL(12,2) DEFAULT 0,
+        capital_cubierto DECIMAL(12,2) DEFAULT 0,
         valor_bruto DECIMAL(12,2) DEFAULT 0,
         valor_neto DECIMAL(12,2) DEFAULT 0,
         actividad_liquidacion_id INT DEFAULT NULL,
@@ -247,6 +249,8 @@ function asegurarEsquemaLiquidaciones(PDO $pdo): void {
         movimiento_liquidacion_id INT DEFAULT NULL,
         movimiento_cuota_id INT DEFAULT NULL,
         movimiento_fondo_id INT DEFAULT NULL,
+        id_movimiento_compensacion INT DEFAULT NULL,
+        ids_prestamos_afectados TEXT DEFAULT NULL,
         movimientos_generados TEXT DEFAULT NULL,
         detalle_preliquidacion TEXT DEFAULT NULL,
         fecha_preliquidacion DATETIME DEFAULT NULL,
@@ -268,6 +272,10 @@ function asegurarEsquemaLiquidaciones(PDO $pdo): void {
             'fecha_preliquidacion' => "ALTER TABLE liquidaciones ADD COLUMN fecha_preliquidacion DATETIME DEFAULT NULL AFTER detalle_preliquidacion",
             'valor_aplicado_deuda' => "ALTER TABLE liquidaciones ADD COLUMN valor_aplicado_deuda DECIMAL(12,2) DEFAULT 0 AFTER valor_cuota_manejo",
             'deficit' => "ALTER TABLE liquidaciones ADD COLUMN deficit DECIMAL(12,2) DEFAULT 0 AFTER valor_aplicado_deuda",
+            'intereses_cubiertos' => "ALTER TABLE liquidaciones ADD COLUMN intereses_cubiertos DECIMAL(12,2) DEFAULT 0 AFTER deficit",
+            'capital_cubierto' => "ALTER TABLE liquidaciones ADD COLUMN capital_cubierto DECIMAL(12,2) DEFAULT 0 AFTER intereses_cubiertos",
+            'id_movimiento_compensacion' => "ALTER TABLE liquidaciones ADD COLUMN id_movimiento_compensacion INT DEFAULT NULL AFTER movimiento_fondo_id",
+            'ids_prestamos_afectados' => "ALTER TABLE liquidaciones ADD COLUMN ids_prestamos_afectados TEXT DEFAULT NULL AFTER id_movimiento_compensacion",
         ];
         foreach ($columnas as $columna => $alterSql) {
             $resultado = $pdo->query("SHOW COLUMNS FROM liquidaciones LIKE '" . $columna . "'");
@@ -353,6 +361,48 @@ function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo): ?
         'valor_neto' => $valorNeto,
         'fecha_preliquidacion' => $fechaPreliquidacion,
     ];
+}
+
+function obtenerActividadCompensacionLiquidacionPrestamo(PDO $pdo): array {
+    asegurarEsquemaActividades($pdo);
+
+    $nombre = 'Compensación Liquidación a Préstamo';
+    $stmt = $pdo->prepare('SELECT * FROM actividades_maestro WHERE nombre_actividad = :nombre LIMIT 1');
+    $stmt->execute([':nombre' => $nombre]);
+    $actividad = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $data = [
+        'nombre_actividad' => $nombre,
+        'descripcion' => 'Compensación automática de saldo de liquidación contra deudas activas de préstamos',
+        'afecta_saldo_socio' => 'resta',
+        'afecta_saldo_natillera' => 'resta',
+        'es_ingreso' => 0,
+        'es_prestamo' => 0,
+        'es_pago_prestamo' => 0,
+        'es_pago_interes' => 0,
+        'es_polla' => 0,
+        'activo' => 1,
+    ];
+
+    if ($actividad) {
+        $sets = [];
+        $params = [':id' => (int) $actividad['id_actividad']];
+        foreach ($data as $col => $valor) {
+            $sets[] = "$col = :$col";
+            $params[":$col"] = $valor;
+        }
+        $pdo->prepare('UPDATE actividades_maestro SET ' . implode(', ', $sets) . ' WHERE id_actividad = :id')->execute($params);
+        $stmt->execute([':nombre' => $nombre]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    $campos = array_keys($data);
+    $placeholders = array_map(static fn($c) => ':' . $c, $campos);
+    $pdo->prepare('INSERT INTO actividades_maestro (' . implode(',', $campos) . ') VALUES (' . implode(',', $placeholders) . ')')
+        ->execute(array_combine($placeholders, array_values($data)));
+
+    $stmt->execute([':nombre' => $nombre]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
 function registrarRetiroCaja(PDO $pdo, array $data): void {
