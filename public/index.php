@@ -4,6 +4,32 @@ require_once __DIR__ . '/../includes/functions.php';
 
 $totalSocios = (int) ($pdo->query("SELECT COUNT(*) AS total FROM socios WHERE activo = 1")->fetch()['total'] ?? 0);
 
+$sociosSaldoNegativo = (int) ($pdo->query("SELECT COUNT(*) AS total FROM socios WHERE activo = 1 AND saldo_socio < 0")->fetch()['total'] ?? 0);
+$prestamosEstados = $pdo->query("SELECT estado, COUNT(*) AS total FROM prestamos WHERE estado IN ('Activo', 'En mora') GROUP BY estado")->fetchAll(PDO::FETCH_KEY_PAIR);
+$prestamosActivos = (int) ($prestamosEstados['Activo'] ?? 0);
+$prestamosEnMora = (int) ($prestamosEstados['En mora'] ?? 0);
+$totalPrestamosSeguimiento = $prestamosActivos + $prestamosEnMora;
+$porcentajePrestamosActivos = $totalPrestamosSeguimiento > 0 ? ($prestamosActivos / $totalPrestamosSeguimiento) * 100 : 0;
+$porcentajePrestamosMora = $totalPrestamosSeguimiento > 0 ? ($prestamosEnMora / $totalPrestamosSeguimiento) * 100 : 0;
+
+$condicionAportePromedio = "m.es_ingreso = 1 AND COALESCE(a.es_prestamo,0) = 0 AND COALESCE(a.es_pago_prestamo,0) = 0 AND COALESCE(a.es_pago_interes,0) = 0 AND COALESCE(a.es_polla,0) = 0";
+$aportePromedioSociosStmt = $pdo->query(
+    "SELECT COALESCE(AVG(aporte_promedio), 0) AS promedio_general\n"
+    . "FROM (\n"
+    . "    SELECT CASE\n"
+    . "        WHEN COUNT(DISTINCT CASE WHEN $condicionAportePromedio THEN DATE_FORMAT(m.fecha, '%Y-%m') END) > 0 THEN\n"
+    . "            SUM(CASE WHEN $condicionAportePromedio THEN m.valor ELSE 0 END) / COUNT(DISTINCT CASE WHEN $condicionAportePromedio THEN DATE_FORMAT(m.fecha, '%Y-%m') END)\n"
+    . "        ELSE 0\n"
+    . "    END AS aporte_promedio\n"
+    . "    FROM socios s\n"
+    . "    LEFT JOIN movimientos m ON m.id_socio = s.id_socio\n"
+    . "    LEFT JOIN actividades_maestro a ON m.id_actividad = a.id_actividad\n"
+    . "    WHERE s.activo = 1\n"
+    . "    GROUP BY s.id_socio\n"
+    . ") aportes_socios"
+);
+$aportePromedioMensualSocio = (float) ($aportePromedioSociosStmt->fetch()['promedio_general'] ?? 0);
+
 $movimientosContablesStmt = $pdo->query("
     WITH mov_clasificado AS (
         SELECT
@@ -283,6 +309,17 @@ $movimientosStmt = $pdo->prepare("
 ");
 $movimientosStmt->execute($params);
 $movimientos = $movimientosStmt->fetchAll();
+$totalMovimientosConsolidado = count($movimientos);
+$totalIngresosConsolidado = 0.0;
+$totalEgresosConsolidado = 0.0;
+foreach ($movimientos as $movimientoConsolidado) {
+    $valorConsolidado = (float) ($movimientoConsolidado['valor_natillera'] ?? 0);
+    if ($valorConsolidado > 0) {
+        $totalIngresosConsolidado += $valorConsolidado;
+    } elseif ($valorConsolidado < 0) {
+        $totalEgresosConsolidado += abs($valorConsolidado);
+    }
+}
 ?>
 <div class="mt-2">
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -390,12 +427,49 @@ $movimientos = $movimientosStmt->fetchAll();
         </div>
     <?php endif; ?>
     <div class="row g-4 mt-1">
+        <div class="col-md-4">
+            <div class="card h-100 border-warning-subtle">
+                <div class="card-header text-warning"><i class="bi bi-exclamation-triangle"></i><span>Socios en mora</span></div>
+                <div class="card-body">
+                    <p class="text-muted mb-1">Saldo negativo con la natillera</p>
+                    <h2 class="display-6 mb-0"><?php echo $sociosSaldoNegativo; ?></h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header category-prestamos"><i class="bi bi-activity"></i><span>Estado de préstamos</span></div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-end mb-2">
+                        <div><span class="text-muted small d-block">Activos</span><strong class="h4 mb-0"><?php echo $prestamosActivos; ?></strong></div>
+                        <div class="text-end"><span class="text-muted small d-block">En mora</span><strong class="h4 mb-0 text-danger"><?php echo $prestamosEnMora; ?></strong></div>
+                    </div>
+                    <div class="progress" role="progressbar" aria-label="Distribución de estados de préstamos" aria-valuenow="<?php echo $prestamosEnMora; ?>" aria-valuemin="0" aria-valuemax="<?php echo max($totalPrestamosSeguimiento, 1); ?>">
+                        <div class="progress-bar bg-success" style="width: <?php echo number_format($porcentajePrestamosActivos, 2, '.', ''); ?>%"></div>
+                        <div class="progress-bar bg-danger" style="width: <?php echo number_format($porcentajePrestamosMora, 2, '.', ''); ?>%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header category-ingresos"><i class="bi bi-graph-up-arrow"></i><span>Aporte mensual promedio</span></div>
+                <div class="card-body">
+                    <p class="text-muted mb-1">Promedio por socio activo</p>
+                    <h2 class="display-6 mb-0">$<?php echo number_format($aportePromedioMensualSocio,0,',','.'); ?></h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row g-4 mt-1">
         <div class="col-lg-6">
             <div class="card h-100">
                 <div class="card-header"><i class="bi bi-pie-chart"></i><span>Distribución de ingresos</span></div>
                 <div class="card-body">
                     <p class="text-muted small mb-2">Incluye rifas (ingresos y premios como egreso)</p>
-                    <canvas id="ingresosChart" height="220"></canvas>
+                    <div class="mx-auto" style="max-width: 420px; height: 260px;">
+                        <canvas id="ingresosChart"></canvas>
+                    </div>
                     <div class="mt-3 d-flex flex-wrap gap-3">
                         <span class="badge-soft">Total ingresos: $<?php echo number_format($totalIngresos,0,',','.'); ?></span>
                         <span class="badge-soft">Total egresos: $<?php echo number_format($totalEgresos,0,',','.'); ?></span>
@@ -475,6 +549,7 @@ $movimientos = $movimientosStmt->fetchAll();
                             </tbody>
                         </table>
                     </div>
+                    <p class="small text-muted mt-2 mb-0"><i class="bi bi-info-circle"></i> La fila <strong>Préstamos</strong> agrupa los ingresos por intereses y los pagos a capital recuperado; el Estado de resultados los muestra separados para facilitar la lectura.</p>
                 </div>
             </div>
         </div>
@@ -521,6 +596,11 @@ $movimientos = $movimientosStmt->fetchAll();
                     <a class="btn btn-outline-secondary btn-icon" href="index.php"><span><i class="bi bi-x-circle"></i> Limpiar</span></a>
                 </div>
             </form>
+            <div class="row g-3 mb-3">
+                <div class="col-md-4"><div class="p-3 rounded bg-success-subtle text-success h-100"><span class="small d-block">Ingresos filtrados</span><strong>$<?php echo number_format($totalIngresosConsolidado,0,',','.'); ?></strong></div></div>
+                <div class="col-md-4"><div class="p-3 rounded bg-danger-subtle text-danger h-100"><span class="small d-block">Egresos filtrados</span><strong>$<?php echo number_format($totalEgresosConsolidado,0,',','.'); ?></strong></div></div>
+                <div class="col-md-4"><div class="p-3 rounded bg-primary-subtle text-primary h-100"><span class="small d-block">Movimientos filtrados</span><strong><?php echo number_format($totalMovimientosConsolidado,0,',','.'); ?></strong></div></div>
+            </div>
             <div class="table-responsive">
                 <table class="table table-striped table-sm" id="tablaConsolidado">
                     <thead>
@@ -572,6 +652,14 @@ $movimientos = $movimientosStmt->fetchAll();
                     </tbody>
                 </table>
             </div>
+            <?php if ($totalMovimientosConsolidado > 50): ?>
+                <div class="text-center mt-3">
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="btnVerMasMovimientos" data-step="50">
+                        Ver más movimientos
+                    </button>
+                    <div class="small text-muted mt-2" id="contadorMovimientosVisibles"></div>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
@@ -593,8 +681,9 @@ if (ctx) {
             }]
         },
         options: {
+            maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'bottom' }
+                legend: { position: 'right' }
             }
         }
     });
@@ -628,5 +717,28 @@ function exportTable(type){
 }
 document.getElementById('btnExportExcel')?.addEventListener('click', () => exportTable('excel'));
 document.getElementById('btnExportPdf')?.addEventListener('click', () => exportTable('pdf'));
+
+const filasConsolidado = Array.from(document.querySelectorAll('#tablaConsolidado tbody tr'));
+const btnVerMasMovimientos = document.getElementById('btnVerMasMovimientos');
+const contadorMovimientosVisibles = document.getElementById('contadorMovimientosVisibles');
+let movimientosVisibles = 50;
+function actualizarMovimientosVisibles(){
+    filasConsolidado.forEach((fila, index) => {
+        fila.classList.toggle('d-none', index >= movimientosVisibles);
+    });
+    if (contadorMovimientosVisibles) {
+        contadorMovimientosVisibles.textContent = `Mostrando ${Math.min(movimientosVisibles, filasConsolidado.length)} de ${filasConsolidado.length} movimientos`;
+    }
+    if (btnVerMasMovimientos && movimientosVisibles >= filasConsolidado.length) {
+        btnVerMasMovimientos.classList.add('d-none');
+    }
+}
+if (btnVerMasMovimientos) {
+    actualizarMovimientosVisibles();
+    btnVerMasMovimientos.addEventListener('click', () => {
+        movimientosVisibles += Number(btnVerMasMovimientos.dataset.step || 50);
+        actualizarMovimientosVisibles();
+    });
+}
 </script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
