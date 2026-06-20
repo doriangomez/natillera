@@ -88,6 +88,12 @@ if ($accion === 'anular') {
     exit;
 }
 
+if ($accion === 'crear' && (string) ($_POST['confirmar_liquidacion'] ?? '') !== '1') {
+    $_SESSION['error'] = 'Debe confirmar explícitamente la liquidación antes de registrarla.';
+    header('Location: ' . $redirect);
+    exit;
+}
+
 $tipoLiquidacion = trim((string) ($_POST['tipo_liquidacion'] ?? 'anticipada'));
 $tipos = obtenerTiposLiquidacion();
 if (!isset($tipos[$tipoLiquidacion])) {
@@ -124,23 +130,11 @@ if ($idSocio <= 0 || $idActividadLiquidacion <= 0) {
     exit;
 }
 
-if ($cuotaManejo > 0 && $idActividadRetencion <= 0) {
-    $_SESSION['error'] = 'Para cuota de administración debe seleccionar la actividad de retención.';
-    header('Location: ' . $redirect);
-    exit;
-}
-
 $actividadLiquidacion = obtenerActividadValida($pdo, $idActividadLiquidacion);
 $actividadRetencion = $idActividadRetencion > 0 ? obtenerActividadValida($pdo, $idActividadRetencion) : null;
 
 if (!$actividadLiquidacion) {
     $_SESSION['error'] = 'La actividad principal de liquidación no es válida.';
-    header('Location: ' . $redirect);
-    exit;
-}
-
-if ($cuotaManejo > 0 && !$actividadRetencion) {
-    $_SESSION['error'] = 'La actividad de retención de administración no es válida.';
     header('Location: ' . $redirect);
     exit;
 }
@@ -153,16 +147,6 @@ if ($reglaSocioPrincipal !== 'resta' || $reglaNatilleraPrincipal !== 'resta') {
     exit;
 }
 
-if ($cuotaManejo > 0) {
-    $reglaSocioRetencion = normalizarReglaAfectacion($actividadRetencion['afecta_saldo_socio'] ?? 'neutral');
-    $reglaNatilleraRetencion = normalizarReglaAfectacion($actividadRetencion['afecta_saldo_natillera'] ?? 'neutral');
-    if ($reglaSocioRetencion !== 'resta' || $reglaNatilleraRetencion !== 'resta') {
-        $_SESSION['error'] = 'Actividad retención inválida: debe restar saldo socio y saldo natillera.';
-        header('Location: ' . $redirect);
-        exit;
-    }
-}
-
 $calculo = calcularLiquidacionSocio($pdo, $idSocio, $cuotaManejo);
 if (!$calculo) {
     $_SESSION['error'] = 'No se encontró el socio para liquidar.';
@@ -170,10 +154,30 @@ if (!$calculo) {
     exit;
 }
 
-if ($calculo['valor_bruto'] <= 0 || $calculo['valor_neto'] < 0) {
+if ($calculo['deficit'] <= 0 && ($calculo['valor_bruto'] <= 0 || $calculo['valor_neto'] < 0)) {
     $_SESSION['error'] = 'El cálculo de liquidación no es válido (bruto <= 0 o neto negativo).';
     header('Location: ' . $redirect);
     exit;
+}
+
+if ($cuotaManejo > 0 && (float) $calculo['deficit'] <= 0) {
+    if ($idActividadRetencion <= 0) {
+        $_SESSION['error'] = 'Para cuota de administración debe seleccionar la actividad de retención.';
+        header('Location: ' . $redirect);
+        exit;
+    }
+    if (!$actividadRetencion) {
+        $_SESSION['error'] = 'La actividad de retención de administración no es válida.';
+        header('Location: ' . $redirect);
+        exit;
+    }
+    $reglaSocioRetencion = normalizarReglaAfectacion($actividadRetencion['afecta_saldo_socio'] ?? 'neutral');
+    $reglaNatilleraRetencion = normalizarReglaAfectacion($actividadRetencion['afecta_saldo_natillera'] ?? 'neutral');
+    if ($reglaSocioRetencion !== 'resta' || $reglaNatilleraRetencion !== 'resta') {
+        $_SESSION['error'] = 'Actividad retención inválida: debe restar saldo socio y saldo natillera.';
+        header('Location: ' . $redirect);
+        exit;
+    }
 }
 
 $fecha = date('Y-m-d');
@@ -185,8 +189,8 @@ $usuario = $_SESSION['usuario'] ?? null;
 $insertMov = $pdo->prepare('INSERT INTO movimientos (fecha, anio, mes, quincena, id_socio, id_actividad, motivo, valor, medio_consignacion, es_ingreso, es_egreso, observaciones, usuario_registro, fecha_registro, modulo)
 VALUES (:fecha, :anio, :mes, :quincena, :id_socio, :id_actividad, :motivo, :valor, :medio, :ingreso, :egreso, :obs, :usuario, NOW(), :modulo)');
 
-$insertLiq = $pdo->prepare('INSERT INTO liquidaciones (socio_id, tipo_liquidacion, saldo_base, valor_pollas, valor_prestamos, valor_cuota_manejo, valor_bruto, valor_neto, actividad_liquidacion_id, actividad_cuota_id, actividad_fondo_id, movimiento_liquidacion_id, movimiento_cuota_id, movimiento_fondo_id, movimientos_generados, observaciones, fecha, usuario_id, estado)
-VALUES (:socio, :tipo, :saldo_base, :pollas, :prestamos, :cuota, :bruto, :neto, :act_liq, :act_cuota, :act_fondo, :mov_liq, :mov_cuota, :mov_fondo, :movs_json, :obs, :fecha, :usuario, :estado)');
+$insertLiq = $pdo->prepare('INSERT INTO liquidaciones (socio_id, tipo_liquidacion, saldo_base, valor_pollas, valor_prestamos, valor_cuota_manejo, valor_aplicado_deuda, deficit, valor_bruto, valor_neto, actividad_liquidacion_id, actividad_cuota_id, actividad_fondo_id, movimiento_liquidacion_id, movimiento_cuota_id, movimiento_fondo_id, movimientos_generados, detalle_preliquidacion, fecha_preliquidacion, observaciones, fecha, usuario_id, estado)
+VALUES (:socio, :tipo, :saldo_base, :pollas, :prestamos, :cuota, :aplicado_deuda, :deficit, :bruto, :neto, :act_liq, :act_cuota, :act_fondo, :mov_liq, :mov_cuota, :mov_fondo, :movs_json, :detalle_preliquidacion, :fecha_preliquidacion, :obs, :fecha, :usuario, :estado)');
 
 $pdo->beginTransaction();
 try {
@@ -197,32 +201,36 @@ try {
         $pdo->prepare('UPDATE liquidaciones SET estado = "editada" WHERE id = :id')->execute([':id' => $idLiquidacion]);
     }
 
-    $insertMov->execute([
-        ':fecha' => $fecha,
-        ':anio' => $anio,
-        ':mes' => $mes,
-        ':quincena' => $quincena,
-        ':id_socio' => $idSocio,
-        ':id_actividad' => $idActividadLiquidacion,
-        ':motivo' => 'Liquidación ' . $tipoLiquidacion . ' - ' . $calculo['socio']['nombre_completo'],
-        ':valor' => -abs((float) $calculo['valor_neto']),
-        ':medio' => 'Liquidaciones',
-        ':ingreso' => 0,
-        ':egreso' => 1,
-        ':obs' => 'Movimiento principal de liquidación (' . $tipoLiquidacion . ').',
-        ':usuario' => $usuario,
-        ':modulo' => 'liquidaciones',
-    ]);
-    $movPrincipalId = (int) $pdo->lastInsertId();
-    $movimientosGenerados = [[
-        'tipo' => 'pago_socio',
-        'id_movimiento' => $movPrincipalId,
-        'id_actividad' => $idActividadLiquidacion,
-        'valor' => abs((float) $calculo['valor_neto']),
-    ]];
+    $movPrincipalId = null;
+    $movimientosGenerados = [];
+    if ((float) $calculo['valor_neto'] > 0) {
+        $insertMov->execute([
+            ':fecha' => $fecha,
+            ':anio' => $anio,
+            ':mes' => $mes,
+            ':quincena' => $quincena,
+            ':id_socio' => $idSocio,
+            ':id_actividad' => $idActividadLiquidacion,
+            ':motivo' => 'Liquidación ' . $tipoLiquidacion . ' - ' . $calculo['socio']['nombre_completo'],
+            ':valor' => -abs((float) $calculo['valor_neto']),
+            ':medio' => 'Liquidaciones',
+            ':ingreso' => 0,
+            ':egreso' => 1,
+            ':obs' => 'Movimiento principal de liquidación (' . $tipoLiquidacion . ').',
+            ':usuario' => $usuario,
+            ':modulo' => 'liquidaciones',
+        ]);
+        $movPrincipalId = (int) $pdo->lastInsertId();
+        $movimientosGenerados[] = [
+            'tipo' => 'pago_socio',
+            'id_movimiento' => $movPrincipalId,
+            'id_actividad' => $idActividadLiquidacion,
+            'valor' => abs((float) $calculo['valor_neto']),
+        ];
+    }
 
     $movRetencionId = null;
-    if ($cuotaManejo > 0) {
+    if ($cuotaManejo > 0 && (float) $calculo['deficit'] <= 0) {
         $insertMov->execute([
             ':fecha' => $fecha,
             ':anio' => $anio,
@@ -255,6 +263,8 @@ try {
         ':pollas' => $calculo['valor_pollas'],
         ':prestamos' => $calculo['valor_prestamos'],
         ':cuota' => $calculo['valor_cuota_manejo'],
+        ':aplicado_deuda' => $calculo['valor_aplicado_deuda'],
+        ':deficit' => $calculo['deficit'],
         ':bruto' => $calculo['valor_bruto'],
         ':neto' => $calculo['valor_neto'],
         ':act_liq' => $idActividadLiquidacion,
@@ -264,6 +274,20 @@ try {
         ':mov_cuota' => $movRetencionId,
         ':mov_fondo' => null,
         ':movs_json' => json_encode($movimientosGenerados),
+        ':detalle_preliquidacion' => json_encode([
+            'socio' => $calculo['socio'],
+            'saldo_base' => $calculo['saldo_base'],
+            'valor_pollas' => $calculo['valor_pollas'],
+            'prestamos_descontados' => $calculo['prestamos_descontados'],
+            'valor_prestamos' => $calculo['valor_prestamos'],
+            'valor_aplicado_deuda' => $calculo['valor_aplicado_deuda'],
+            'deficit' => $calculo['deficit'],
+            'valor_cuota_manejo' => $calculo['valor_cuota_manejo'],
+            'valor_bruto' => $calculo['valor_bruto'],
+            'valor_neto' => $calculo['valor_neto'],
+            'advertencia_deficit' => $calculo['deficit'] > 0 ? 'El saldo del socio no cubre la totalidad de la deuda. El déficit restante deberá ser gestionado manualmente en el módulo de préstamos.' : null,
+        ], JSON_UNESCAPED_UNICODE),
+        ':fecha_preliquidacion' => $calculo['fecha_preliquidacion'],
         ':obs' => $observaciones,
         ':fecha' => $fecha,
         ':usuario' => $usuario,
