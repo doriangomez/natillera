@@ -157,6 +157,8 @@ INSERT INTO actividades_maestro (nombre_actividad, descripcion, afecta_saldo_soc
 ('Préstamo a socio', 'Desembolso de préstamo al socio o aval para un particular', 'resta', 'resta', 0, 1, 0, 0, 0, 0, 0, 1),
 ('Pago a préstamo', 'Abonos a capital de préstamos vigentes', 'suma', 'suma', 1, 0, 1, 0, 0, 0, 0, 1),
 ('Pago de intereses', 'Pagos de intereses de préstamos', 'suma', 'suma', 1, 0, 0, 1, 0, 0, 0, 1),
+('Pago de intereses por liquidación', 'Pago de intereses de préstamo aplicado desde liquidación de socio', 'neutral', 'resta', 0, 0, 0, 1, 0, 0, 0, 1),
+('Pago de capital por liquidación', 'Pago de capital de préstamo aplicado desde liquidación de socio', 'resta', 'resta', 0, 0, 1, 0, 0, 0, 0, 1),
 ('Causación de intereses', 'Causación automática de intereses mensuales', 'resta', 'neutral', 0, 0, 0, 0, 1, 0, 0, 1),
 ('Polla', 'Aportes y pagos de polla', 'suma', 'suma', 1, 0, 0, 0, 0, 1, 0, 1),
 ('Pago Premio Polla', 'Pago de premio de polla', 'resta', 'resta', 0, 0, 0, 0, 0, 1, 0, 1),
