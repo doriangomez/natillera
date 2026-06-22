@@ -538,10 +538,8 @@ function asegurarColumnasConfiguracionGeneral(PDO $pdo): void {
     }
 }
 
-function sincronizarConceptosPrestamo(PDO $pdo): array {
-    asegurarEsquemaActividades($pdo);
-
-    $conceptos = [
+function obtenerDefinicionesConceptosPrestamo(): array {
+    return [
         'es_prestamo' => [
             'nombre_actividad' => 'Préstamo a socio',
             'descripcion' => 'Desembolso de préstamo al socio o aval para un particular',
@@ -571,7 +569,13 @@ function sincronizarConceptosPrestamo(PDO $pdo): array {
             'es_ingreso' => 0,
         ],
     ];
+}
 
+function sincronizarConceptosPrestamo(PDO $pdo): array {
+    asegurarEsquemaActividades($pdo);
+
+    $conceptos = obtenerDefinicionesConceptosPrestamo();
+    $flagsUnicos = ['es_prestamo', 'es_interes_causado'];
     $resultado = [];
 
     foreach ($conceptos as $flag => $data) {
@@ -581,23 +585,15 @@ function sincronizarConceptosPrestamo(PDO $pdo): array {
         ]);
         $columnasFlags[$flag] = 1;
 
-        $stmtBandera = $pdo->prepare("SELECT * FROM actividades_maestro WHERE $flag = 1 ORDER BY id_actividad ASC");
-        $stmtBandera->execute();
-        $existentes = $stmtBandera->fetchAll();
-
-        if (count($existentes) > 1) {
-            foreach (array_slice($existentes, 1) as $duplicado) {
-                $pdo->prepare("UPDATE actividades_maestro SET $flag = 0 WHERE id_actividad = :id")
-                    ->execute([':id' => $duplicado['id_actividad']]);
-            }
-        }
-
-        $principal = $existentes[0] ?? null;
+        $stmtNombre = $pdo->prepare('SELECT * FROM actividades_maestro WHERE nombre_actividad = :nombre LIMIT 1');
+        $stmtNombre->execute([':nombre' => $data['nombre_actividad']]);
+        $principal = $stmtNombre->fetch();
 
         if (!$principal) {
-            $stmtNombre = $pdo->prepare('SELECT * FROM actividades_maestro WHERE nombre_actividad = :nombre LIMIT 1');
-            $stmtNombre->execute([':nombre' => $data['nombre_actividad']]);
-            $principal = $stmtNombre->fetch();
+            $stmtBandera = $pdo->prepare("SELECT * FROM actividades_maestro WHERE $flag = 1 ORDER BY id_actividad ASC");
+            $stmtBandera->execute();
+            $existentes = $stmtBandera->fetchAll();
+            $principal = $existentes[0] ?? null;
         }
 
         if ($principal) {
@@ -611,20 +607,86 @@ function sincronizarConceptosPrestamo(PDO $pdo): array {
             $sqlUpdate = 'UPDATE actividades_maestro SET ' . implode(', ', $sets) . ' WHERE id_actividad = :id';
             $pdo->prepare($sqlUpdate)->execute($params);
             $resultado[$flag] = (int) $principal['id_actividad'];
-            continue;
+        } else {
+            $columnasInsert = array_merge($data, $columnasFlags, ['activo' => 1]);
+            $campos = array_keys($columnasInsert);
+            $placeholders = array_map(fn($c) => ':' . $c, $campos);
+            $sql = 'INSERT INTO actividades_maestro (' . implode(',', $campos) . ') VALUES (' . implode(',', $placeholders) . ')';
+            $stmtInsert = $pdo->prepare($sql);
+            $paramsInsert = [];
+            foreach ($columnasInsert as $col => $valor) {
+                $paramsInsert[":$col"] = $valor;
+            }
+            $stmtInsert->execute($paramsInsert);
+            $resultado[$flag] = (int) $pdo->lastInsertId();
         }
 
-        $columnasInsert = array_merge($data, $columnasFlags, ['activo' => 1]);
-        $campos = array_keys($columnasInsert);
-        $placeholders = array_map(fn($c) => ':' . $c, $campos);
-        $sql = 'INSERT INTO actividades_maestro (' . implode(',', $campos) . ') VALUES (' . implode(',', $placeholders) . ')';
-        $stmtInsert = $pdo->prepare($sql);
-        $paramsInsert = [];
-        foreach ($columnasInsert as $col => $valor) {
-            $paramsInsert[":$col"] = $valor;
+        if (in_array($flag, $flagsUnicos, true)) {
+            $pdo->prepare("UPDATE actividades_maestro SET $flag = 0 WHERE $flag = 1 AND id_actividad <> :id")
+                ->execute([':id' => $resultado[$flag]]);
         }
-        $stmtInsert->execute($paramsInsert);
-        $resultado[$flag] = (int) $pdo->lastInsertId();
+    }
+
+    return $resultado;
+}
+
+function sincronizarConceptosLiquidacionPrestamo(PDO $pdo): array {
+    asegurarEsquemaActividades($pdo);
+
+    $conceptosBase = obtenerDefinicionesConceptosPrestamo();
+    $columnasBase = array_merge(array_fill_keys(array_keys($conceptosBase), 0), [
+        'es_polla' => 0,
+        'es_gasto_general' => 0,
+    ]);
+
+    $conceptos = [
+        'pago_interes_liquidacion' => array_merge($columnasBase, [
+            'nombre_actividad' => 'Pago de intereses por liquidación',
+            'descripcion' => 'Pago de intereses de préstamo aplicado desde liquidación de socio',
+            'afecta_saldo_socio' => 'neutral',
+            'afecta_saldo_natillera' => 'resta',
+            'es_ingreso' => 0,
+            'es_pago_interes' => 1,
+            'activo' => 1,
+        ]),
+        'pago_capital_liquidacion' => array_merge($columnasBase, [
+            'nombre_actividad' => 'Pago de capital por liquidación',
+            'descripcion' => 'Pago de capital de préstamo aplicado desde liquidación de socio',
+            'afecta_saldo_socio' => 'resta',
+            'afecta_saldo_natillera' => 'resta',
+            'es_ingreso' => 0,
+            'es_pago_prestamo' => 1,
+            'activo' => 1,
+        ]),
+    ];
+
+    $resultado = [];
+    foreach ($conceptos as $clave => $data) {
+        $stmt = $pdo->prepare('SELECT * FROM actividades_maestro WHERE nombre_actividad = :nombre LIMIT 1');
+        $stmt->execute([':nombre' => $data['nombre_actividad']]);
+        $actividad = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($actividad) {
+            $sets = [];
+            $params = [':id' => (int) $actividad['id_actividad']];
+            foreach ($data as $col => $valor) {
+                $sets[] = "$col = :$col";
+                $params[":$col"] = $valor;
+            }
+            $pdo->prepare('UPDATE actividades_maestro SET ' . implode(', ', $sets) . ' WHERE id_actividad = :id')->execute($params);
+        } else {
+            $campos = array_keys($data);
+            $placeholders = array_map(static fn($c) => ':' . $c, $campos);
+            $params = [];
+            foreach ($data as $col => $valor) {
+                $params[":$col"] = $valor;
+            }
+            $pdo->prepare('INSERT INTO actividades_maestro (' . implode(',', $campos) . ') VALUES (' . implode(',', $placeholders) . ')')
+                ->execute($params);
+        }
+
+        $stmt->execute([':nombre' => $data['nombre_actividad']]);
+        $resultado[$clave] = $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
     return $resultado;
@@ -636,9 +698,17 @@ function obtenerConceptoPorBandera(PDO $pdo, string $flag): ?array {
         return null;
     }
 
+    $conceptos = obtenerDefinicionesConceptosPrestamo();
     sincronizarConceptosPrestamo($pdo);
 
-    $stmt = $pdo->prepare("SELECT * FROM actividades_maestro WHERE $flag = 1 LIMIT 1");
+    $stmt = $pdo->prepare("SELECT * FROM actividades_maestro WHERE $flag = 1 AND nombre_actividad = :nombre LIMIT 1");
+    $stmt->execute([':nombre' => $conceptos[$flag]['nombre_actividad']]);
+    $principal = $stmt->fetch();
+    if ($principal) {
+        return $principal;
+    }
+
+    $stmt = $pdo->prepare("SELECT * FROM actividades_maestro WHERE $flag = 1 ORDER BY id_actividad ASC LIMIT 1");
     $stmt->execute();
     return $stmt->fetch() ?: null;
 }

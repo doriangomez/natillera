@@ -156,36 +156,11 @@ if ($reglaSocioPrincipal !== 'resta' || $reglaNatilleraPrincipal !== 'resta') {
     exit;
 }
 
-$calculo = calcularLiquidacionSocio($pdo, $idSocio, $cuotaManejo);
-if (!$calculo) {
-    $_SESSION['error'] = 'No se encontró el socio para liquidar.';
-    header('Location: ' . $redirect);
-    exit;
-}
-
-if ($calculo['deficit'] <= 0 && ($calculo['valor_bruto'] <= 0 || $calculo['valor_neto'] < 0)) {
-    $_SESSION['error'] = 'El cálculo de liquidación no es válido (bruto <= 0 o neto negativo).';
-    header('Location: ' . $redirect);
-    exit;
-}
-
-if ($cuotaManejo > 0 && (float) $calculo['deficit'] <= 0) {
-    if ($idActividadRetencion <= 0) {
-        $_SESSION['error'] = 'Para cuota de administración debe seleccionar la actividad de retención.';
-        header('Location: ' . $redirect);
-        exit;
-    }
-    if (!$actividadRetencion) {
-        $_SESSION['error'] = 'La actividad de retención de administración no es válida.';
-        header('Location: ' . $redirect);
-        exit;
-    }
-    $reglaSocioRetencion = normalizarReglaAfectacion($actividadRetencion['afecta_saldo_socio'] ?? 'neutral');
-    $reglaNatilleraRetencion = normalizarReglaAfectacion($actividadRetencion['afecta_saldo_natillera'] ?? 'neutral');
-    if ($reglaSocioRetencion !== 'resta' || $reglaNatilleraRetencion !== 'resta') {
-        $_SESSION['error'] = 'Actividad retención inválida: debe restar saldo socio y saldo natillera.';
-        header('Location: ' . $redirect);
-        exit;
+$idsPrestamosPrevios = [];
+if ($liquidacionBase) {
+    $idsPrevios = json_decode((string) ($liquidacionBase['ids_prestamos_afectados'] ?? '[]'), true);
+    if (is_array($idsPrevios)) {
+        $idsPrestamosPrevios = array_values(array_unique(array_filter(array_map('intval', $idsPrevios), static fn($id) => $id > 0)));
     }
 }
 
@@ -208,6 +183,33 @@ try {
             borrarMovimientoSiExiste($pdo, $idMovimiento);
         }
         $pdo->prepare('UPDATE liquidaciones SET estado = "editada" WHERE id = :id')->execute([':id' => $idLiquidacion]);
+        recalcularSaldosDesdeMovimientos($pdo);
+        foreach ($idsPrestamosPrevios as $idPrestamoPrevio) {
+            recalcularPrestamoDesdeMovimientos($pdo, $idPrestamoPrevio);
+        }
+    }
+
+    $calculo = calcularLiquidacionSocio($pdo, $idSocio, $cuotaManejo);
+    if (!$calculo) {
+        throw new InvalidArgumentException('No se encontró el socio para liquidar.');
+    }
+
+    if ((float) $calculo['valor_neto'] < 0 || ((float) $calculo['valor_bruto'] <= 0 && (float) $calculo['valor_aplicado_deuda'] <= 0)) {
+        throw new InvalidArgumentException('El cálculo de liquidación no es válido (sin valor para pagar o aplicar a deuda, o neto negativo).');
+    }
+
+    if ($cuotaManejo > 0 && (float) $calculo['deficit'] <= 0) {
+        if ($idActividadRetencion <= 0) {
+            throw new InvalidArgumentException('Para cuota de administración debe seleccionar la actividad de retención.');
+        }
+        if (!$actividadRetencion) {
+            throw new InvalidArgumentException('La actividad de retención de administración no es válida.');
+        }
+        $reglaSocioRetencion = normalizarReglaAfectacion($actividadRetencion['afecta_saldo_socio'] ?? 'neutral');
+        $reglaNatilleraRetencion = normalizarReglaAfectacion($actividadRetencion['afecta_saldo_natillera'] ?? 'neutral');
+        if ($reglaSocioRetencion !== 'resta' || $reglaNatilleraRetencion !== 'resta') {
+            throw new InvalidArgumentException('Actividad retención inválida: debe restar saldo socio y saldo natillera.');
+        }
     }
 
     $movPrincipalId = null;
@@ -218,7 +220,13 @@ try {
     $movimientosGenerados = [];
 
     if ((float) $calculo['valor_aplicado_deuda'] > 0) {
-        $actividadCompensacion = obtenerActividadCompensacionLiquidacionPrestamo($pdo);
+        $actividadesLiquidacionPrestamo = sincronizarConceptosLiquidacionPrestamo($pdo);
+        $actividadPagoInteresLiquidacion = $actividadesLiquidacionPrestamo['pago_interes_liquidacion'] ?? null;
+        $actividadPagoCapitalLiquidacion = $actividadesLiquidacionPrestamo['pago_capital_liquidacion'] ?? null;
+        if (!$actividadPagoInteresLiquidacion || !$actividadPagoCapitalLiquidacion) {
+            throw new RuntimeException('No se pudieron preparar las actividades de pago por liquidación.');
+        }
+
         $saldoDisponibleDeuda = (float) $calculo['valor_aplicado_deuda'];
         foreach ($calculo['prestamos_descontados'] as $prestamo) {
             if ($saldoDisponibleDeuda <= 0.01) {
@@ -240,22 +248,51 @@ try {
             $nuevoEstado = $nuevoCapital <= 0.01 && $nuevoInteres <= 0.01 ? 'Finalizado' : ($nuevoInteres > 0.01 ? 'En mora' : 'Activo');
             $idPrestamo = (int) $prestamo['id_prestamo'];
 
-            $insertMov->execute([
-                ':fecha' => $fecha, ':anio' => $anio, ':mes' => $mes, ':quincena' => $quincena,
-                ':id_socio' => $idSocio, ':id_prestamo' => $idPrestamo, ':id_actividad' => (int) $actividadCompensacion['id_actividad'],
-                ':motivo' => 'Compensación liquidación a préstamo #' . $idPrestamo . ' - ' . $calculo['socio']['nombre_completo'],
-                ':valor' => -abs($totalCubiertoPrestamo), ':medio' => 'Liquidaciones', ':ingreso' => 0, ':egreso' => 1,
-                ':obs' => 'Compensación automática. Intereses cubiertos: ' . $interesCubierto . '; capital cubierto: ' . $capitalCubiertoPrestamo . '.',
-                ':usuario' => $usuario, ':modulo' => 'liquidaciones',
-            ]);
-            $idMovComp = (int) $pdo->lastInsertId();
-            $movCompensacionId = $movCompensacionId ?: $idMovComp;
+            if ($interesCubierto > 0.01) {
+                $insertMov->execute([
+                    ':fecha' => $fecha, ':anio' => $anio, ':mes' => $mes, ':quincena' => $quincena,
+                    ':id_socio' => $idSocio, ':id_prestamo' => $idPrestamo, ':id_actividad' => (int) $actividadPagoInteresLiquidacion['id_actividad'],
+                    ':motivo' => 'Pago de intereses por liquidación préstamo #' . $idPrestamo . ' - ' . $calculo['socio']['nombre_completo'],
+                    ':valor' => abs($interesCubierto), ':medio' => 'Liquidaciones', ':ingreso' => 0, ':egreso' => 1,
+                    ':obs' => 'Compensación automática de liquidación aplicada a intereses.',
+                    ':usuario' => $usuario, ':modulo' => 'liquidaciones',
+                ]);
+                $idMovInteres = (int) $pdo->lastInsertId();
+                $movCompensacionId = $movCompensacionId ?: $idMovInteres;
+                $movimientosGenerados[] = [
+                    'tipo' => 'pago_interes_liquidacion',
+                    'id_movimiento' => $idMovInteres,
+                    'id_prestamo' => $idPrestamo,
+                    'id_actividad' => (int) $actividadPagoInteresLiquidacion['id_actividad'],
+                    'valor' => $interesCubierto,
+                ];
+            }
+
+            if ($capitalCubiertoPrestamo > 0.01) {
+                $insertMov->execute([
+                    ':fecha' => $fecha, ':anio' => $anio, ':mes' => $mes, ':quincena' => $quincena,
+                    ':id_socio' => $idSocio, ':id_prestamo' => $idPrestamo, ':id_actividad' => (int) $actividadPagoCapitalLiquidacion['id_actividad'],
+                    ':motivo' => 'Pago de capital por liquidación préstamo #' . $idPrestamo . ' - ' . $calculo['socio']['nombre_completo'],
+                    ':valor' => abs($capitalCubiertoPrestamo), ':medio' => 'Liquidaciones', ':ingreso' => 0, ':egreso' => 1,
+                    ':obs' => 'Compensación automática de liquidación aplicada a capital.',
+                    ':usuario' => $usuario, ':modulo' => 'liquidaciones',
+                ]);
+                $idMovCapital = (int) $pdo->lastInsertId();
+                $movCompensacionId = $movCompensacionId ?: $idMovCapital;
+                $movimientosGenerados[] = [
+                    'tipo' => 'pago_capital_liquidacion',
+                    'id_movimiento' => $idMovCapital,
+                    'id_prestamo' => $idPrestamo,
+                    'id_actividad' => (int) $actividadPagoCapitalLiquidacion['id_actividad'],
+                    'valor' => $capitalCubiertoPrestamo,
+                ];
+            }
+
             $idsPrestamosAfectados[] = $idPrestamo;
             $interesesCubiertos += $interesCubierto;
             $capitalCubierto += $capitalCubiertoPrestamo;
             $pdo->prepare('UPDATE prestamos SET saldo_capital_actual = :cap, saldo_intereses_actual = :int, estado = :estado WHERE id_prestamo = :id')
                 ->execute([':cap' => $nuevoCapital, ':int' => $nuevoInteres, ':estado' => $nuevoEstado, ':id' => $idPrestamo]);
-            $movimientosGenerados[] = ['tipo' => 'compensacion_prestamo', 'id_movimiento' => $idMovComp, 'id_prestamo' => $idPrestamo, 'valor' => $totalCubiertoPrestamo, 'intereses_cubiertos' => $interesCubierto, 'capital_cubierto' => $capitalCubiertoPrestamo];
         }
     }
     if ((float) $calculo['valor_neto'] > 0) {
@@ -359,6 +396,9 @@ try {
     ]);
 
     recalcularSaldosDesdeMovimientos($pdo);
+    foreach (array_values(array_unique($idsPrestamosAfectados)) as $idPrestamoAfectado) {
+        recalcularPrestamoDesdeMovimientos($pdo, (int) $idPrestamoAfectado);
+    }
     $pdo->commit();
 
     $_SESSION['exito'] = $accion === 'editar'
