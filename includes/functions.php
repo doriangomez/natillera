@@ -500,6 +500,7 @@ function asegurarEsquemaActividades(PDO $pdo): void {
         'es_pago_interes TINYINT(1) DEFAULT 0',
         'es_interes_causado TINYINT(1) DEFAULT 0',
         'es_rifa TINYINT(1) DEFAULT 0',
+        'categoria VARCHAR(150) NULL',
     ];
 
     foreach ($columnas as $definicion) {
@@ -663,6 +664,12 @@ function obtenerSiguienteIdSocioDisponible(PDO $pdo): int {
 function recalcularAutoIncrementSocios(PDO $pdo): void {
     $siguiente = (int) $pdo->query('SELECT COALESCE(MAX(id_socio), 0) + 1 FROM socios')->fetchColumn();
     $pdo->exec('ALTER TABLE socios AUTO_INCREMENT = ' . $siguiente);
+}
+
+function getCategoriasActividades(PDO $pdo): array {
+    asegurarEsquemaActividades($pdo);
+    $stmt = $pdo->query("SELECT DISTINCT TRIM(categoria) AS categoria FROM actividades_maestro WHERE categoria IS NOT NULL AND TRIM(categoria) <> '' ORDER BY categoria");
+    return $stmt ? $stmt->fetchAll(PDO::FETCH_COLUMN) : [];
 }
 
 function getActividades($pdo, $soloPolla = false, $incluirInactivas = false, $soloRifa = false) {

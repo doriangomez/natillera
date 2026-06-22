@@ -6,6 +6,7 @@ require_once __DIR__ . '/../includes/functions.php';
 
 $config = getConfiguracionGeneral($pdo);
 $actividades = getActividades($pdo, false, true);
+$categoriasActividades = getCategoriasActividades($pdo);
 $medios = getMediosPago($pdo, true);
 $periodosConfig = getPeriodosConfiguracion($pdo);
 $usuarios = getUsuarios($pdo);
@@ -308,6 +309,16 @@ $medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
                             <input type="text" name="descripcion" class="form-control" value="<?php echo clean($editData['descripcion'] ?? ''); ?>">
                         </div>
                         <div class="col-md-6">
+                            <label class="form-label">Categoría</label>
+                            <input type="text" name="categoria" class="form-control" list="categoriasActividadesConfig" maxlength="150" placeholder="Ej. Préstamos" value="<?php echo clean($editData['categoria'] ?? ''); ?>">
+                            <datalist id="categoriasActividadesConfig">
+                                <?php foreach ($categoriasActividades as $categoriaActividad): ?>
+                                    <option value="<?php echo clean($categoriaActividad); ?>"></option>
+                                <?php endforeach; ?>
+                            </datalist>
+                            <div class="form-text">Escribe una categoría nueva o reutiliza una existente.</div>
+                        </div>
+                        <div class="col-md-6">
                             <label class="form-label">Saldo socio</label>
                             <select class="form-select" name="afecta_saldo_socio">
                                 <?php $opts=['suma','resta','neutral']; foreach($opts as $o): ?>
@@ -354,6 +365,7 @@ $medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
                             <tr>
                                 <th>ID</th>
                                 <th>Nombre</th>
+                                <th>Categoría</th>
                                 <th>Socio</th>
                                 <th>Natillera</th>
                                 <th>Flags</th>
@@ -366,6 +378,7 @@ $medioData = $medioId ? getMedioPago($pdo, $medioId) : null;
                                 <tr>
                                     <td><?php echo $a['id_actividad']; ?></td>
                                     <td><?php echo clean($a['nombre_actividad']); ?></td>
+                                    <td><?php echo clean($a['categoria'] ?: 'Sin categoría'); ?></td>
                                     <td><?php echo $a['afecta_saldo_socio']; ?></td>
                                     <td><?php echo $a['afecta_saldo_natillera']; ?></td>
                                     <td class="small">

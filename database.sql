@@ -28,6 +28,7 @@ CREATE TABLE actividades_maestro (
     id_actividad INT AUTO_INCREMENT PRIMARY KEY,
     nombre_actividad VARCHAR(150) NOT NULL,
     descripcion TEXT,
+    categoria VARCHAR(150) DEFAULT NULL,
     afecta_saldo_socio VARCHAR(10) DEFAULT 'neutral',
     afecta_saldo_natillera VARCHAR(10) DEFAULT 'neutral',
     es_ingreso TINYINT(1) DEFAULT 0,
@@ -153,14 +154,14 @@ CREATE TABLE periodos_prestamo_historial (
 );
 
 -- Actividades de ejemplo
-INSERT INTO actividades_maestro (nombre_actividad, descripcion, afecta_saldo_socio, afecta_saldo_natillera, es_ingreso, es_prestamo, es_pago_prestamo, es_pago_interes, es_interes_causado, es_polla, es_gasto_general, activo) VALUES
-('Préstamo a socio', 'Desembolso de préstamo al socio o aval para un particular', 'resta', 'resta', 0, 1, 0, 0, 0, 0, 0, 1),
-('Pago a préstamo', 'Abonos a capital de préstamos vigentes', 'suma', 'suma', 1, 0, 1, 0, 0, 0, 0, 1),
-('Pago de intereses', 'Pagos de intereses de préstamos', 'suma', 'suma', 1, 0, 0, 1, 0, 0, 0, 1),
-('Causación de intereses', 'Causación automática de intereses mensuales', 'resta', 'neutral', 0, 0, 0, 0, 1, 0, 0, 1),
-('Polla', 'Aportes y pagos de polla', 'suma', 'suma', 1, 0, 0, 0, 0, 1, 0, 1),
-('Pago Premio Polla', 'Pago de premio de polla', 'resta', 'resta', 0, 0, 0, 0, 0, 1, 0, 1),
-('Gasto General', 'Gasto general de la natillera', 'neutral', 'resta', 0, 0, 0, 0, 0, 0, 1, 1);
+INSERT INTO actividades_maestro (nombre_actividad, descripcion, categoria, afecta_saldo_socio, afecta_saldo_natillera, es_ingreso, es_prestamo, es_pago_prestamo, es_pago_interes, es_interes_causado, es_polla, es_gasto_general, activo) VALUES
+('Préstamo a socio', 'Desembolso de préstamo al socio o aval para un particular', 'Préstamos', 'resta', 'resta', 0, 1, 0, 0, 0, 0, 0, 1),
+('Pago a préstamo', 'Abonos a capital de préstamos vigentes', 'Préstamos', 'suma', 'suma', 1, 0, 1, 0, 0, 0, 0, 1),
+('Pago de intereses', 'Pagos de intereses de préstamos', 'Préstamos', 'suma', 'suma', 1, 0, 0, 1, 0, 0, 0, 1),
+('Causación de intereses', 'Causación automática de intereses mensuales', 'Préstamos', 'resta', 'neutral', 0, 0, 0, 0, 1, 0, 0, 1),
+('Polla', 'Aportes y pagos de polla', 'Pollas', 'suma', 'suma', 1, 0, 0, 0, 0, 1, 0, 1),
+('Pago Premio Polla', 'Pago de premio de polla', 'Pollas', 'resta', 'resta', 0, 0, 0, 0, 0, 1, 0, 1),
+('Gasto General', 'Gasto general de la natillera', 'Gastos', 'neutral', 'resta', 0, 0, 0, 0, 0, 0, 1, 1);
 
 CREATE TABLE configuracion_general (
     id_config INT PRIMARY KEY,

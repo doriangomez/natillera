@@ -32,6 +32,7 @@ if ($accion === 'eliminar' && $id) {
 $data = [
     ':nombre_actividad' => $_POST['nombre_actividad'],
     ':descripcion' => $_POST['descripcion'] ?? '',
+    ':categoria' => trim((string) ($_POST['categoria'] ?? '')) !== '' ? trim((string) $_POST['categoria']) : null,
     ':afecta_saldo_socio' => $_POST['afecta_saldo_socio'] ?? 'neutral',
     ':afecta_saldo_natillera' => $_POST['afecta_saldo_natillera'] ?? 'neutral',
     ':es_ingreso' => isset($_POST['es_ingreso']) ? 1 : 0,
@@ -46,9 +47,9 @@ $data = [
 
 if ($id) {
     $data[':id'] = $id;
-    $sql = 'UPDATE actividades_maestro SET nombre_actividad=:nombre_actividad, descripcion=:descripcion, afecta_saldo_socio=:afecta_saldo_socio, afecta_saldo_natillera=:afecta_saldo_natillera, es_ingreso=:es_ingreso, es_prestamo=:es_prestamo, es_pago_prestamo=:es_pago_prestamo, es_pago_interes=:es_pago_interes, es_interes_causado=:es_interes_causado, es_polla=:es_polla, es_gasto_general=:es_gasto_general, activo=:activo WHERE id_actividad=:id';
+    $sql = 'UPDATE actividades_maestro SET nombre_actividad=:nombre_actividad, descripcion=:descripcion, categoria=:categoria, afecta_saldo_socio=:afecta_saldo_socio, afecta_saldo_natillera=:afecta_saldo_natillera, es_ingreso=:es_ingreso, es_prestamo=:es_prestamo, es_pago_prestamo=:es_pago_prestamo, es_pago_interes=:es_pago_interes, es_interes_causado=:es_interes_causado, es_polla=:es_polla, es_gasto_general=:es_gasto_general, activo=:activo WHERE id_actividad=:id';
 } else {
-    $sql = 'INSERT INTO actividades_maestro (nombre_actividad, descripcion, afecta_saldo_socio, afecta_saldo_natillera, es_ingreso, es_prestamo, es_pago_prestamo, es_pago_interes, es_interes_causado, es_polla, es_gasto_general, activo) VALUES (:nombre_actividad, :descripcion, :afecta_saldo_socio, :afecta_saldo_natillera, :es_ingreso, :es_prestamo, :es_pago_prestamo, :es_pago_interes, :es_interes_causado, :es_polla, :es_gasto_general, :activo)';
+    $sql = 'INSERT INTO actividades_maestro (nombre_actividad, descripcion, categoria, afecta_saldo_socio, afecta_saldo_natillera, es_ingreso, es_prestamo, es_pago_prestamo, es_pago_interes, es_interes_causado, es_polla, es_gasto_general, activo) VALUES (:nombre_actividad, :descripcion, :categoria, :afecta_saldo_socio, :afecta_saldo_natillera, :es_ingreso, :es_prestamo, :es_pago_prestamo, :es_pago_interes, :es_interes_causado, :es_polla, :es_gasto_general, :activo)';
 }
 $stmt = $pdo->prepare($sql);
 $stmt->execute($data);
