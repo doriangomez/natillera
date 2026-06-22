@@ -41,6 +41,39 @@ CREATE TABLE actividades_maestro (
     activo TINYINT(1) DEFAULT 1
 );
 
+-- Migración incremental para bases existentes: agrega la categoría sin recrear datos.
+SET @existe_categoria_actividades := (
+    SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'actividades_maestro'
+      AND COLUMN_NAME = 'categoria'
+);
+SET @sql_categoria_actividades := IF(
+    @existe_categoria_actividades = 0,
+    'ALTER TABLE actividades_maestro ADD COLUMN categoria VARCHAR(150) DEFAULT NULL AFTER descripcion',
+    'SELECT ''La columna categoria ya existe en actividades_maestro'' AS mensaje'
+);
+PREPARE stmt_categoria_actividades FROM @sql_categoria_actividades;
+EXECUTE stmt_categoria_actividades;
+DEALLOCATE PREPARE stmt_categoria_actividades;
+
+-- Datos de categoría iniciales para actividades ya existentes.
+UPDATE actividades_maestro
+SET categoria = 'Préstamos'
+WHERE nombre_actividad IN ('Préstamo a socio', 'Pago a préstamo', 'Pago de intereses', 'Causación de intereses')
+  AND (categoria IS NULL OR TRIM(categoria) = '');
+
+UPDATE actividades_maestro
+SET categoria = 'Pollas'
+WHERE nombre_actividad IN ('Polla', 'Pago Premio Polla')
+  AND (categoria IS NULL OR TRIM(categoria) = '');
+
+UPDATE actividades_maestro
+SET categoria = 'Gastos'
+WHERE nombre_actividad IN ('Gasto General')
+  AND (categoria IS NULL OR TRIM(categoria) = '');
+
 CREATE TABLE medios_pago (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
