@@ -28,6 +28,7 @@ CREATE TABLE actividades_maestro (
     id_actividad INT AUTO_INCREMENT PRIMARY KEY,
     nombre_actividad VARCHAR(150) NOT NULL,
     descripcion TEXT,
+    categoria VARCHAR(150) DEFAULT NULL,
     afecta_saldo_socio VARCHAR(10) DEFAULT 'neutral',
     afecta_saldo_natillera VARCHAR(10) DEFAULT 'neutral',
     es_ingreso TINYINT(1) DEFAULT 0,
@@ -39,6 +40,39 @@ CREATE TABLE actividades_maestro (
     es_gasto_general TINYINT(1) DEFAULT 0,
     activo TINYINT(1) DEFAULT 1
 );
+
+-- Migración incremental para bases existentes: agrega la categoría sin recrear datos.
+SET @existe_categoria_actividades := (
+    SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'actividades_maestro'
+      AND COLUMN_NAME = 'categoria'
+);
+SET @sql_categoria_actividades := IF(
+    @existe_categoria_actividades = 0,
+    'ALTER TABLE actividades_maestro ADD COLUMN categoria VARCHAR(150) DEFAULT NULL AFTER descripcion',
+    'SELECT ''La columna categoria ya existe en actividades_maestro'' AS mensaje'
+);
+PREPARE stmt_categoria_actividades FROM @sql_categoria_actividades;
+EXECUTE stmt_categoria_actividades;
+DEALLOCATE PREPARE stmt_categoria_actividades;
+
+-- Datos de categoría iniciales para actividades ya existentes.
+UPDATE actividades_maestro
+SET categoria = 'Préstamos'
+WHERE nombre_actividad IN ('Préstamo a socio', 'Pago a préstamo', 'Pago de intereses', 'Causación de intereses')
+  AND (categoria IS NULL OR TRIM(categoria) = '');
+
+UPDATE actividades_maestro
+SET categoria = 'Pollas'
+WHERE nombre_actividad IN ('Polla', 'Pago Premio Polla')
+  AND (categoria IS NULL OR TRIM(categoria) = '');
+
+UPDATE actividades_maestro
+SET categoria = 'Gastos'
+WHERE nombre_actividad IN ('Gasto General')
+  AND (categoria IS NULL OR TRIM(categoria) = '');
 
 CREATE TABLE medios_pago (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -153,16 +187,14 @@ CREATE TABLE periodos_prestamo_historial (
 );
 
 -- Actividades de ejemplo
-INSERT INTO actividades_maestro (nombre_actividad, descripcion, afecta_saldo_socio, afecta_saldo_natillera, es_ingreso, es_prestamo, es_pago_prestamo, es_pago_interes, es_interes_causado, es_polla, es_gasto_general, activo) VALUES
-('Préstamo a socio', 'Desembolso de préstamo al socio o aval para un particular', 'resta', 'resta', 0, 1, 0, 0, 0, 0, 0, 1),
-('Pago a préstamo', 'Abonos a capital de préstamos vigentes', 'suma', 'suma', 1, 0, 1, 0, 0, 0, 0, 1),
-('Pago de intereses', 'Pagos de intereses de préstamos', 'suma', 'suma', 1, 0, 0, 1, 0, 0, 0, 1),
-('Pago de intereses por liquidación', 'Pago de intereses de préstamo aplicado desde liquidación de socio', 'neutral', 'resta', 0, 0, 0, 1, 0, 0, 0, 1),
-('Pago de capital por liquidación', 'Pago de capital de préstamo aplicado desde liquidación de socio', 'resta', 'resta', 0, 0, 1, 0, 0, 0, 0, 1),
-('Causación de intereses', 'Causación automática de intereses mensuales', 'resta', 'neutral', 0, 0, 0, 0, 1, 0, 0, 1),
-('Polla', 'Aportes y pagos de polla', 'suma', 'suma', 1, 0, 0, 0, 0, 1, 0, 1),
-('Pago Premio Polla', 'Pago de premio de polla', 'resta', 'resta', 0, 0, 0, 0, 0, 1, 0, 1),
-('Gasto General', 'Gasto general de la natillera', 'neutral', 'resta', 0, 0, 0, 0, 0, 0, 1, 1);
+INSERT INTO actividades_maestro (nombre_actividad, descripcion, categoria, afecta_saldo_socio, afecta_saldo_natillera, es_ingreso, es_prestamo, es_pago_prestamo, es_pago_interes, es_interes_causado, es_polla, es_gasto_general, activo) VALUES
+('Préstamo a socio', 'Desembolso de préstamo al socio o aval para un particular', 'Préstamos', 'resta', 'resta', 0, 1, 0, 0, 0, 0, 0, 1),
+('Pago a préstamo', 'Abonos a capital de préstamos vigentes', 'Préstamos', 'suma', 'suma', 1, 0, 1, 0, 0, 0, 0, 1),
+('Pago de intereses', 'Pagos de intereses de préstamos', 'Préstamos', 'suma', 'suma', 1, 0, 0, 1, 0, 0, 0, 1),
+('Causación de intereses', 'Causación automática de intereses mensuales', 'Préstamos', 'resta', 'neutral', 0, 0, 0, 0, 1, 0, 0, 1),
+('Polla', 'Aportes y pagos de polla', 'Pollas', 'suma', 'suma', 1, 0, 0, 0, 0, 1, 0, 1),
+('Pago Premio Polla', 'Pago de premio de polla', 'Pollas', 'resta', 'resta', 0, 0, 0, 0, 0, 1, 0, 1),
+('Gasto General', 'Gasto general de la natillera', 'Gastos', 'neutral', 'resta', 0, 0, 0, 0, 0, 0, 1, 1);
 
 CREATE TABLE configuracion_general (
     id_config INT PRIMARY KEY,

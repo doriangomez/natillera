@@ -5,6 +5,7 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 $actividades = getActividades($pdo, false, true);
+$categoriasActividades = getCategoriasActividades($pdo);
 $editId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $editData = null;
 if ($editId) {
@@ -37,6 +38,16 @@ if ($editId) {
                     <div class="mb-3">
                         <label class="form-label">Descripción</label>
                         <textarea name="descripcion" class="form-control" rows="3"><?php echo clean($editData['descripcion'] ?? ''); ?></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Categoría</label>
+                        <input type="text" name="categoria" class="form-control" list="categoriasActividades" maxlength="150" placeholder="Ej. Préstamos, Rifas, Natillera" value="<?php echo clean($editData['categoria'] ?? ''); ?>">
+                        <datalist id="categoriasActividades">
+                            <?php foreach ($categoriasActividades as $categoriaActividad): ?>
+                                <option value="<?php echo clean($categoriaActividad); ?>"></option>
+                            <?php endforeach; ?>
+                        </datalist>
+                        <div class="form-text">Escribe una categoría nueva o selecciona una ya usada. Si queda vacía se mostrará como "Sin categoría" en los reportes.</div>
                     </div>
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -110,6 +121,7 @@ if ($editId) {
                             <tr>
                                 <th>ID</th>
                                 <th>Nombre</th>
+                                <th>Categoría</th>
                                 <th>Saldo socio</th>
                                 <th>Saldo natillera</th>
                                 <th>Flags</th>
@@ -122,6 +134,7 @@ if ($editId) {
                                 <tr>
                                     <td><?php echo $a['id_actividad']; ?></td>
                                     <td><?php echo clean($a['nombre_actividad']); ?></td>
+                                    <td><?php echo clean($a['categoria'] ?: 'Sin categoría'); ?></td>
                                     <td><?php echo $a['afecta_saldo_socio']; ?></td>
                                     <td><?php echo $a['afecta_saldo_natillera']; ?></td>
                                 <td class="small">
