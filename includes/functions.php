@@ -342,10 +342,12 @@ function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo): ?
 
     $saldoBase = (float) ($socio['saldo_socio'] ?? 0);
     $cuotaManejo = max(0, $cuotaManejo);
-    $valorAplicadoDeuda = min($saldoBase, $valorPrestamos);
-    $deficit = max(0, $valorPrestamos - $saldoBase);
-    $valorBruto = max(0, $saldoBase - $valorPrestamos);
-    $valorNeto = $deficit > 0 ? 0.0 : ($valorBruto - $cuotaManejo);
+    $deudaTotal = $valorPrestamos + $cuotaManejo;
+    $saldoLiquidacion = $saldoBase - $deudaTotal;
+    $valorAplicadoDeuda = min(max(0, $saldoBase), $valorPrestamos);
+    $deficit = max(0, abs(min(0, $saldoLiquidacion)));
+    $valorBruto = $saldoBase - $valorPrestamos;
+    $valorNeto = max(0, $saldoLiquidacion);
     $fechaPreliquidacion = date('Y-m-d H:i:s');
 
     return [
@@ -353,6 +355,8 @@ function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo): ?
         'saldo_base' => $saldoBase,
         'valor_pollas' => $valorPollas,
         'valor_prestamos' => $valorPrestamos,
+        'deuda_total' => $deudaTotal,
+        'saldo_liquidacion' => $saldoLiquidacion,
         'prestamos_descontados' => $prestamos,
         'valor_cuota_manejo' => $cuotaManejo,
         'valor_aplicado_deuda' => $valorAplicadoDeuda,
