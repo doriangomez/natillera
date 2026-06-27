@@ -194,8 +194,8 @@ try {
         throw new InvalidArgumentException('No se encontró el socio para liquidar.');
     }
 
-    if ((float) $calculo['valor_neto'] < 0 || ((float) $calculo['valor_bruto'] <= 0 && (float) $calculo['valor_aplicado_deuda'] <= 0)) {
-        throw new InvalidArgumentException('El cálculo de liquidación no es válido (sin valor para pagar o aplicar a deuda, o neto negativo).');
+    if ((float) $calculo['deuda_total'] <= 0 && (float) $calculo['valor_neto'] <= 0) {
+        throw new InvalidArgumentException('El cálculo de liquidación no es válido (sin valor para pagar, aplicar a deuda o registrar como saldo pendiente).');
     }
 
     if ($cuotaManejo > 0 && (float) $calculo['deficit'] <= 0) {
@@ -378,6 +378,8 @@ try {
             'valor_pollas' => $calculo['valor_pollas'],
             'prestamos_descontados' => $calculo['prestamos_descontados'],
             'valor_prestamos' => $calculo['valor_prestamos'],
+            'deuda_total' => $calculo['deuda_total'],
+            'saldo_liquidacion' => $calculo['saldo_liquidacion'],
             'valor_aplicado_deuda' => $calculo['valor_aplicado_deuda'],
             'intereses_cubiertos' => $interesesCubiertos,
             'capital_cubierto' => $capitalCubierto,
@@ -386,7 +388,7 @@ try {
             'valor_cuota_manejo' => $calculo['valor_cuota_manejo'],
             'valor_bruto' => $calculo['valor_bruto'],
             'valor_neto' => $calculo['valor_neto'],
-            'advertencia_deficit' => $calculo['deficit'] > 0 ? 'El saldo del socio no cubre la totalidad de la deuda. El déficit restante deberá ser gestionado manualmente en el módulo de préstamos.' : null,
+            'advertencia_deficit' => $calculo['deficit'] > 0 ? 'El saldo de liquidación es negativo. El saldo pendiente deberá ser gestionado manualmente en el módulo de préstamos.' : null,
         ], JSON_UNESCAPED_UNICODE),
         ':fecha_preliquidacion' => $calculo['fecha_preliquidacion'],
         ':obs' => $observaciones,
