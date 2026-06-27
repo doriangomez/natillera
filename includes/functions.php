@@ -114,6 +114,7 @@ function asegurarEsquemaMovimientos(PDO $pdo): void {
         'mes INT DEFAULT NULL',
         'quincena INT DEFAULT 0',
         "modulo VARCHAR(100) DEFAULT NULL",
+        "id_liquidacion INT DEFAULT NULL",
     ];
 
     foreach ($columnas as $def) {
@@ -709,7 +710,7 @@ function sincronizarConceptosLiquidacionPrestamo(PDO $pdo): array {
             'nombre_actividad' => 'Pago de capital por liquidación',
             'descripcion' => 'Pago de capital de préstamo aplicado desde liquidación de socio',
             'afecta_saldo_socio' => 'resta',
-            'afecta_saldo_natillera' => 'resta',
+            'afecta_saldo_natillera' => 'neutral',
             'es_ingreso' => 0,
             'es_pago_prestamo' => 1,
             'activo' => 1,
