@@ -60,6 +60,39 @@ function ejecutarLiquidacionStatement(PDOStatement $stmt, array $params = []): v
     $stmt->execute($params);
 }
 
+
+function esAdminDebugLiquidacion(): bool {
+    return ($_SESSION['rol'] ?? '') === 'admin';
+}
+
+function registrarDebugLiquidacion(string $momento, array $datos): void {
+    if (!esAdminDebugLiquidacion()) {
+        return;
+    }
+    $_SESSION['debug_liquidacion'][] = [
+        'momento' => $momento,
+        'fecha' => date('Y-m-d H:i:s'),
+        'datos' => $datos,
+    ];
+}
+
+function obtenerEstadoSocioDebug(PDO $pdo, int $idSocio): array {
+    $stmt = $pdo->prepare('SELECT id_socio, nombre_completo, saldo_socio, activo, estado_socio, clasificacion FROM socios WHERE id_socio = :id');
+    ejecutarLiquidacionStatement($stmt, [':id' => $idSocio]);
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+}
+
+function obtenerPrestamosDebug(PDO $pdo, array $idsPrestamos): array {
+    $idsPrestamos = array_values(array_filter(array_unique(array_map('intval', $idsPrestamos)), static fn($id) => $id > 0));
+    if (empty($idsPrestamos)) {
+        return [];
+    }
+    $placeholders = implode(',', array_fill(0, count($idsPrestamos), '?'));
+    $stmt = $pdo->prepare("SELECT id_prestamo, id_socio, monto_prestamo, saldo_capital_actual, saldo_intereses_actual, estado, clasificacion_cartera FROM prestamos WHERE id_prestamo IN ($placeholders) ORDER BY id_prestamo ASC");
+    $stmt->execute($idsPrestamos);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 function obtenerActividadValida(PDO $pdo, int $id): ?array {
     if ($id <= 0) {
         return null;
@@ -338,6 +371,12 @@ try {
     $prestamoNuevoId = null;
     $saldoPendiente = (float) $calculo['deficit'];
 
+    registrarDebugLiquidacion('ANTES de ejecutar liquidación', [
+        'saldo_ahorros_socio' => $calculo['ahorro_acumulado_bruto'],
+        'capital_pendiente_prestamo_activo' => array_sum(array_map(static fn($p) => (float) $p['capital_pendiente'], $calculo['prestamos_descontados'])),
+        'estado_actual_socio' => obtenerEstadoSocioDebug($pdo, $idSocio),
+    ]);
+
     if ((float) $calculo['valor_aplicado_deuda'] > 0) {
         $actividadesLiquidacionPrestamo = sincronizarConceptosLiquidacionPrestamo($pdo);
         $actividadPagoInteresLiquidacion = $actividadesLiquidacionPrestamo['pago_interes_liquidacion'] ?? null;
@@ -604,6 +643,14 @@ try {
     }
 
     recalcularSaldosDesdeMovimientos($pdo);
+
+    registrarDebugLiquidacion('DESPUÉS de completar liquidación', [
+        'saldo_ahorros_socio' => obtenerEstadoSocioDebug($pdo, $idSocio)['saldo_socio'] ?? null,
+        'prestamo_original' => obtenerPrestamosDebug($pdo, $idsPrestamosAfectados),
+        'prestamo_nuevo' => $prestamoNuevoId ? obtenerPrestamosDebug($pdo, [$prestamoNuevoId]) : [],
+        'estado_socio' => obtenerEstadoSocioDebug($pdo, $idSocio),
+    ]);
+
     $pdo->commit();
 
     $_SESSION['exito'] = $accion === 'editar'
