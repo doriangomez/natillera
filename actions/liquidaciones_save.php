@@ -3,6 +3,7 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 checkAuth();
 asegurarEsquemaLiquidaciones($pdo);
+asegurarEsquemaBolsaAdministracion($pdo);
 
 $accion = trim((string) ($_POST['accion'] ?? 'crear'));
 $idLiquidacion = isset($_POST['id_liquidacion']) ? (int) $_POST['id_liquidacion'] : 0;
@@ -377,7 +378,7 @@ try {
         'estado_actual_socio' => obtenerEstadoSocioDebug($pdo, $idSocio),
     ]);
 
-    if ((float) $calculo['valor_aplicado_deuda'] > 0) {
+    if ((float) $calculo['valor_aplicado_deuda'] > 0 && $saldoPendiente <= 0.01) {
         $actividadesLiquidacionPrestamo = sincronizarConceptosLiquidacionPrestamo($pdo);
         $actividadPagoInteresLiquidacion = $actividadesLiquidacionPrestamo['pago_interes_liquidacion'] ?? null;
         $actividadPagoCapitalLiquidacion = $actividadesLiquidacionPrestamo['pago_capital_liquidacion'] ?? null;
@@ -463,7 +464,7 @@ try {
     }
 
     if (!empty($calculo['prestamos_descontados'])) {
-        $idActividadCancelacion = asegurarActividadLiquidacionSimple($pdo, 'Cancelación préstamo por liquidación', 'Cancelación contable del préstamo original por liquidación', 'suma', 'neutral');
+        $idActividadCancelacion = asegurarActividadLiquidacionSimple($pdo, 'Cancelación préstamo por liquidación', 'Cancelación contable del préstamo original por liquidación', 'suma', 'suma', 0, 1);
         foreach ($calculo['prestamos_descontados'] as $prestamoCancelado) {
             $capitalCancelado = (float) $prestamoCancelado['capital_pendiente'];
             if ($capitalCancelado <= 0.01) {
@@ -483,35 +484,50 @@ try {
         }
     }
 
-    if ($cuotaManejo > 0 && $saldoPendiente > 0.01) {
-        $idActividadCuotaPendiente = asegurarActividadLiquidacionSimple($pdo, 'Cuota administración liquidación pendiente', 'Cuota de administración capitalizada en saldo pendiente de liquidación', 'neutral', 'neutral');
-        ejecutarLiquidacionStatement($insertMov, [
-            ':fecha' => $fecha, ':anio' => $anio, ':mes' => $mes, ':quincena' => $quincena,
-            ':id_socio' => $idSocio, ':id_prestamo' => null, ':id_actividad' => $idActividadCuotaPendiente,
-            ':motivo' => 'Cuota administración capitalizada en liquidación - ' . $calculo['socio']['nombre_completo'],
-            ':valor' => abs($cuotaManejo), ':medio' => 'Liquidaciones', ':ingreso' => 0, ':egreso' => 0,
-            ':obs' => 'Cuota de administración incluida en el saldo pendiente de liquidación.',
-            ':usuario' => $usuario, ':modulo' => 'liquidaciones',
-        ]);
-        $idMovCuotaPendiente = (int) $pdo->lastInsertId();
-        $movimientosGenerados[] = ['tipo' => 'cuota_administracion_saldo_pendiente', 'id_movimiento' => $idMovCuotaPendiente, 'valor' => abs((float) $cuotaManejo)];
-    }
-
     if ($saldoPendiente > 0.01) {
         $stmtInsertPrestamoPendiente = $pdo->prepare("INSERT INTO prestamos (id_socio, es_particular, id_socio_aval, nombre_deudor, fecha_prestamo, monto_prestamo, tasa_interes, interes_mensual, saldo_capital_actual, saldo_intereses_actual, estado, clasificacion_cartera) VALUES (:socio, 0, NULL, NULL, :fecha, :monto, 0, 0, :saldo, 0, 'Activo', 'Socio retirado con deuda pendiente')");
         ejecutarLiquidacionStatement($stmtInsertPrestamoPendiente, [':socio' => $idSocio, ':fecha' => $fecha, ':monto' => $saldoPendiente, ':saldo' => $saldoPendiente]);
         $prestamoNuevoId = (int) $pdo->lastInsertId();
-        $idActividadPrestamoRetiro = asegurarActividadLiquidacionSimple($pdo, 'Creación préstamo por retiro', 'Ingreso a cartera por saldo pendiente de socio retirado', 'resta', 'neutral', 1, 1);
+        $idActividadPrestamoRetiro = asegurarActividadLiquidacionSimple($pdo, 'Creación préstamo por retiro', 'Ingreso a cartera por saldo pendiente de socio retirado', 'resta', 'resta', 1, 0);
         ejecutarLiquidacionStatement($insertMov, [
             ':fecha' => $fecha, ':anio' => $anio, ':mes' => $mes, ':quincena' => $quincena,
             ':id_socio' => $idSocio, ':id_prestamo' => $prestamoNuevoId, ':id_actividad' => $idActividadPrestamoRetiro,
-            ':motivo' => 'Creación préstamo por saldo pendiente de retiro',
+            ':motivo' => 'Creación préstamo por retiro',
             ':valor' => abs($saldoPendiente), ':medio' => 'Liquidaciones', ':ingreso' => 1, ':egreso' => 0,
             ':obs' => 'Creación de préstamo por saldo pendiente de liquidación.',
             ':usuario' => $usuario, ':modulo' => 'liquidaciones',
         ]);
         $idMovPrestamoNuevo = (int) $pdo->lastInsertId();
         $movimientosGenerados[] = ['tipo' => 'prestamo_saldo_pendiente_liquidacion', 'id_movimiento' => $idMovPrestamoNuevo, 'id_prestamo' => $prestamoNuevoId, 'valor' => $saldoPendiente];
+
+        if ((float) $calculo['valor_aplicado_deuda'] > 0.01) {
+            $idActividadAbonoAhorro = asegurarActividadLiquidacionSimple($pdo, 'Abono ahorro a préstamo por liquidación', 'Aplicación de ahorros del socio al préstamo en liquidación con saldo pendiente', 'suma', 'suma', 0, 1);
+            ejecutarLiquidacionStatement($insertMov, [
+                ':fecha' => $fecha, ':anio' => $anio, ':mes' => $mes, ':quincena' => $quincena,
+                ':id_socio' => $idSocio, ':id_prestamo' => $prestamoNuevoId, ':id_actividad' => $idActividadAbonoAhorro,
+                ':motivo' => 'Abono ahorro a préstamo por liquidación',
+                ':valor' => abs((float) $calculo['valor_aplicado_deuda']), ':medio' => 'Liquidaciones', ':ingreso' => 1, ':egreso' => 0,
+                ':obs' => 'Ahorros del socio aplicados al préstamo durante la liquidación con saldo pendiente.',
+                ':usuario' => $usuario, ':modulo' => 'liquidaciones',
+            ]);
+            $idMovAbonoAhorro = (int) $pdo->lastInsertId();
+            $movimientosGenerados[] = ['tipo' => 'abono_ahorro_prestamo_liquidacion', 'id_movimiento' => $idMovAbonoAhorro, 'id_prestamo' => $prestamoNuevoId, 'valor' => abs((float) $calculo['valor_aplicado_deuda'])];
+        }
+
+        if ($cuotaManejo > 0) {
+            $idActividadCuotaPendiente = asegurarActividadLiquidacionSimple($pdo, 'Cuota administración liquidación pendiente', 'Cuota de administración acumulada en bolsa separada por liquidación pendiente', 'resta', 'neutral');
+            ejecutarLiquidacionStatement($insertMov, [
+                ':fecha' => $fecha, ':anio' => $anio, ':mes' => $mes, ':quincena' => $quincena,
+                ':id_socio' => $idSocio, ':id_prestamo' => null, ':id_actividad' => $idActividadCuotaPendiente,
+                ':motivo' => 'Cuota administración liquidación pendiente',
+                ':valor' => abs($cuotaManejo), ':medio' => 'Liquidaciones', ':ingreso' => 0, ':egreso' => 0,
+                ':obs' => 'Cuota de administración acumulada en bolsa separada de administración.',
+                ':usuario' => $usuario, ':modulo' => 'liquidaciones',
+            ]);
+            $idMovCuotaPendiente = (int) $pdo->lastInsertId();
+            registrarBolsaAdministracion($pdo, $idSocio, $idMovCuotaPendiente, null, $fecha, abs((float) $cuotaManejo), 'Cuota administración liquidación pendiente', 'Acumulada por liquidación definitiva con deuda pendiente.', $usuario);
+            $movimientosGenerados[] = ['tipo' => 'cuota_administracion_saldo_pendiente', 'id_movimiento' => $idMovCuotaPendiente, 'valor' => abs((float) $cuotaManejo)];
+        }
     }
 
     $stmtRetirarSocio = $pdo->prepare("UPDATE socios SET activo = 0, estado_socio = :estado, clasificacion = :clasificacion WHERE id_socio = :id");
@@ -638,6 +654,8 @@ try {
         $placeholdersMovs = implode(',', array_fill(0, count($idsMovimientosLiquidacion), '?'));
         $pdo->prepare("UPDATE movimientos SET id_liquidacion = ?, motivo = CONCAT('Liquidación #', ?, ' - ', motivo), observaciones = CONCAT('Liquidación #', ?, '. ', COALESCE(observaciones, '')) WHERE id_movimiento IN ($placeholdersMovs)")
             ->execute(array_merge([$idLiquidacionCreada, $idLiquidacionCreada, $idLiquidacionCreada], $idsMovimientosLiquidacion));
+        $pdo->prepare("UPDATE bolsa_administracion SET id_liquidacion = ? WHERE id_movimiento IN ($placeholdersMovs)")
+            ->execute(array_merge([$idLiquidacionCreada], $idsMovimientosLiquidacion));
         $stmtUpdateLiquidacionMovs = $pdo->prepare('UPDATE liquidaciones SET movimientos_generados = :movs_json WHERE id = :id');
         ejecutarLiquidacionStatement($stmtUpdateLiquidacionMovs, [':movs_json' => json_encode($movimientosGenerados), ':id' => $idLiquidacionCreada]);
     }
