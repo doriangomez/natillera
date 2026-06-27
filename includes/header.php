@@ -269,6 +269,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <a class="nav-link-sidebar<?php echo $currentPage === 'prestamos.php' ? ' active' : ''; ?>" href="prestamos.php"><i class="bi bi-cash-coin"></i><span>Préstamos</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'prestamos_matriz.php' ? ' active' : ''; ?>" href="prestamos_matriz.php"><i class="bi bi-table"></i><span>Matriz de préstamos</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'retiros_caja.php' ? ' active' : ''; ?>" href="retiros_caja.php"><i class="bi bi-safe2"></i><span>Retiros a caja</span></a>
+            <a class="nav-link-sidebar<?php echo $currentPage === 'bolsa_administracion.php' ? ' active' : ''; ?>" href="bolsa_administracion.php"><i class="bi bi-piggy-bank"></i><span>Bolsa administración</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'gastos.php' ? ' active' : ''; ?>" href="gastos.php"><i class="bi bi-receipt"></i><span>Gastos</span></a>
             <a class="nav-link-sidebar<?php echo in_array($currentPage, ['liquidaciones.php', 'liquidacion_anticipada.php', 'liquidacion_definitiva.php'], true) ? ' active' : ''; ?>" href="liquidaciones.php"><i class="bi bi-calculator-fill"></i><span>Liquidaciones</span></a>
             <div class="nav-submenu">

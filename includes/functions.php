@@ -6,6 +6,50 @@ function clean($value) {
     return htmlspecialchars(trim((string)$value), ENT_QUOTES, 'UTF-8');
 }
 
+function asegurarEsquemaBolsaAdministracion(PDO $pdo): void {
+    static $asegurada = false;
+    if ($asegurada) {
+        return;
+    }
+
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS bolsa_administracion (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            id_socio INT DEFAULT NULL,
+            id_movimiento INT DEFAULT NULL,
+            id_liquidacion INT DEFAULT NULL,
+            fecha DATE NOT NULL,
+            valor DECIMAL(12,2) NOT NULL DEFAULT 0,
+            concepto VARCHAR(255) NOT NULL,
+            observaciones TEXT DEFAULT NULL,
+            usuario_registro VARCHAR(100) DEFAULT NULL,
+            fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_bolsa_admin_socio (id_socio),
+            INDEX idx_bolsa_admin_movimiento (id_movimiento),
+            INDEX idx_bolsa_admin_liquidacion (id_liquidacion)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } catch (Exception $e) {
+        // No interrumpir el flujo principal si el motor no permite crear la tabla.
+    }
+
+    $asegurada = true;
+}
+
+function registrarBolsaAdministracion(PDO $pdo, ?int $idSocio, ?int $idMovimiento, ?int $idLiquidacion, string $fecha, float $valor, string $concepto, ?string $observaciones = null, ?string $usuario = null): void {
+    asegurarEsquemaBolsaAdministracion($pdo);
+    $stmt = $pdo->prepare('INSERT INTO bolsa_administracion (id_socio, id_movimiento, id_liquidacion, fecha, valor, concepto, observaciones, usuario_registro) VALUES (:socio, :movimiento, :liquidacion, :fecha, :valor, :concepto, :observaciones, :usuario)');
+    $stmt->execute([
+        ':socio' => $idSocio,
+        ':movimiento' => $idMovimiento,
+        ':liquidacion' => $idLiquidacion,
+        ':fecha' => $fecha,
+        ':valor' => $valor,
+        ':concepto' => $concepto,
+        ':observaciones' => $observaciones,
+        ':usuario' => $usuario,
+    ]);
+}
+
 function asegurarColumnaIdInternoSocios(PDO $pdo): void {
     static $asegurada = false;
     if ($asegurada) {
