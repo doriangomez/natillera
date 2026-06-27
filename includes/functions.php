@@ -114,6 +114,7 @@ function asegurarEsquemaMovimientos(PDO $pdo): void {
         'mes INT DEFAULT NULL',
         'quincena INT DEFAULT 0',
         "modulo VARCHAR(100) DEFAULT NULL",
+        "id_liquidacion INT DEFAULT NULL",
     ];
 
     foreach ($columnas as $def) {
@@ -267,6 +268,12 @@ function asegurarEsquemaLiquidaciones(PDO $pdo): void {
 
     try {
         $columnas = [
+            'estado_anterior_socio' => "ALTER TABLE liquidaciones ADD COLUMN estado_anterior_socio TEXT DEFAULT NULL AFTER socio_id",
+            'prestamo_nuevo_id' => "ALTER TABLE liquidaciones ADD COLUMN prestamo_nuevo_id INT DEFAULT NULL AFTER ids_prestamos_afectados",
+            'saldo_pendiente' => "ALTER TABLE liquidaciones ADD COLUMN saldo_pendiente DECIMAL(12,2) DEFAULT 0 AFTER deficit",
+            'fecha_reverso' => "ALTER TABLE liquidaciones ADD COLUMN fecha_reverso DATETIME DEFAULT NULL AFTER estado",
+            'usuario_reverso' => "ALTER TABLE liquidaciones ADD COLUMN usuario_reverso VARCHAR(50) DEFAULT NULL AFTER fecha_reverso",
+            'motivo_reverso' => "ALTER TABLE liquidaciones ADD COLUMN motivo_reverso TEXT DEFAULT NULL AFTER usuario_reverso",
             'movimientos_generados' => "ALTER TABLE liquidaciones ADD COLUMN movimientos_generados TEXT DEFAULT NULL AFTER movimiento_fondo_id",
             'detalle_preliquidacion' => "ALTER TABLE liquidaciones ADD COLUMN detalle_preliquidacion TEXT DEFAULT NULL AFTER movimientos_generados",
             'fecha_preliquidacion' => "ALTER TABLE liquidaciones ADD COLUMN fecha_preliquidacion DATETIME DEFAULT NULL AFTER detalle_preliquidacion",
@@ -279,6 +286,27 @@ function asegurarEsquemaLiquidaciones(PDO $pdo): void {
         ];
         foreach ($columnas as $columna => $alterSql) {
             $resultado = $pdo->query("SHOW COLUMNS FROM liquidaciones LIKE '" . $columna . "'");
+            if ($resultado && $resultado->rowCount() === 0) {
+                $pdo->exec($alterSql);
+            }
+        }
+
+        $columnasSocios = [
+            'estado_socio' => "ALTER TABLE socios ADD COLUMN estado_socio VARCHAR(60) DEFAULT 'Activo' AFTER activo",
+            'clasificacion' => "ALTER TABLE socios ADD COLUMN clasificacion VARCHAR(120) DEFAULT NULL AFTER estado_socio",
+        ];
+        foreach ($columnasSocios as $columna => $alterSql) {
+            $resultado = $pdo->query("SHOW COLUMNS FROM socios LIKE '" . $columna . "'");
+            if ($resultado && $resultado->rowCount() === 0) {
+                $pdo->exec($alterSql);
+            }
+        }
+        $columnasPrestamos = [
+            'clasificacion_cartera' => "ALTER TABLE prestamos ADD COLUMN clasificacion_cartera VARCHAR(120) DEFAULT NULL AFTER estado",
+            'prestamo_origen_liquidacion_id' => "ALTER TABLE prestamos ADD COLUMN prestamo_origen_liquidacion_id INT DEFAULT NULL AFTER clasificacion_cartera",
+        ];
+        foreach ($columnasPrestamos as $columna => $alterSql) {
+            $resultado = $pdo->query("SHOW COLUMNS FROM prestamos LIKE '" . $columna . "'");
             if ($resultado && $resultado->rowCount() === 0) {
                 $pdo->exec($alterSql);
             }
@@ -682,7 +710,7 @@ function sincronizarConceptosLiquidacionPrestamo(PDO $pdo): array {
             'nombre_actividad' => 'Pago de capital por liquidación',
             'descripcion' => 'Pago de capital de préstamo aplicado desde liquidación de socio',
             'afecta_saldo_socio' => 'resta',
-            'afecta_saldo_natillera' => 'resta',
+            'afecta_saldo_natillera' => 'neutral',
             'es_ingreso' => 0,
             'es_pago_prestamo' => 1,
             'activo' => 1,
