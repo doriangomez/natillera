@@ -375,6 +375,9 @@ try {
         ':detalle_preliquidacion' => json_encode([
             'socio' => $calculo['socio'],
             'saldo_base' => $calculo['saldo_base'],
+            'saldo_actual_socio' => $calculo['saldo_actual_socio'],
+            'ahorro_acumulado_bruto' => $calculo['ahorro_acumulado_bruto'],
+            'rendimientos' => $calculo['rendimientos'],
             'valor_pollas' => $calculo['valor_pollas'],
             'prestamos_descontados' => $calculo['prestamos_descontados'],
             'valor_prestamos' => $calculo['valor_prestamos'],

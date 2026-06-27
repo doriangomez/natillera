@@ -317,6 +317,27 @@ function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo): ?
     $stmtPollas->execute([':id' => $idSocio]);
     $valorPollas = (float) $stmtPollas->fetchColumn();
 
+    $stmtAhorroBruto = $pdo->prepare(
+        "SELECT COALESCE(SUM(
+            CASE
+                WHEN a.afecta_saldo_socio = 'suma' THEN ABS(m.valor)
+                WHEN a.afecta_saldo_socio = 'resta' THEN -ABS(m.valor)
+                ELSE 0
+            END
+        ), 0)
+         FROM movimientos m
+         JOIN actividades_maestro a ON a.id_actividad = m.id_actividad
+         WHERE m.id_socio = :id
+           AND COALESCE(a.es_prestamo,0) = 0
+           AND COALESCE(a.es_pago_prestamo,0) = 0
+           AND COALESCE(a.es_pago_interes,0) = 0
+           AND COALESCE(a.es_polla,0) = 0
+           AND COALESCE(m.modulo, '') <> 'liquidaciones'"
+    );
+    $stmtAhorroBruto->execute([':id' => $idSocio]);
+    $ahorroAcumuladoBruto = (float) $stmtAhorroBruto->fetchColumn();
+    $rendimientos = 0.0;
+
     $stmtPrestamos = $pdo->prepare(
         "SELECT id_prestamo, estado, saldo_capital_actual, saldo_intereses_actual
          FROM prestamos
@@ -340,11 +361,12 @@ function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo): ?
         $valorPrestamos += $total;
     }
 
-    $saldoBase = (float) ($socio['saldo_socio'] ?? 0);
+    $saldoActualSocio = (float) ($socio['saldo_socio'] ?? 0);
+    $saldoBase = $ahorroAcumuladoBruto;
     $cuotaManejo = max(0, $cuotaManejo);
     $deudaTotal = $valorPrestamos + $cuotaManejo;
-    $saldoLiquidacion = $saldoBase - $deudaTotal;
-    $valorAplicadoDeuda = min(max(0, $saldoBase), $valorPrestamos);
+    $saldoLiquidacion = $ahorroAcumuladoBruto + $rendimientos - $deudaTotal;
+    $valorAplicadoDeuda = min(max(0, $ahorroAcumuladoBruto + $rendimientos), $valorPrestamos);
     $deficit = max(0, abs(min(0, $saldoLiquidacion)));
     $valorBruto = $saldoBase - $valorPrestamos;
     $valorNeto = max(0, $saldoLiquidacion);
@@ -353,6 +375,9 @@ function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo): ?
     return [
         'socio' => $socio,
         'saldo_base' => $saldoBase,
+        'saldo_actual_socio' => $saldoActualSocio,
+        'ahorro_acumulado_bruto' => $ahorroAcumuladoBruto,
+        'rendimientos' => $rendimientos,
         'valor_pollas' => $valorPollas,
         'valor_prestamos' => $valorPrestamos,
         'deuda_total' => $deudaTotal,

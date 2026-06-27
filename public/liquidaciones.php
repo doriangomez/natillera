@@ -145,8 +145,8 @@ if ($editarId > 0) {
             <div class="table-responsive mb-3">
                 <table class="table table-sm table-bordered align-middle">
                     <tbody>
-                    <tr><th>Ahorro acumulado</th><td>$<?php echo number_format($resultado['saldo_base'], 0, ',', '.'); ?></td></tr>
-                    <tr><th>+ Rendimientos</th><td>$0</td></tr>
+                    <tr><th>Ahorro acumulado</th><td>$<?php echo number_format($resultado['ahorro_acumulado_bruto'], 0, ',', '.'); ?></td></tr>
+                    <tr><th>+ Rendimientos</th><td>$<?php echo number_format($resultado['rendimientos'], 0, ',', '.'); ?></td></tr>
                     <tr><th>- Capital pendiente</th><td>$<?php echo number_format(array_sum(array_column($resultado['prestamos_descontados'], 'capital_pendiente')), 0, ',', '.'); ?></td></tr>
                     <tr><th>- Intereses pendientes</th><td>$<?php echo number_format(array_sum(array_column($resultado['prestamos_descontados'], 'intereses_pendientes')), 0, ',', '.'); ?></td></tr>
                     <tr><th>- Cuota de administración</th><td>$<?php echo number_format($resultado['valor_cuota_manejo'], 0, ',', '.'); ?></td></tr>
