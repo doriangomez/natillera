@@ -135,26 +135,30 @@ if ($editarId > 0) {
                 </div>
             </div>
 
-            <?php if ($resultado['deficit'] > 0): ?>
+            <?php if ($resultado['saldo_liquidacion'] < 0): ?>
                 <div class="alert alert-warning">
-                    <strong>El saldo del socio no cubre la totalidad de la deuda.</strong>
-                    El déficit restante deberá ser gestionado manualmente en el módulo de préstamos.
+                    <strong>El saldo de liquidación es negativo.</strong>
+                    El saldo pendiente del socio es <strong>$<?php echo number_format(abs((float) $resultado['saldo_liquidacion']), 0, ',', '.'); ?></strong> y deberá ser gestionado manualmente.
                 </div>
             <?php endif; ?>
 
             <div class="table-responsive mb-3">
                 <table class="table table-sm table-bordered align-middle">
                     <tbody>
-                    <tr><th>Saldo base</th><td>$<?php echo number_format($resultado['saldo_base'], 0, ',', '.'); ?></td></tr>
-                    <tr><th>Total préstamos</th><td>$<?php echo number_format($resultado['valor_prestamos'], 0, ',', '.'); ?></td></tr>
-                    <tr><th>Valor aplicado a la deuda</th><td>$<?php echo number_format($resultado['valor_aplicado_deuda'], 0, ',', '.'); ?></td></tr>
-                    <?php if ($resultado['deficit'] > 0): ?>
-                        <tr class="table-warning"><th>Déficit restante</th><td class="fw-bold">$<?php echo number_format($resultado['deficit'], 0, ',', '.'); ?></td></tr>
+                    <tr><th>Ahorro acumulado</th><td>$<?php echo number_format($resultado['ahorro_acumulado_bruto'], 0, ',', '.'); ?></td></tr>
+                    <tr><th>+ Rendimientos</th><td>$<?php echo number_format($resultado['rendimientos'], 0, ',', '.'); ?></td></tr>
+                    <tr><th>- Capital pendiente</th><td>$<?php echo number_format(array_sum(array_column($resultado['prestamos_descontados'], 'capital_pendiente')), 0, ',', '.'); ?></td></tr>
+                    <tr><th>- Intereses pendientes</th><td>$<?php echo number_format(array_sum(array_column($resultado['prestamos_descontados'], 'intereses_pendientes')), 0, ',', '.'); ?></td></tr>
+                    <tr><th>- Cuota de administración</th><td>$<?php echo number_format($resultado['valor_cuota_manejo'], 0, ',', '.'); ?></td></tr>
+                    <tr><th>Deuda total</th><td>$<?php echo number_format($resultado['deuda_total'], 0, ',', '.'); ?></td></tr>
+                    <tr class="table-light"><th>Saldo de liquidación</th><td class="fw-bold"><?php echo $resultado['saldo_liquidacion'] < 0 ? '-' : ''; ?>$<?php echo number_format(abs((float) $resultado['saldo_liquidacion']), 0, ',', '.'); ?></td></tr>
+                    <tr><th>Valor aplicado a préstamos</th><td>$<?php echo number_format($resultado['valor_aplicado_deuda'], 0, ',', '.'); ?></td></tr>
+                    <?php if ($resultado['saldo_liquidacion'] < 0): ?>
+                        <tr class="table-warning"><th>Saldo pendiente del socio</th><td class="fw-bold">$<?php echo number_format(abs((float) $resultado['saldo_liquidacion']), 0, ',', '.'); ?></td></tr>
+                    <?php else: ?>
+                        <tr class="table-success"><th>Valor neto a entregar al socio</th><td class="fw-bold">$<?php echo number_format($resultado['valor_neto'], 0, ',', '.'); ?></td></tr>
                     <?php endif; ?>
                     <tr><th>Valor de pollas informativo</th><td>$<?php echo number_format($resultado['valor_pollas'], 0, ',', '.'); ?></td></tr>
-                    <tr><th>Cuota de administración</th><td>$<?php echo number_format($resultado['valor_cuota_manejo'], 0, ',', '.'); ?></td></tr>
-                    <tr><th>Valor bruto</th><td>$<?php echo number_format($resultado['valor_bruto'], 0, ',', '.'); ?></td></tr>
-                    <tr class="table-light"><th>Valor neto a entregar al socio</th><td class="fw-bold">$<?php echo number_format($resultado['valor_neto'], 0, ',', '.'); ?></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -189,7 +193,7 @@ if ($editarId > 0) {
                 </table>
             </div>
 
-            <p class="small text-muted mb-2">Fórmula: neto = (saldo base - préstamos) - cuota administración. Las pollas no se incluyen en la devolución. El déficit es informativo y no genera abonos automáticos a préstamos.</p>
+            <p class="small text-muted mb-2">Fórmula auditada: saldo de liquidación = ahorro acumulado + rendimientos - capital pendiente - intereses pendientes - cuota de administración. Ese único saldo determina si se paga al socio o si queda un saldo pendiente; no se recalcula ningún déficit sobre el préstamo.</p>
             <?php if ($resultado['valor_cuota_manejo'] > 0 && $resultado['deficit'] <= 0): ?>
                 <div class="alert alert-info py-2">
                     Se entregan <strong>$<?php echo number_format((float) $resultado['valor_neto'], 0, ',', '.'); ?></strong> al socio y
