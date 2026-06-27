@@ -43,7 +43,7 @@ if (isset($tipos[$filtroTipo])) {
     $sqlHistorial .= ' AND l.tipo_liquidacion = :tipo';
     $params[':tipo'] = $filtroTipo;
 }
-if (in_array($filtroEstado, ['activa', 'anulada', 'editada', 'todas'], true) && $filtroEstado !== 'todas') {
+if (in_array($filtroEstado, ['activa', 'reversada', 'editada', 'todas'], true) && $filtroEstado !== 'todas') {
     $sqlHistorial .= ' AND l.estado = :estado';
     $params[':estado'] = $filtroEstado;
 }
@@ -138,7 +138,8 @@ if ($editarId > 0) {
             <?php if ($resultado['saldo_liquidacion'] < 0): ?>
                 <div class="alert alert-warning">
                     <strong>El saldo de liquidación es negativo.</strong>
-                    El saldo pendiente del socio es <strong>$<?php echo number_format(abs((float) $resultado['saldo_liquidacion']), 0, ',', '.'); ?></strong> y deberá ser gestionado manualmente.
+                    El socio quedará con saldo pendiente de <strong>$<?php echo number_format(abs((float) $resultado['saldo_liquidacion']), 0, ',', '.'); ?></strong>.
+                    Al confirmar se cancelará la deuda original y se creará un nuevo préstamo por este saldo pendiente exacto.
                 </div>
             <?php endif; ?>
 
@@ -201,7 +202,10 @@ if ($editarId > 0) {
                 </div>
             <?php endif; ?>
             <div class="alert alert-secondary py-2">¿Confirma registrar esta liquidación?</div>
-            <form method="post" action="../actions/liquidaciones_save.php" onsubmit="return confirm('¿Confirma registrar esta liquidación?');">
+            <?php $mensajeConfirmacion = $resultado['saldo_liquidacion'] < 0
+                ? 'El socio queda con un saldo pendiente de $' . number_format(abs((float) $resultado['saldo_liquidacion']), 0, ',', '.') . '. ¿Desea cancelar la deuda original y crear un nuevo préstamo por este saldo pendiente?'
+                : '¿Confirma registrar esta liquidación?'; ?>
+            <form method="post" action="../actions/liquidaciones_save.php" onsubmit="return confirm('<?php echo clean($mensajeConfirmacion); ?>');">
                 <input type="hidden" name="accion" value="crear">
                 <input type="hidden" name="confirmar_liquidacion" value="1">
                 <input type="hidden" name="tipo_liquidacion" value="<?php echo clean($tipoLiquidacion); ?>">
@@ -292,7 +296,7 @@ if ($editarId > 0) {
             </div>
             <div class="col-md-3">
                 <select class="form-select" name="filtro_estado">
-                    <?php foreach (['activa', 'anulada', 'editada', 'todas'] as $estado): ?>
+                    <?php foreach (['activa', 'reversada', 'editada', 'todas'] as $estado): ?>
                         <option value="<?php echo $estado; ?>" <?php echo $filtroEstado === $estado ? 'selected' : ''; ?>><?php echo ucfirst($estado); ?></option>
                     <?php endforeach; ?>
                 </select>
@@ -306,7 +310,7 @@ if ($editarId > 0) {
             <table class="table table-sm table-striped align-middle">
                 <thead>
                 <tr>
-                    <th>#</th><th>Fecha</th><th>Socio</th><th>Tipo</th><th>Bruto</th><th>Cuota</th><th>Neto</th><th>Estado</th><th>Acciones</th>
+                    <th>#</th><th>Fecha</th><th>Socio</th><th>Tipo</th><th>Bruto</th><th>Cuota</th><th>Saldo pendiente</th><th>Préstamo nuevo</th><th>Estado</th><th>Acciones</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -318,15 +322,16 @@ if ($editarId > 0) {
                         <td><?php echo clean($tipos[$fila['tipo_liquidacion']] ?? $fila['tipo_liquidacion']); ?></td>
                         <td>$<?php echo number_format((float) $fila['valor_bruto'], 0, ',', '.'); ?></td>
                         <td>$<?php echo number_format((float) $fila['valor_cuota_manejo'], 0, ',', '.'); ?></td>
-                        <td>$<?php echo number_format((float) $fila['valor_neto'], 0, ',', '.'); ?></td>
-                        <td><span class="badge text-bg-<?php echo $fila['estado'] === 'activa' ? 'success' : ($fila['estado'] === 'anulada' ? 'secondary' : 'warning'); ?>"><?php echo clean($fila['estado']); ?></span></td>
+                        <td>$<?php echo number_format((float) ($fila['saldo_pendiente'] ?? $fila['deficit'] ?? 0), 0, ',', '.'); ?></td>
+                        <td><?php echo !empty($fila['prestamo_nuevo_id']) ? '#' . (int) $fila['prestamo_nuevo_id'] : 'N/A'; ?></td>
+                        <td><span class="badge text-bg-<?php echo $fila['estado'] === 'activa' ? 'success' : ($fila['estado'] === 'reversada' ? 'secondary' : 'warning'); ?>"><?php echo clean($fila['estado']); ?></span></td>
                         <td>
                             <?php if ($fila['estado'] === 'activa'): ?>
                                 <a class="btn btn-sm btn-outline-warning" href="liquidaciones.php?editar=<?php echo (int) $fila['id']; ?>">Editar</a>
-                                <form method="post" action="../actions/liquidaciones_save.php" class="d-inline" onsubmit="return confirm('¿Anular liquidación y revertir sus movimientos?');">
+                                <form method="post" action="../actions/liquidaciones_save.php" class="d-inline" onsubmit="return confirm('¿Reversar liquidación, restaurar socio/préstamo original y anular préstamo nuevo si aplica?');">
                                     <input type="hidden" name="accion" value="anular">
                                     <input type="hidden" name="id_liquidacion" value="<?php echo (int) $fila['id']; ?>">
-                                    <button class="btn btn-sm btn-outline-danger">Anular</button>
+                                    <input type="hidden" name="motivo_reverso" value="Reverso solicitado desde historial de liquidaciones"><button class="btn btn-sm btn-outline-danger">Reversar</button>
                                 </form>
                             <?php endif; ?>
                         </td>
