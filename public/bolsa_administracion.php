@@ -93,10 +93,10 @@ $socios = $pdo->query('SELECT id_socio, nombre_completo FROM socios ORDER BY nom
             <div class="card-header"><i class="bi bi-list-check"></i><span>Movimientos de la bolsa</span></div>
             <div class="table-responsive">
                 <table class="table table-striped align-middle mb-0">
-                    <thead><tr><th>Fecha</th><th>Socio</th><th>Concepto</th><th>Movimiento</th><th class="text-end">Valor</th></tr></thead>
+                    <thead><tr><th>Fecha</th><th>Socio</th><th>Concepto</th><th>Movimiento</th><th class="text-end">Valor</th><th class="text-end">Acciones</th></tr></thead>
                     <tbody>
                     <?php if (empty($movimientosBolsa)): ?>
-                        <tr><td colspan="5" class="text-center text-muted">No hay movimientos en la bolsa de administración.</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted">No hay movimientos en la bolsa de administración.</td></tr>
                     <?php endif; ?>
                     <?php foreach ($movimientosBolsa as $mov): ?>
                         <tr>
@@ -105,6 +105,13 @@ $socios = $pdo->query('SELECT id_socio, nombre_completo FROM socios ORDER BY nom
                             <td><?php echo clean($mov['concepto']); ?></td>
                             <td><?php echo $mov['id_movimiento'] ? '#' . (int) $mov['id_movimiento'] . ' - ' . clean($mov['motivo_movimiento'] ?? '') : 'N/A'; ?></td>
                             <td class="text-end fw-semibold">$<?php echo number_format((float) $mov['valor'], 0, ',', '.'); ?></td>
+                            <td class="text-end">
+                                <form method="post" action="../actions/bolsa_administracion_save.php" class="d-inline" onsubmit="return confirm('¿Eliminar este registro de la bolsa de administración? Esta acción solo limpia la bolsa y no elimina el movimiento contable asociado.');">
+                                    <input type="hidden" name="accion" value="eliminar">
+                                    <input type="hidden" name="id_bolsa" value="<?php echo (int) $mov['id']; ?>">
+                                    <button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash"></i> Eliminar</button>
+                                </form>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
