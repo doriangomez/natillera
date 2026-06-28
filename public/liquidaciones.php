@@ -60,20 +60,6 @@ if ($editarId > 0) {
 }
 ?>
 <h2 class="mb-3">Módulo de Liquidaciones</h2>
-
-<?php if (($_SESSION['rol'] ?? '') === 'admin' && !empty($_SESSION['debug_liquidacion'])): ?>
-    <div class="card mb-4 border-danger">
-        <div class="card-header bg-danger text-white"><i class="bi bi-bug"></i> Debug temporal liquidación</div>
-        <div class="card-body">
-            <?php foreach ($_SESSION['debug_liquidacion'] as $bloqueDebug): ?>
-                <h6><?php echo clean($bloqueDebug['momento'] ?? 'Debug'); ?> <small class="text-muted"><?php echo clean($bloqueDebug['fecha'] ?? ''); ?></small></h6>
-                <pre class="small bg-light border rounded p-2 mb-3"><?php echo clean(print_r($bloqueDebug['datos'] ?? [], true)); ?></pre>
-            <?php endforeach; ?>
-        </div>
-    </div>
-    <?php unset($_SESSION['debug_liquidacion']); ?>
-<?php endif; ?>
-
 <p class="text-muted">Liquidaciones parciales, definitivas anticipadas y definitivas con trazabilidad contable.</p>
 
 <div class="card mb-4">
