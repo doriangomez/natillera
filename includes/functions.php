@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/prestamos_helpers.php';
+require_once __DIR__ . '/../migrations/20260628_add_actividad_contrapartida.php';
 
 function clean($value) {
     return htmlspecialchars(trim((string)$value), ENT_QUOTES, 'UTF-8');
@@ -604,6 +605,8 @@ function asegurarEsquemaActividades(PDO $pdo): void {
         'categoria VARCHAR(150) NULL',
     ];
 
+    migrarActividadContrapartida($pdo);
+
     foreach ($columnas as $definicion) {
         $nombre = explode(' ', $definicion)[0];
         try {
@@ -845,21 +848,21 @@ function getCategoriasActividades(PDO $pdo): array {
 
 function getActividades($pdo, $soloPolla = false, $incluirInactivas = false, $soloRifa = false) {
     asegurarEsquemaActividades($pdo);
-    $sql = "SELECT * FROM actividades_maestro";
+    $sql = "SELECT a.*, c.nombre_actividad AS nombre_contrapartida FROM actividades_maestro a LEFT JOIN actividades_maestro c ON c.id_actividad = a.id_actividad_contrapartida";
     $condiciones = [];
     if ($soloPolla) {
-        $condiciones[] = "es_polla = 1";
+        $condiciones[] = "a.es_polla = 1";
     }
     if ($soloRifa) {
-        $condiciones[] = "es_rifa = 1";
+        $condiciones[] = "a.es_rifa = 1";
     }
     if (!$incluirInactivas) {
-        $condiciones[] = "activo = 1";
+        $condiciones[] = "a.activo = 1";
     }
     if ($condiciones) {
         $sql .= ' WHERE ' . implode(' AND ', $condiciones);
     }
-    $sql .= " ORDER BY nombre_actividad";
+    $sql .= " ORDER BY a.nombre_actividad";
     return $pdo->query($sql)->fetchAll();
 }
 
