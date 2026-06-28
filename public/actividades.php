@@ -5,6 +5,7 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 $actividades = getActividades($pdo, false, true);
+$actividadesContrapartida = getActividades($pdo);
 $categoriasActividades = getCategoriasActividades($pdo);
 $editId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $editData = null;
@@ -67,6 +68,17 @@ if ($editId) {
                             </select>
                         </div>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">Actividad contrapartida</label>
+                        <select class="form-select" name="id_actividad_contrapartida">
+                            <option value="">Sin contrapartida</option>
+                            <?php foreach ($actividadesContrapartida as $actividadContrapartida): ?>
+                                <?php if ($editId && (int) $actividadContrapartida['id_actividad'] === $editId) { continue; } ?>
+                                <option value="<?php echo (int) $actividadContrapartida['id_actividad']; ?>" <?php echo ((int) ($editData['id_actividad_contrapartida'] ?? 0) === (int) $actividadContrapartida['id_actividad']) ? 'selected' : ''; ?>><?php echo clean($actividadContrapartida['nombre_actividad']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">Opcional. Selecciona la actividad vinculada para calcular resultados netos por evento.</div>
+                    </div>
                     <div class="row g-3 mt-1">
                         <div class="col-md-6 form-check">
                             <input class="form-check-input" type="checkbox" id="flagIngreso" name="es_ingreso" value="1" <?php echo (!empty($editData['es_ingreso']))?'checked':''; ?>>
@@ -126,6 +138,7 @@ if ($editId) {
                                 <th>Saldo natillera</th>
                                 <th>Flags</th>
                                 <th>Estado</th>
+                                <th>Contrapartida</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -149,6 +162,7 @@ if ($editId) {
                                     <td>
                                         <span class="badge <?php echo $a['activo'] ? 'bg-success' : 'bg-secondary'; ?>"><?php echo $a['activo'] ? 'Activa' : 'Inactiva'; ?></span>
                                     </td>
+                                    <td><?php echo clean($a['nombre_contrapartida'] ?? '—'); ?></td>
                                     <td class="text-end">
                                         <a class="btn btn-sm btn-outline-primary" href="?id=<?php echo $a['id_actividad']; ?>">Editar</a>
                                         <form method="POST" action="../actions/actividades_estado.php" class="d-inline">
