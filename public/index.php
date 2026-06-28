@@ -265,18 +265,16 @@ $detalleActividades = $detalleActividadesStmt->fetchAll(PDO::FETCH_ASSOC);
 $resultadoNetoEventosStmt = $pdo->query("
     WITH pares AS (
         SELECT
-            LEAST(a.id_actividad, c.id_actividad) AS id_ingreso,
-            GREATEST(a.id_actividad, c.id_actividad) AS id_egreso,
+            LEAST(a.id_actividad, c.id_actividad) AS id_actividad_1,
+            GREATEST(a.id_actividad, c.id_actividad) AS id_actividad_2,
             CASE WHEN a.afecta_saldo_natillera = 'suma' THEN a.nombre_actividad WHEN c.afecta_saldo_natillera = 'suma' THEN c.nombre_actividad ELSE a.nombre_actividad END AS actividad_ingreso,
             CASE WHEN a.afecta_saldo_natillera = 'resta' THEN a.nombre_actividad WHEN c.afecta_saldo_natillera = 'resta' THEN c.nombre_actividad ELSE c.nombre_actividad END AS actividad_egreso,
-            a.es_polla AS ingreso_es_polla,
-            c.es_polla AS egreso_es_polla,
-            a.es_rifa AS ingreso_es_rifa,
-            c.es_rifa AS egreso_es_rifa
+            CASE WHEN a.es_polla = 1 AND c.es_polla = 1 THEN 1 ELSE 0 END AS es_par_polla,
+            CASE WHEN a.es_rifa = 1 AND c.es_rifa = 1 THEN 1 ELSE 0 END AS es_par_rifa
         FROM actividades_maestro a
         JOIN actividades_maestro c ON c.id_actividad = a.id_actividad_contrapartida
         WHERE a.id_actividad_contrapartida IS NOT NULL
-        GROUP BY id_ingreso, id_egreso, actividad_ingreso, actividad_egreso, ingreso_es_polla, egreso_es_polla, ingreso_es_rifa, egreso_es_rifa
+        GROUP BY id_actividad_1, id_actividad_2, actividad_ingreso, actividad_egreso, es_par_polla, es_par_rifa
     ),
     movimientos_par AS (
         SELECT
@@ -289,12 +287,31 @@ $resultadoNetoEventosStmt = $pdo->query("
             CASE WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor) ELSE 0 END AS recaudado,
             CASE WHEN a.afecta_saldo_natillera = 'resta' THEN ABS(m.valor) ELSE 0 END AS pagado
         FROM pares p
-        JOIN movimientos m ON m.id_actividad IN (p.id_ingreso, p.id_egreso)
+        JOIN movimientos m ON m.id_actividad IN (p.id_actividad_1, p.id_actividad_2)
         JOIN actividades_maestro a ON a.id_actividad = m.id_actividad
     )
     SELECT * FROM (
         SELECT
-            CONCAT(anio, '-', LPAD(mes, 2, '0'), ' · Q', COALESCE(NULLIF(quincena, 0), 'Sin quincena')) AS evento,
+            CONCAT(
+                'Polla – ',
+                CASE mes
+                    WHEN 1 THEN 'Ene'
+                    WHEN 2 THEN 'Feb'
+                    WHEN 3 THEN 'Mar'
+                    WHEN 4 THEN 'Abr'
+                    WHEN 5 THEN 'May'
+                    WHEN 6 THEN 'Jun'
+                    WHEN 7 THEN 'Jul'
+                    WHEN 8 THEN 'Ago'
+                    WHEN 9 THEN 'Sep'
+                    WHEN 10 THEN 'Oct'
+                    WHEN 11 THEN 'Nov'
+                    WHEN 12 THEN 'Dic'
+                    ELSE 'Sin mes'
+                END,
+                ' ',
+                anio
+            ) AS evento,
             actividad_ingreso,
             actividad_egreso,
             COALESCE(SUM(recaudado), 0) AS recaudado,
@@ -302,8 +319,8 @@ $resultadoNetoEventosStmt = $pdo->query("
             COALESCE(SUM(recaudado - pagado), 0) AS resultado_neto,
             MAX(fecha) AS fecha_orden
         FROM movimientos_par
-        WHERE ingreso_es_polla = 1 AND egreso_es_polla = 1
-        GROUP BY id_ingreso, id_egreso, anio, mes, quincena, actividad_ingreso, actividad_egreso
+        WHERE es_par_polla = 1
+        GROUP BY id_actividad_1, id_actividad_2, anio, mes, actividad_ingreso, actividad_egreso
 
         UNION ALL
 
@@ -316,11 +333,11 @@ $resultadoNetoEventosStmt = $pdo->query("
             COALESCE(SUM(CASE WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor) WHEN a.afecta_saldo_natillera = 'resta' THEN -ABS(m.valor) ELSE 0 END), 0) AS resultado_neto,
             MAX(COALESCE(m.fecha, r.fecha_fin, r.fecha_inicio)) AS fecha_orden
         FROM pares p
-        JOIN rifas r ON r.id_actividad_ingreso IN (p.id_ingreso, p.id_egreso) AND r.id_actividad_premio IN (p.id_ingreso, p.id_egreso)
-        LEFT JOIN movimientos m ON m.id_actividad IN (p.id_ingreso, p.id_egreso) AND m.modulo = 'rifas'
+        JOIN rifas r ON r.id_actividad_ingreso IN (p.id_actividad_1, p.id_actividad_2) AND r.id_actividad_premio IN (p.id_actividad_1, p.id_actividad_2)
+        LEFT JOIN movimientos m ON m.id_actividad IN (p.id_actividad_1, p.id_actividad_2) AND m.modulo = 'rifas'
         LEFT JOIN actividades_maestro a ON a.id_actividad = m.id_actividad
-        WHERE p.ingreso_es_rifa = 1 AND p.egreso_es_rifa = 1
-        GROUP BY p.id_ingreso, p.id_egreso, r.id_rifa, r.nombre, p.actividad_ingreso, p.actividad_egreso
+        WHERE p.es_par_rifa = 1
+        GROUP BY p.id_actividad_1, p.id_actividad_2, r.id_rifa, r.nombre, p.actividad_ingreso, p.actividad_egreso
 
         UNION ALL
 
@@ -333,8 +350,8 @@ $resultadoNetoEventosStmt = $pdo->query("
             COALESCE(SUM(recaudado - pagado), 0) AS resultado_neto,
             MAX(fecha) AS fecha_orden
         FROM movimientos_par
-        WHERE NOT (ingreso_es_polla = 1 AND egreso_es_polla = 1) AND NOT (ingreso_es_rifa = 1 AND egreso_es_rifa = 1)
-        GROUP BY id_ingreso, id_egreso, actividad_ingreso, actividad_egreso
+        WHERE es_par_polla = 0 AND es_par_rifa = 0
+        GROUP BY id_actividad_1, id_actividad_2, actividad_ingreso, actividad_egreso
     ) resultados
     ORDER BY fecha_orden DESC, evento DESC
 ");
@@ -701,7 +718,7 @@ foreach ($movimientos as $movimientoConsolidado) {
     <div class="card mt-4">
         <div class="card-header"><i class="bi bi-arrow-left-right"></i><span>Resultado neto por evento</span></div>
         <div class="card-body">
-            <p class="text-muted small mb-3">Muestra pares de actividades con contrapartida asignada, agrupados por quincena para pollas, por rifa para rifas y como total global para otros pares.</p>
+            <p class="text-muted small mb-3">Muestra pares de actividades con contrapartida asignada, agrupados por mes para pollas, por rifa para rifas y como total global para otros pares.</p>
             <div class="table-responsive">
                 <table class="table table-sm align-middle mb-0">
                     <thead>
