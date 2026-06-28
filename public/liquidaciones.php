@@ -326,6 +326,7 @@ if ($editarId > 0) {
                         <td><?php echo !empty($fila['prestamo_nuevo_id']) ? '#' . (int) $fila['prestamo_nuevo_id'] : 'N/A'; ?></td>
                         <td><span class="badge text-bg-<?php echo $fila['estado'] === 'activa' ? 'success' : ($fila['estado'] === 'reversada' ? 'secondary' : 'warning'); ?>"><?php echo clean($fila['estado']); ?></span></td>
                         <td>
+                            <a class="btn btn-sm btn-outline-primary" href="../actions/comprobante_liquidacion.php?id=<?php echo (int) $fila['id']; ?>" target="_blank" rel="noopener">Descargar comprobante</a>
                             <?php if ($fila['estado'] === 'activa'): ?>
                                 <a class="btn btn-sm btn-outline-warning" href="liquidaciones.php?editar=<?php echo (int) $fila['id']; ?>">Editar</a>
                                 <form method="post" action="../actions/liquidaciones_save.php" class="d-inline" onsubmit="return confirm('¿Reversar liquidación, restaurar socio/préstamo original y anular préstamo nuevo si aplica?');">
