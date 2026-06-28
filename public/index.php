@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/rifas_helpers.php';
+
+asegurarEsquemaActividades($pdo);
+asegurarEsquemaRifas($pdo);
 
 $totalSocios = (int) ($pdo->query("SELECT COUNT(*) AS total FROM socios WHERE activo = 1")->fetch()['total'] ?? 0);
 
@@ -257,6 +261,84 @@ $detalleActividadesStmt = $pdo->query("
     ORDER BY total_movimiento DESC, a.nombre_actividad ASC
 ");
 $detalleActividades = $detalleActividadesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+$resultadoNetoEventosStmt = $pdo->query("
+    WITH pares AS (
+        SELECT
+            LEAST(a.id_actividad, c.id_actividad) AS id_ingreso,
+            GREATEST(a.id_actividad, c.id_actividad) AS id_egreso,
+            CASE WHEN a.afecta_saldo_natillera = 'suma' THEN a.nombre_actividad WHEN c.afecta_saldo_natillera = 'suma' THEN c.nombre_actividad ELSE a.nombre_actividad END AS actividad_ingreso,
+            CASE WHEN a.afecta_saldo_natillera = 'resta' THEN a.nombre_actividad WHEN c.afecta_saldo_natillera = 'resta' THEN c.nombre_actividad ELSE c.nombre_actividad END AS actividad_egreso,
+            a.es_polla AS ingreso_es_polla,
+            c.es_polla AS egreso_es_polla,
+            a.es_rifa AS ingreso_es_rifa,
+            c.es_rifa AS egreso_es_rifa
+        FROM actividades_maestro a
+        JOIN actividades_maestro c ON c.id_actividad = a.id_actividad_contrapartida
+        WHERE a.id_actividad_contrapartida IS NOT NULL
+        GROUP BY id_ingreso, id_egreso, actividad_ingreso, actividad_egreso, ingreso_es_polla, egreso_es_polla, ingreso_es_rifa, egreso_es_rifa
+    ),
+    movimientos_par AS (
+        SELECT
+            p.*,
+            m.fecha,
+            m.anio,
+            m.mes,
+            m.quincena,
+            m.id_actividad,
+            CASE WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor) ELSE 0 END AS recaudado,
+            CASE WHEN a.afecta_saldo_natillera = 'resta' THEN ABS(m.valor) ELSE 0 END AS pagado
+        FROM pares p
+        JOIN movimientos m ON m.id_actividad IN (p.id_ingreso, p.id_egreso)
+        JOIN actividades_maestro a ON a.id_actividad = m.id_actividad
+    )
+    SELECT * FROM (
+        SELECT
+            CONCAT(anio, '-', LPAD(mes, 2, '0'), ' · Q', COALESCE(NULLIF(quincena, 0), 'Sin quincena')) AS evento,
+            actividad_ingreso,
+            actividad_egreso,
+            COALESCE(SUM(recaudado), 0) AS recaudado,
+            COALESCE(SUM(pagado), 0) AS pagado,
+            COALESCE(SUM(recaudado - pagado), 0) AS resultado_neto,
+            MAX(fecha) AS fecha_orden
+        FROM movimientos_par
+        WHERE ingreso_es_polla = 1 AND egreso_es_polla = 1
+        GROUP BY id_ingreso, id_egreso, anio, mes, quincena, actividad_ingreso, actividad_egreso
+
+        UNION ALL
+
+        SELECT
+            COALESCE(r.nombre, CONCAT('Rifa #', r.id_rifa)) AS evento,
+            p.actividad_ingreso,
+            p.actividad_egreso,
+            COALESCE(SUM(CASE WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor) ELSE 0 END), 0) AS recaudado,
+            COALESCE(SUM(CASE WHEN a.afecta_saldo_natillera = 'resta' THEN ABS(m.valor) ELSE 0 END), 0) AS pagado,
+            COALESCE(SUM(CASE WHEN a.afecta_saldo_natillera = 'suma' THEN ABS(m.valor) WHEN a.afecta_saldo_natillera = 'resta' THEN -ABS(m.valor) ELSE 0 END), 0) AS resultado_neto,
+            MAX(COALESCE(m.fecha, r.fecha_fin, r.fecha_inicio)) AS fecha_orden
+        FROM pares p
+        JOIN rifas r ON r.id_actividad_ingreso IN (p.id_ingreso, p.id_egreso) AND r.id_actividad_premio IN (p.id_ingreso, p.id_egreso)
+        LEFT JOIN movimientos m ON m.id_actividad IN (p.id_ingreso, p.id_egreso) AND m.modulo = 'rifas'
+        LEFT JOIN actividades_maestro a ON a.id_actividad = m.id_actividad
+        WHERE p.ingreso_es_rifa = 1 AND p.egreso_es_rifa = 1
+        GROUP BY p.id_ingreso, p.id_egreso, r.id_rifa, r.nombre, p.actividad_ingreso, p.actividad_egreso
+
+        UNION ALL
+
+        SELECT
+            'Total global' AS evento,
+            actividad_ingreso,
+            actividad_egreso,
+            COALESCE(SUM(recaudado), 0) AS recaudado,
+            COALESCE(SUM(pagado), 0) AS pagado,
+            COALESCE(SUM(recaudado - pagado), 0) AS resultado_neto,
+            MAX(fecha) AS fecha_orden
+        FROM movimientos_par
+        WHERE NOT (ingreso_es_polla = 1 AND egreso_es_polla = 1) AND NOT (ingreso_es_rifa = 1 AND egreso_es_rifa = 1)
+        GROUP BY id_ingreso, id_egreso, actividad_ingreso, actividad_egreso
+    ) resultados
+    ORDER BY fecha_orden DESC, evento DESC
+");
+$resultadoNetoEventos = $resultadoNetoEventosStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $socios = getSocios($pdo);
 $actividades = getActividades($pdo, false, true);
@@ -609,6 +691,45 @@ foreach ($movimientos as $movimientoConsolidado) {
                         <?php endforeach; ?>
                         <?php if (!$detalleActividades): ?>
                             <tr><td colspan="5" class="text-center text-muted">No hay actividades activas registradas.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header"><i class="bi bi-arrow-left-right"></i><span>Resultado neto por evento</span></div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">Muestra pares de actividades con contrapartida asignada, agrupados por quincena para pollas, por rifa para rifas y como total global para otros pares.</p>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Evento</th>
+                            <th>Actividad de ingreso</th>
+                            <th>Actividad de egreso</th>
+                            <th class="text-end">Recaudado</th>
+                            <th class="text-end">Pagado</th>
+                            <th class="text-end">Resultado neto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($resultadoNetoEventos as $eventoNeto): ?>
+                            <?php
+                                $resultadoEvento = (float) ($eventoNeto['resultado_neto'] ?? 0);
+                            ?>
+                            <tr>
+                                <td><?php echo clean($eventoNeto['evento']); ?></td>
+                                <td><?php echo clean($eventoNeto['actividad_ingreso']); ?></td>
+                                <td><?php echo clean($eventoNeto['actividad_egreso']); ?></td>
+                                <td class="text-end">$<?php echo number_format((float) ($eventoNeto['recaudado'] ?? 0),0,',','.'); ?></td>
+                                <td class="text-end">$<?php echo number_format((float) ($eventoNeto['pagado'] ?? 0),0,',','.'); ?></td>
+                                <td class="text-end <?php echo $resultadoEvento >= 0 ? 'text-success' : 'text-danger'; ?>">$<?php echo number_format($resultadoEvento,0,',','.'); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if (!$resultadoNetoEventos): ?>
+                            <tr><td colspan="6" class="text-center text-muted">No hay pares de actividades con contrapartida y movimientos registrados.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>

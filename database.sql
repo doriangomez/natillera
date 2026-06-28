@@ -38,8 +38,28 @@ CREATE TABLE actividades_maestro (
     es_interes_causado TINYINT(1) DEFAULT 0,
     es_polla TINYINT(1) DEFAULT 0,
     es_gasto_general TINYINT(1) DEFAULT 0,
-    activo TINYINT(1) DEFAULT 1
+    id_actividad_contrapartida INT NULL,
+    activo TINYINT(1) DEFAULT 1,
+    CONSTRAINT fk_actividades_contrapartida FOREIGN KEY (id_actividad_contrapartida) REFERENCES actividades_maestro(id_actividad) ON DELETE SET NULL ON UPDATE CASCADE
 );
+
+
+-- Migración incremental para bases existentes: agrega la actividad contrapartida opcional.
+SET @existe_contrapartida_actividades := (
+    SELECT COUNT(*)
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'actividades_maestro'
+      AND COLUMN_NAME = 'id_actividad_contrapartida'
+);
+SET @sql_contrapartida_actividades := IF(
+    @existe_contrapartida_actividades = 0,
+    'ALTER TABLE actividades_maestro ADD COLUMN id_actividad_contrapartida INT NULL AFTER es_gasto_general',
+    'SELECT ''La columna id_actividad_contrapartida ya existe en actividades_maestro'' AS mensaje'
+);
+PREPARE stmt_contrapartida_actividades FROM @sql_contrapartida_actividades;
+EXECUTE stmt_contrapartida_actividades;
+DEALLOCATE PREPARE stmt_contrapartida_actividades;
 
 -- Migración incremental para bases existentes: agrega la categoría sin recrear datos.
 SET @existe_categoria_actividades := (

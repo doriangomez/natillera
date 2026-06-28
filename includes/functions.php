@@ -602,6 +602,7 @@ function asegurarEsquemaActividades(PDO $pdo): void {
         'es_interes_causado TINYINT(1) DEFAULT 0',
         'es_rifa TINYINT(1) DEFAULT 0',
         'categoria VARCHAR(150) NULL',
+        'id_actividad_contrapartida INT NULL',
     ];
 
     foreach ($columnas as $definicion) {
@@ -845,21 +846,21 @@ function getCategoriasActividades(PDO $pdo): array {
 
 function getActividades($pdo, $soloPolla = false, $incluirInactivas = false, $soloRifa = false) {
     asegurarEsquemaActividades($pdo);
-    $sql = "SELECT * FROM actividades_maestro";
+    $sql = "SELECT a.*, c.nombre_actividad AS nombre_contrapartida FROM actividades_maestro a LEFT JOIN actividades_maestro c ON c.id_actividad = a.id_actividad_contrapartida";
     $condiciones = [];
     if ($soloPolla) {
-        $condiciones[] = "es_polla = 1";
+        $condiciones[] = "a.es_polla = 1";
     }
     if ($soloRifa) {
-        $condiciones[] = "es_rifa = 1";
+        $condiciones[] = "a.es_rifa = 1";
     }
     if (!$incluirInactivas) {
-        $condiciones[] = "activo = 1";
+        $condiciones[] = "a.activo = 1";
     }
     if ($condiciones) {
         $sql .= ' WHERE ' . implode(' AND ', $condiciones);
     }
-    $sql .= " ORDER BY nombre_actividad";
+    $sql .= " ORDER BY a.nombre_actividad";
     return $pdo->query($sql)->fetchAll();
 }
 
