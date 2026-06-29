@@ -18,6 +18,76 @@ sincronizarConceptosPrestamo($pdo);
 $accion = $_POST['accion'] ?? 'crear';
 $idPrestamo = isset($_POST['id_prestamo']) ? (int) $_POST['id_prestamo'] : 0;
 
+if ($accion === 'editar_campos_liquidacion') {
+    try {
+        if ($idPrestamo <= 0) {
+            throw new RuntimeException('Préstamo no válido.');
+        }
+
+        $tasa = isset($_POST['tasa_interes']) ? (float) $_POST['tasa_interes'] : null;
+        $fechaPrestamo = trim($_POST['fecha_prestamo'] ?? '');
+        $fechaVencimiento = trim($_POST['fecha_vencimiento'] ?? '');
+
+        if ($tasa === null || $tasa < 0) {
+            throw new RuntimeException('La tasa de interés no puede ser negativa.');
+        }
+
+        $fechaPrestamoObj = DateTime::createFromFormat('Y-m-d', $fechaPrestamo);
+        if (!$fechaPrestamoObj || $fechaPrestamoObj->format('Y-m-d') !== $fechaPrestamo) {
+            throw new RuntimeException('La fecha de inicio no es válida.');
+        }
+
+        $existeFechaVencimiento = false;
+        $stmtFechaVencimiento = $pdo->query("SHOW COLUMNS FROM prestamos LIKE 'fecha_vencimiento'");
+        $existeFechaVencimiento = $stmtFechaVencimiento && $stmtFechaVencimiento->rowCount() > 0;
+
+        if ($existeFechaVencimiento && $fechaVencimiento !== '') {
+            $fechaVencimientoObj = DateTime::createFromFormat('Y-m-d', $fechaVencimiento);
+            if (!$fechaVencimientoObj || $fechaVencimientoObj->format('Y-m-d') !== $fechaVencimiento) {
+                throw new RuntimeException('La fecha de vencimiento no es válida.');
+            }
+        }
+
+        $stmtPrestamo = $pdo->prepare('SELECT monto_prestamo FROM prestamos WHERE id_prestamo = :id');
+        $stmtPrestamo->execute([':id' => $idPrestamo]);
+        $prestamo = $stmtPrestamo->fetch();
+
+        if (!$prestamo) {
+            throw new RuntimeException('Préstamo no encontrado.');
+        }
+
+        $interesMensual = round(((float) $prestamo['monto_prestamo']) * $tasa / 100, 2);
+        $camposActualizar = [
+            'tasa_interes = :tasa_interes',
+            'interes_mensual = :interes_mensual',
+            'fecha_prestamo = :fecha_prestamo',
+        ];
+        $paramsActualizar = [
+            ':tasa_interes' => $tasa,
+            ':interes_mensual' => $interesMensual,
+            ':fecha_prestamo' => $fechaPrestamo,
+            ':id_prestamo' => $idPrestamo,
+        ];
+
+        if ($existeFechaVencimiento) {
+            $camposActualizar[] = 'fecha_vencimiento = :fecha_vencimiento';
+            $paramsActualizar[':fecha_vencimiento'] = $fechaVencimiento !== '' ? $fechaVencimiento : null;
+        }
+
+        $stmtActualizar = $pdo->prepare(
+            'UPDATE prestamos SET ' . implode(', ', $camposActualizar) . ' WHERE id_prestamo = :id_prestamo'
+        );
+        $stmtActualizar->execute($paramsActualizar);
+
+        $_SESSION['success'] = 'Campos de liquidación del préstamo actualizados correctamente.';
+    } catch (Exception $e) {
+        $_SESSION['error'] = 'No se pudo actualizar el préstamo: ' . $e->getMessage();
+    }
+
+    header('Location: ../public/prestamos.php');
+    exit;
+}
+
 if ($accion === 'eliminar') {
     try {
         $pdo->beginTransaction();

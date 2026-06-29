@@ -39,6 +39,14 @@ $prestamos = $pdo->query(
      LIMIT 100"
 )->fetchAll();
 
+$existeFechaVencimientoPrestamo = false;
+try {
+    $stmtFechaVencimiento = $pdo->query("SHOW COLUMNS FROM prestamos LIKE 'fecha_vencimiento'");
+    $existeFechaVencimientoPrestamo = $stmtFechaVencimiento && $stmtFechaVencimiento->rowCount() > 0;
+} catch (Exception $e) {
+    $existeFechaVencimientoPrestamo = false;
+}
+
 function completarPeriodosPrestamo(array $periodos, string $fechaPrestamo, array $periodosConfiguracion = []): array {
     usort($periodos, function ($a, $b) {
         if ((int) $a['anio'] === (int) $b['anio']) {
@@ -390,8 +398,26 @@ $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS |
 </div>
 <h4 class="d-flex align-items-center gap-2"><i class="bi bi-activity text-primary"></i><span>Préstamos vigentes</span></h4>
 <div class="table-responsive">
-<table class="table table-sm table-bordered">
-    <thead><tr><th>ID</th><th>Deudor</th><th>Aval</th><th>Tipo</th><th>Monto</th><th>Tasa mensual (%)</th><th>Interés mensual</th><th>Saldo capital</th><th>Saldo interés</th><th>Estado</th><th></th></tr></thead>
+<table class="table table-sm table-bordered align-middle">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Deudor</th>
+            <th>Aval</th>
+            <th>Tipo</th>
+            <th>Monto</th>
+            <th>Tasa mensual (%)</th>
+            <th>Interés mensual</th>
+            <th>Fecha inicio</th>
+            <?php if ($existeFechaVencimientoPrestamo): ?>
+                <th>Fecha vencimiento</th>
+            <?php endif; ?>
+            <th>Saldo capital</th>
+            <th>Saldo interés</th>
+            <th>Estado</th>
+            <th></th>
+        </tr>
+    </thead>
     <tbody>
         <?php foreach($prestamos as $p): ?>
             <?php
@@ -405,6 +431,7 @@ $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS |
                     $semaforo = '🟡';
                 }
             ?>
+            <?php $formEditarId = 'form-editar-prestamo-' . (int) $p['id_prestamo']; ?>
             <tr>
                 <td><?php echo $p['id_prestamo']; ?></td>
                 <td>
@@ -416,12 +443,27 @@ $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS |
                 <td><?php echo clean($p['nombre_aval']); ?></td>
                 <td><?php echo $p['es_particular'] ? 'Particular' : 'Socio'; ?></td>
                 <td>$<?php echo number_format($p['monto_prestamo'],0,',','.'); ?></td>
-                <td><?php echo number_format($p['tasa_interes'],2,',','.'); ?>%</td>
+                <td>
+                    <input form="<?php echo $formEditarId; ?>" type="number" step="0.01" min="0" name="tasa_interes" class="form-control form-control-sm" value="<?php echo clean($p['tasa_interes']); ?>" required>
+                </td>
                 <td>$<?php echo number_format($p['interes_mensual'],0,',','.'); ?></td>
+                <td>
+                    <input form="<?php echo $formEditarId; ?>" type="date" name="fecha_prestamo" class="form-control form-control-sm" value="<?php echo clean($p['fecha_prestamo']); ?>" required>
+                </td>
+                <?php if ($existeFechaVencimientoPrestamo): ?>
+                    <td>
+                        <input form="<?php echo $formEditarId; ?>" type="date" name="fecha_vencimiento" class="form-control form-control-sm" value="<?php echo clean($p['fecha_vencimiento'] ?? ''); ?>">
+                    </td>
+                <?php endif; ?>
                 <td>$<?php echo number_format($p['saldo_capital_actual'],0,',','.'); ?></td>
                 <td>$<?php echo number_format($p['saldo_intereses_actual'],0,',','.'); ?></td>
                 <td><?php echo $estadoPrestamo; ?> <span class="small"><?php echo $semaforo; ?></span></td>
                 <td class="text-end">
+                    <form id="<?php echo $formEditarId; ?>" method="POST" action="../actions/prestamos_save.php" class="d-inline">
+                        <input type="hidden" name="accion" value="editar_campos_liquidacion">
+                        <input type="hidden" name="id_prestamo" value="<?php echo $p['id_prestamo']; ?>">
+                        <button class="btn btn-sm btn-outline-primary mb-1" type="submit">Guardar</button>
+                    </form>
                     <form method="POST" action="../actions/prestamos_save.php" class="d-inline" onsubmit="return confirm('Esta acción eliminará el préstamo y sus movimientos asociados. ¿Deseas continuar?');">
                         <input type="hidden" name="accion" value="eliminar">
                         <input type="hidden" name="id_prestamo" value="<?php echo $p['id_prestamo']; ?>">
