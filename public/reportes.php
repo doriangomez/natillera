@@ -179,6 +179,15 @@ $periodosEnMora = $pdo
     ->fetchAll();
 ?>
 <h2 class="mb-3">Reportes</h2>
+<div class="card mb-3">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+            <h5 class="mb-1">Último aporte por socio</h5>
+            <p class="text-muted mb-0">Consulta el último pago de cuota y la última polla registrada para cada socio activo.</p>
+        </div>
+        <a class="btn btn-primary" href="reporte_ultimo_aporte.php"><i class="bi bi-table"></i> Ver reporte</a>
+    </div>
+</div>
 <div class="row g-3 mb-3">
     <div class="col-md-3">
         <div class="card h-100">
