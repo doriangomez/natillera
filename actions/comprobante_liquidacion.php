@@ -201,6 +201,7 @@ $saldoLiquidacion = array_key_exists('saldo_liquidacion', $detalle)
     ? (float) $detalle['saldo_liquidacion']
     : ($ahorro + $rendimientos - $capitalPendiente - $interesesPendientes - $cuotaAdmin);
 $saldoPendiente = valorDetalle($detalle, $liquidacion, 'saldo_pendiente', 'saldo_pendiente', max(0, -$saldoLiquidacion));
+$estadoNuevoSocio = round($saldoPendiente, 2) > 0.0 ? 'Retirado con deuda pendiente' : 'Retirado';
 $config = getConfiguracionGeneral($pdo);
 $logo = logoLiquidacionBase64($config);
 $fechaGeneracion = date('Y-m-d H:i:s');
@@ -258,7 +259,7 @@ ob_start();
     <table>
         <tr><td class="label">Nombre completo</td><td><?php echo h($liquidacion['nombre_completo']); ?></td></tr>
         <tr><td class="label">Estado anterior</td><td>Activo</td></tr>
-        <tr><td class="label">Estado nuevo</td><td>Retirado con deuda pendiente</td></tr>
+        <tr><td class="label">Estado nuevo</td><td><?php echo h($estadoNuevoSocio); ?></td></tr>
     </table>
 
     <h2>Sección 2 — Resumen financiero</h2>
