@@ -323,7 +323,7 @@ $movimientosInconsistentes = $inconsistenciasStmt->fetchAll(PDO::FETCH_ASSOC);
     <table class="table table-striped table-sm">
         <thead>
             <tr>
-                <th>Fecha</th><th>Periodo</th><th>Socio</th><th>Actividad</th><th>Tipo</th><th>Valor contable</th><th>Medio</th><th>Módulo</th><th></th>
+                <th>Fecha</th><th>Periodo</th><th>Socio</th><th>Actividad</th><th>Tipo</th><th>Valor</th><th>Medio</th><th>Módulo</th><th></th>
             </tr>
         </thead>
         <tbody>
@@ -344,7 +344,7 @@ $movimientosInconsistentes = $inconsistenciasStmt->fetchAll(PDO::FETCH_ASSOC);
                     <td><?php echo clean($nombreMovimiento); ?></td>
                     <td><?php echo clean($m['nombre_actividad']); ?></td>
                     <td><span class="badge <?php echo $claseTipo; ?>"><?php echo clean($m['tipo_movimiento']); ?></span></td>
-                    <td>$<?php echo number_format($m['valor_natillera'],0,',','.'); ?></td>
+                    <td>$<?php echo number_format(abs($m['valor']),0,',','.'); ?></td>
                     <td><?php echo clean($m['medio_nombre'] ?: $m['medio_consignacion']); ?></td>
                     <td><?php echo clean($m['modulo'] ?: 'movimientos'); ?></td>
                     <td class="text-end">

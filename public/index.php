@@ -843,7 +843,7 @@ foreach ($movimientos as $movimientoConsolidado) {
                                 <td><?php echo clean($m['medio_nombre']); ?></td>
                                 <td><span class="badge <?php echo $claseTipo; ?>">
                                     <?php echo $tipoMovimiento; ?></span></td>
-                                <td class="text-end">$<?php echo number_format($m['valor_natillera'],0,',','.'); ?></td>
+                                <td class="text-end">$<?php echo number_format(abs($m['valor']),0,',','.'); ?></td>
                                 <td class="text-end"><?php echo $m['saldo_socio'] !== null ? '$'.number_format($m['saldo_socio'],0,',','.') : '-'; ?></td>
                                 <td class="text-end">$<?php echo number_format($m['saldo_general'],0,',','.'); ?></td>
                             </tr>
