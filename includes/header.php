@@ -276,9 +276,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <a class="nav-link-submenu<?php echo $currentPage === 'liquidacion_anticipada.php' ? ' active' : ''; ?>" href="liquidacion_anticipada.php">Liquidación anticipada</a>
                 <a class="nav-link-submenu<?php echo $currentPage === 'liquidacion_definitiva.php' ? ' active' : ''; ?>" href="liquidacion_definitiva.php">Liquidación definitiva</a>
             </div>
-            <a class="nav-link-sidebar<?php echo $currentPage === 'reportes.php' ? ' active' : ''; ?>" href="reportes.php"><i class="bi bi-file-earmark-bar-graph"></i><span>Reportes</span></a>
+            <a class="nav-link-sidebar<?php echo in_array($currentPage, ['reportes.php', 'reporte_ultimo_aporte.php'], true) ? ' active' : ''; ?>" href="reportes.php"><i class="bi bi-file-earmark-bar-graph"></i><span>Reportes</span></a>
+            <div class="nav-submenu">
+                <a class="nav-link-submenu<?php echo $currentPage === 'reporte_ultimo_aporte.php' ? ' active' : ''; ?>" href="reporte_ultimo_aporte.php">Último aporte por socio</a>
+            </div>
             <a class="nav-link-sidebar<?php echo $currentPage === 'estadisticas.php' ? ' active' : ''; ?>" href="estadisticas.php"><i class="bi bi-pie-chart"></i><span>Estadísticas</span></a>
-            <a class="nav-link-sidebar<?php echo $currentPage === 'gestion_talento.php' ? ' active' : ''; ?>" href="gestion_talento.php"><i class="bi bi-people-fill"></i><span>Gestión visual de talento</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'reglamento.php' ? ' active' : ''; ?>" href="reglamento.php"><i class="bi bi-journal-text"></i><span>Reglamento</span></a>
             <a class="nav-link-sidebar" href="../actions/export_csv.php?tipo=menu"><i class="bi bi-filetype-csv"></i><span>Exportar</span></a>
             <?php if ($isAdmin): ?>
