@@ -12,11 +12,11 @@ if (($_SESSION['rol'] ?? '') !== 'admin') {
     exit('Acceso restringido: solo usuarios administradores pueden descargar comprobantes de liquidación.');
 }
 
-function cargarAutoloadPdfLiquidacion(): void
+function cargarAutoloadPdfLiquidacion(): bool
 {
     static $autoloadCargado = false;
     if ($autoloadCargado) {
-        return;
+        return true;
     }
 
     foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/vendor/autoload.php'] as $path) {
@@ -27,17 +27,13 @@ function cargarAutoloadPdfLiquidacion(): void
         }
     }
 
-    if (!$autoloadCargado) {
-        exit('No se encontró vendor/autoload.php. Ejecute "composer install" en la raíz del proyecto.');
-    }
+    return $autoloadCargado;
 }
 
-function crearDompdfLiquidacion(): Dompdf
+function crearDompdfLiquidacion(): ?Dompdf
 {
-    cargarAutoloadPdfLiquidacion();
-
-    if (!class_exists(Dompdf::class)) {
-        exit('DOMPDF no está disponible. Ejecute "composer require dompdf/dompdf" en la raíz del proyecto.');
+    if (!cargarAutoloadPdfLiquidacion() || !class_exists(Dompdf::class)) {
+        return null;
     }
 
     $opciones = new Options();
@@ -122,6 +118,7 @@ function idsMovimientosComprobante(array $liquidacion): array
 
 asegurarEsquemaLiquidaciones($pdo);
 asegurarEsquemaMovimientos($pdo);
+asegurarEsquemaActividades($pdo);
 
 $idLiquidacion = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 if ($idLiquidacion <= 0) {
@@ -161,9 +158,22 @@ if ($idsMovimientos) {
           AND LOWER(COALESCE(a.nombre_actividad, '')) NOT LIKE '%polla%'
           AND LOWER(COALESCE(m.motivo, '')) NOT LIKE '%polla%'
         ORDER BY m.fecha ASC, m.id_movimiento ASC";
-    $stmtMovimientos = $pdo->prepare($sqlMovimientos);
-    $stmtMovimientos->execute($idsMovimientos);
-    $movimientos = $stmtMovimientos->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        $stmtMovimientos = $pdo->prepare($sqlMovimientos);
+        $stmtMovimientos->execute($idsMovimientos);
+        $movimientos = $stmtMovimientos->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $sqlMovimientos = "SELECT m.fecha, m.motivo, m.valor, m.es_ingreso, m.es_egreso, a.nombre_actividad, a.afecta_saldo_socio, 0 AS es_polla
+            FROM movimientos m
+            JOIN actividades_maestro a ON a.id_actividad = m.id_actividad
+            WHERE m.id_movimiento IN ($placeholders)
+              AND LOWER(COALESCE(a.nombre_actividad, '')) NOT LIKE '%polla%'
+              AND LOWER(COALESCE(m.motivo, '')) NOT LIKE '%polla%'
+            ORDER BY m.fecha ASC, m.id_movimiento ASC";
+        $stmtMovimientos = $pdo->prepare($sqlMovimientos);
+        $stmtMovimientos->execute($idsMovimientos);
+        $movimientos = $stmtMovimientos->fetchAll(PDO::FETCH_ASSOC);
+    }
 }
 
 $saldoSocio = 0.0;
@@ -191,6 +201,7 @@ $saldoLiquidacion = array_key_exists('saldo_liquidacion', $detalle)
     ? (float) $detalle['saldo_liquidacion']
     : ($ahorro + $rendimientos - $capitalPendiente - $interesesPendientes - $cuotaAdmin);
 $saldoPendiente = valorDetalle($detalle, $liquidacion, 'saldo_pendiente', 'saldo_pendiente', max(0, -$saldoLiquidacion));
+$estadoNuevoSocio = round($saldoPendiente, 2) > 0.0 ? 'Retirado con deuda pendiente' : 'Retirado';
 $config = getConfiguracionGeneral($pdo);
 $logo = logoLiquidacionBase64($config);
 $fechaGeneracion = date('Y-m-d H:i:s');
@@ -248,7 +259,7 @@ ob_start();
     <table>
         <tr><td class="label">Nombre completo</td><td><?php echo h($liquidacion['nombre_completo']); ?></td></tr>
         <tr><td class="label">Estado anterior</td><td>Activo</td></tr>
-        <tr><td class="label">Estado nuevo</td><td>Retirado con deuda pendiente</td></tr>
+        <tr><td class="label">Estado nuevo</td><td><?php echo h($estadoNuevoSocio); ?></td></tr>
     </table>
 
     <h2>Sección 2 — Resumen financiero</h2>
@@ -302,8 +313,21 @@ ob_start();
 $html = ob_get_clean();
 
 $dompdf = crearDompdfLiquidacion();
-$dompdf->loadHtml($html, 'UTF-8');
-$dompdf->setPaper('letter', 'portrait');
-$dompdf->render();
-$dompdf->stream('comprobante_liquidacion_' . $idLiquidacion . '.pdf', ['Attachment' => false]);
+if ($dompdf === null) {
+    header('Content-Type: text/html; charset=UTF-8');
+    header('Content-Disposition: inline; filename="comprobante_liquidacion_' . $idLiquidacion . '.html"');
+    echo $html;
+    exit;
+}
+
+try {
+    $dompdf->loadHtml($html, 'UTF-8');
+    $dompdf->setPaper('letter', 'portrait');
+    $dompdf->render();
+    $dompdf->stream('comprobante_liquidacion_' . $idLiquidacion . '.pdf', ['Attachment' => false]);
+} catch (Throwable $e) {
+    header('Content-Type: text/html; charset=UTF-8');
+    header('Content-Disposition: inline; filename="comprobante_liquidacion_' . $idLiquidacion . '.html"');
+    echo $html;
+}
 exit;
