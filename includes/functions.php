@@ -599,8 +599,12 @@ function normalizarReglaAfectacion($regla) {
 function asegurarEsquemaActividades(PDO $pdo): void {
     $columnas = [
         'es_ingreso TINYINT(1) DEFAULT 0',
+        'es_prestamo TINYINT(1) DEFAULT 0',
+        'es_pago_prestamo TINYINT(1) DEFAULT 0',
         'es_pago_interes TINYINT(1) DEFAULT 0',
         'es_interes_causado TINYINT(1) DEFAULT 0',
+        'es_polla TINYINT(1) DEFAULT 0',
+        'es_gasto_general TINYINT(1) DEFAULT 0',
         'es_rifa TINYINT(1) DEFAULT 0',
         'categoria VARCHAR(150) NULL',
         'id_actividad_contrapartida INT NULL',
