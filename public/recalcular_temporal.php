@@ -1,9 +1,13 @@
 <?php
-require_once '../includes/db.php';
-require_once '../includes/functions.php';
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
+
+require_once __DIR__ . '/../includes/functions.php';
 
 recalcularSaldosDesdeMovimientos($pdo);
-echo "Recálculo completado. Saldo natillera: ";
 
-$stmt = $pdo->query("SELECT saldo_actual FROM natillera_estado WHERE id_estado = 1");
-echo number_format($stmt->fetchColumn(), 0, ',', '.');
+$stmt = $pdo->query('SELECT saldo_actual FROM natillera_estado WHERE id_estado = 1 LIMIT 1');
+$saldo = (float) $stmt->fetchColumn();
+
+echo 'Saldo natillera: ' . number_format($saldo, 0, ',', '.');
