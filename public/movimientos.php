@@ -52,8 +52,9 @@ $filtroFechaIni = $_GET['desde'] ?? '';
 $filtroFechaFin = $_GET['hasta'] ?? '';
 $filtroTipo = $_GET['tipo'] ?? '';
 $filtroMedio = isset($_GET['medio']) ? (int) $_GET['medio'] : 0;
+$filtroMovimiento = isset($_GET['id_movimiento']) ? (int) $_GET['id_movimiento'] : 0;
 
-if (!$filtroFechaIni && !$filtroFechaFin) {
+if (!$filtroMovimiento && !$filtroFechaIni && !$filtroFechaFin) {
     $filtroFechaIni = $periodoInicio;
     $filtroFechaFin = $periodoFin;
 }
@@ -65,6 +66,7 @@ if ($filtroActividad) { $where[] = 'm.id_actividad = :a'; $params[':a'] = $filtr
 if ($filtroFechaIni) { $where[] = 'm.fecha >= :fi'; $params[':fi'] = $filtroFechaIni; }
 if ($filtroFechaFin) { $where[] = 'm.fecha <= :ff'; $params[':ff'] = $filtroFechaFin; }
 if ($filtroMedio) { $where[] = 'm.id_medio_pago = :mp'; $params[':mp'] = $filtroMedio; }
+if ($filtroMovimiento) { $where[] = 'm.id_movimiento = :movimiento'; $params[':movimiento'] = $filtroMovimiento; }
 
 $sqlWhere = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 $sqlWhereTipo = '';

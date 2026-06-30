@@ -103,7 +103,7 @@ $socios = $pdo->query('SELECT id_socio, nombre_completo FROM socios ORDER BY nom
                             <td><?php echo clean($mov['fecha']); ?></td>
                             <td><?php echo clean($mov['nombre_completo'] ?? 'Sin socio'); ?></td>
                             <td><?php echo clean($mov['concepto']); ?></td>
-                            <td><?php echo $mov['id_movimiento'] ? '#' . (int) $mov['id_movimiento'] . ' - ' . clean($mov['motivo_movimiento'] ?? '') : 'N/A'; ?></td>
+                            <td><?php if ($mov['id_movimiento']): ?><a href="movimientos.php?id_movimiento=<?php echo (int) $mov['id_movimiento']; ?>" class="link-primary fw-semibold">#<?php echo (int) $mov['id_movimiento']; ?></a> - <?php echo clean($mov['motivo_movimiento'] ?? ''); ?><?php else: ?>N/A<?php endif; ?></td>
                             <td class="text-end fw-semibold">$<?php echo number_format((float) $mov['valor'], 0, ',', '.'); ?></td>
                             <td class="text-end">
                                 <form method="post" action="../actions/bolsa_administracion_save.php" class="d-inline" onsubmit="return confirm('¿Eliminar este registro de la bolsa de administración? Esta acción solo limpia la bolsa y no elimina el movimiento contable asociado.');">

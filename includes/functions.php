@@ -33,6 +33,20 @@ function asegurarEsquemaBolsaAdministracion(PDO $pdo): void {
         // No interrumpir el flujo principal si el motor no permite crear la tabla.
     }
 
+    try {
+        $pdo->exec('UPDATE bolsa_administracion ba LEFT JOIN movimientos m ON m.id_movimiento = ba.id_movimiento SET ba.id_movimiento = NULL WHERE ba.id_movimiento IS NOT NULL AND m.id_movimiento IS NULL');
+        asegurarForeignKey($pdo, [
+            'tabla' => 'bolsa_administracion',
+            'columna' => 'id_movimiento',
+            'referencia' => 'movimientos',
+            'col_referencia' => 'id_movimiento',
+            'nombre' => 'fk_bolsa_admin_movimiento',
+            'on_delete' => 'CASCADE',
+        ]);
+    } catch (Exception $e) {
+        // Si no se puede reforzar la relación, la bolsa sigue funcionando sin interrumpir el flujo.
+    }
+
     $asegurada = true;
 }
 
