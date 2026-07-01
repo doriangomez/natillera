@@ -600,6 +600,17 @@ try {
             ':modulo' => 'liquidaciones',
         ]);
         $movRetencionId = (int) $pdo->lastInsertId();
+        registrarBolsaAdministracion(
+            $pdo,
+            $idSocio,
+            $movRetencionId,
+            null,
+            $fecha,
+            abs((float) $cuotaManejo),
+            'Retención administración liquidación',
+            'Acumulada por liquidación con saldo pagado.',
+            $usuario
+        );
         $movimientosGenerados[] = [
             'tipo' => 'retencion_administracion',
             'id_movimiento' => $movRetencionId,
