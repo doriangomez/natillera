@@ -14,6 +14,10 @@ $filtroEstado = trim((string) ($_GET['filtro_estado'] ?? 'activa'));
 $idSocio = isset($_GET['id_socio']) ? (int) $_GET['id_socio'] : 0;
 $tipoLiquidacion = trim((string) ($_GET['tipo_liquidacion'] ?? 'anticipada'));
 $cuotaManejo = isset($_GET['cuota_manejo']) ? (float) $_GET['cuota_manejo'] : 0.0;
+$otrosConceptosDeuda = normalizarConceptosDeudaLiquidacion(
+    is_array($_GET['otros_conceptos_descripcion'] ?? null) ? $_GET['otros_conceptos_descripcion'] : [],
+    is_array($_GET['otros_conceptos_valor'] ?? null) ? $_GET['otros_conceptos_valor'] : []
+);
 $idActividadLiquidacion = isset($_GET['id_actividad_liquidacion']) ? (int) $_GET['id_actividad_liquidacion'] : 0;
 $idActividadRetencion = isset($_GET['id_actividad_retencion'])
     ? (int) $_GET['id_actividad_retencion']
@@ -27,7 +31,7 @@ if (!isset($tipos[$tipoLiquidacion])) {
 $resultado = null;
 $socioSeleccionado = null;
 if ($idSocio > 0) {
-    $resultado = calcularLiquidacionSocio($pdo, $idSocio, $cuotaManejo);
+    $resultado = calcularLiquidacionSocio($pdo, $idSocio, $cuotaManejo, $otrosConceptosDeuda);
     if ($resultado) {
         $socioSeleccionado = $resultado['socio'];
     }
@@ -93,6 +97,32 @@ if ($editarId > 0) {
                 <button class="btn btn-primary" type="submit"><i class="bi bi-lightning-charge"></i> Precalcular</button>
             </div>
 
+            <div class="col-12">
+                <div class="border rounded p-3 bg-light">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                        <label class="form-label mb-0">Otros conceptos de deuda</label>
+                        <button class="btn btn-sm btn-outline-primary" type="button" id="agregar-concepto-deuda"><i class="bi bi-plus-circle"></i> Agregar concepto</button>
+                    </div>
+                    <div class="small text-muted mb-2">Agregue conceptos adicionales que deben descontarse al socio, por ejemplo: Intereses Junio o Polla Mayo y Junio.</div>
+                    <div id="otros-conceptos-deuda" class="vstack gap-2">
+                        <?php $conceptosFormulario = !empty($otrosConceptosDeuda) ? $otrosConceptosDeuda : [['descripcion' => '', 'valor' => '']]; ?>
+                        <?php foreach ($conceptosFormulario as $concepto): ?>
+                            <div class="row g-2 concepto-deuda-linea">
+                                <div class="col-md-7">
+                                    <input class="form-control" type="text" name="otros_conceptos_descripcion[]" placeholder="Descripción" value="<?php echo clean((string) ($concepto['descripcion'] ?? '')); ?>">
+                                </div>
+                                <div class="col-md-4">
+                                    <input class="form-control" type="number" min="0" step="0.01" name="otros_conceptos_valor[]" placeholder="Valor" value="<?php echo ($concepto['valor'] ?? '') !== '' ? number_format((float) $concepto['valor'], 2, '.', '') : ''; ?>">
+                                </div>
+                                <div class="col-md-1 d-grid">
+                                    <button class="btn btn-outline-danger quitar-concepto-deuda" type="button" aria-label="Quitar concepto">&times;</button>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+
             <div class="col-md-6">
                 <label class="form-label" for="id_actividad_liquidacion">Actividad principal (pago al socio)</label>
                 <select class="form-select" name="id_actividad_liquidacion" id="id_actividad_liquidacion" required>
@@ -151,6 +181,9 @@ if ($editarId > 0) {
                     <tr><th>- Capital pendiente</th><td>$<?php echo number_format(array_sum(array_column($resultado['prestamos_descontados'], 'capital_pendiente')), 0, ',', '.'); ?></td></tr>
                     <tr><th>- Intereses pendientes</th><td>$<?php echo number_format(array_sum(array_column($resultado['prestamos_descontados'], 'intereses_pendientes')), 0, ',', '.'); ?></td></tr>
                     <tr><th>- Cuota de administración</th><td>$<?php echo number_format($resultado['valor_cuota_manejo'], 0, ',', '.'); ?></td></tr>
+                    <?php foreach ($resultado['otros_conceptos_deuda'] as $concepto): ?>
+                        <tr><th>- <?php echo clean((string) $concepto['descripcion']); ?></th><td>$<?php echo number_format((float) $concepto['valor'], 0, ',', '.'); ?></td></tr>
+                    <?php endforeach; ?>
                     <tr><th>Deuda total</th><td>$<?php echo number_format($resultado['deuda_total'], 0, ',', '.'); ?></td></tr>
                     <tr class="table-light"><th>Saldo de liquidación</th><td class="fw-bold"><?php echo $resultado['saldo_liquidacion'] < 0 ? '-' : ''; ?>$<?php echo number_format(abs((float) $resultado['saldo_liquidacion']), 0, ',', '.'); ?></td></tr>
                     <tr><th>Valor aplicado a préstamos</th><td>$<?php echo number_format($resultado['valor_aplicado_deuda'], 0, ',', '.'); ?></td></tr>
@@ -194,7 +227,7 @@ if ($editarId > 0) {
                 </table>
             </div>
 
-            <p class="small text-muted mb-2">Fórmula auditada: saldo de liquidación = ahorro acumulado + rendimientos - capital pendiente - intereses pendientes - cuota de administración. Ese único saldo determina si se paga al socio o si queda un saldo pendiente; no se recalcula ningún déficit sobre el préstamo.</p>
+            <p class="small text-muted mb-2">Fórmula auditada: saldo de liquidación = ahorro acumulado + rendimientos - capital pendiente - intereses pendientes - cuota de administración - otros conceptos de deuda. Ese único saldo determina si se paga al socio o si queda un saldo pendiente; no se recalcula ningún déficit sobre el préstamo.</p>
             <?php if ($resultado['valor_cuota_manejo'] > 0 && $resultado['deficit'] <= 0): ?>
                 <div class="alert alert-info py-2">
                     Se entregan <strong>$<?php echo number_format((float) $resultado['valor_neto'], 0, ',', '.'); ?></strong> al socio y
@@ -213,6 +246,10 @@ if ($editarId > 0) {
                 <input type="hidden" name="cuota_manejo" value="<?php echo number_format($cuotaManejo, 2, '.', ''); ?>">
                 <input type="hidden" name="id_actividad_liquidacion" value="<?php echo (int) $idActividadLiquidacion; ?>">
                 <input type="hidden" name="id_actividad_retencion" value="<?php echo (int) $idActividadRetencion; ?>">
+                <?php foreach ($resultado['otros_conceptos_deuda'] as $concepto): ?>
+                    <input type="hidden" name="otros_conceptos_descripcion[]" value="<?php echo clean((string) $concepto['descripcion']); ?>">
+                    <input type="hidden" name="otros_conceptos_valor[]" value="<?php echo number_format((float) $concepto['valor'], 2, '.', ''); ?>">
+                <?php endforeach; ?>
                 <input type="hidden" name="observaciones" value="Liquidación <?php echo clean($tipoLiquidacion); ?> desde módulo central.">
                 <button class="btn btn-success" type="submit"><i class="bi bi-check-circle"></i> Confirmar</button>
                 <a class="btn btn-outline-secondary" href="liquidaciones.php">Cancelar</a>
@@ -343,5 +380,48 @@ if ($editarId > 0) {
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const contenedor = document.getElementById('otros-conceptos-deuda');
+    const botonAgregar = document.getElementById('agregar-concepto-deuda');
+    if (!contenedor || !botonAgregar) {
+        return;
+    }
+
+    function crearLinea() {
+        const linea = document.createElement('div');
+        linea.className = 'row g-2 concepto-deuda-linea';
+        linea.innerHTML = `
+            <div class="col-md-7">
+                <input class="form-control" type="text" name="otros_conceptos_descripcion[]" placeholder="Descripción">
+            </div>
+            <div class="col-md-4">
+                <input class="form-control" type="number" min="0" step="0.01" name="otros_conceptos_valor[]" placeholder="Valor">
+            </div>
+            <div class="col-md-1 d-grid">
+                <button class="btn btn-outline-danger quitar-concepto-deuda" type="button" aria-label="Quitar concepto">&times;</button>
+            </div>`;
+        return linea;
+    }
+
+    botonAgregar.addEventListener('click', function () {
+        contenedor.appendChild(crearLinea());
+    });
+
+    contenedor.addEventListener('click', function (event) {
+        if (!event.target.classList.contains('quitar-concepto-deuda')) {
+            return;
+        }
+        const linea = event.target.closest('.concepto-deuda-linea');
+        if (linea) {
+            linea.remove();
+        }
+        if (!contenedor.querySelector('.concepto-deuda-linea')) {
+            contenedor.appendChild(crearLinea());
+        }
+    });
+});
+</script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
