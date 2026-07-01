@@ -226,6 +226,10 @@ if (!isset($tipos[$tipoLiquidacion])) {
 
 $idSocio = isset($_POST['id_socio']) ? (int) $_POST['id_socio'] : 0;
 $cuotaManejo = isset($_POST['cuota_manejo']) ? (float) $_POST['cuota_manejo'] : 0.0;
+$otrosConceptosDeuda = normalizarConceptosDeudaLiquidacion(
+    is_array($_POST['otros_conceptos_descripcion'] ?? null) ? $_POST['otros_conceptos_descripcion'] : [],
+    is_array($_POST['otros_conceptos_valor'] ?? null) ? $_POST['otros_conceptos_valor'] : []
+);
 $idActividadLiquidacion = isset($_POST['id_actividad_liquidacion']) ? (int) $_POST['id_actividad_liquidacion'] : 0;
 $idActividadRetencion = isset($_POST['id_actividad_retencion'])
     ? (int) $_POST['id_actividad_retencion']
@@ -302,7 +306,7 @@ try {
         }
     }
 
-    $calculo = calcularLiquidacionSocio($pdo, $idSocio, $cuotaManejo);
+    $calculo = calcularLiquidacionSocio($pdo, $idSocio, $cuotaManejo, $otrosConceptosDeuda);
     if (!$calculo) {
         throw new InvalidArgumentException('No se encontró el socio para liquidar.');
     }
@@ -533,6 +537,51 @@ try {
         ];
     }
 
+    $idActividadOtrosConceptos = null;
+    foreach ($calculo['otros_conceptos_deuda'] as $conceptoDeuda) {
+        $valorConcepto = (float) ($conceptoDeuda['valor'] ?? 0);
+        $descripcionConcepto = trim((string) ($conceptoDeuda['descripcion'] ?? ''));
+        if ($descripcionConcepto === '' || $valorConcepto <= 0) {
+            continue;
+        }
+        if ($idActividadOtrosConceptos === null) {
+            $idActividadOtrosConceptos = asegurarActividadLiquidacionSimple(
+                $pdo,
+                'Otros conceptos deuda liquidación',
+                'Conceptos adicionales de deuda recuperados en liquidación',
+                'resta',
+                'resta',
+                0,
+                0
+            );
+        }
+        ejecutarLiquidacionStatement($insertMov, [
+            ':fecha' => $fecha,
+            ':anio' => $anio,
+            ':mes' => $mes,
+            ':quincena' => $quincena,
+            ':id_socio' => $idSocio,
+            ':id_prestamo' => null,
+            ':id_actividad' => $idActividadOtrosConceptos,
+            ':motivo' => $descripcionConcepto,
+            ':valor' => -abs($valorConcepto),
+            ':medio' => 'Liquidaciones',
+            ':ingreso' => 0,
+            ':egreso' => 1,
+            ':obs' => 'Concepto adicional de deuda recuperado en liquidación.',
+            ':usuario' => $usuario,
+            ':modulo' => 'liquidaciones',
+        ]);
+        $idMovConcepto = (int) $pdo->lastInsertId();
+        $movimientosGenerados[] = [
+            'tipo' => 'otro_concepto_deuda',
+            'id_movimiento' => $idMovConcepto,
+            'id_actividad' => $idActividadOtrosConceptos,
+            'descripcion' => $descripcionConcepto,
+            'valor' => abs($valorConcepto),
+        ];
+    }
+
     $movRetencionId = null;
     if ($cuotaManejo > 0 && (float) $calculo['deficit'] <= 0) {
         ejecutarLiquidacionStatement($insertMov, [
@@ -606,6 +655,8 @@ try {
             'saldo_pendiente' => $saldoPendiente,
             'deficit' => $calculo['deficit'],
             'valor_cuota_manejo' => $calculo['valor_cuota_manejo'],
+            'otros_conceptos_deuda' => $calculo['otros_conceptos_deuda'],
+            'total_otros_conceptos_deuda' => $calculo['total_otros_conceptos_deuda'],
             'valor_bruto' => $calculo['valor_bruto'],
             'valor_neto' => $calculo['valor_neto'],
             'advertencia_deficit' => $calculo['deficit'] > 0 ? 'El saldo de liquidación es negativo. Se creó un nuevo préstamo por el saldo pendiente exacto y el socio quedó retirado con deuda pendiente.' : null,

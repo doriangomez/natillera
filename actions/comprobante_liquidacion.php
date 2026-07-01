@@ -197,9 +197,21 @@ if (!empty($detalle['prestamos_descontados']) && is_array($detalle['prestamos_de
     $interesesPendientes = array_sum(array_map(static fn($p) => (float) ($p['intereses_pendientes'] ?? 0), $detalle['prestamos_descontados']));
 }
 $cuotaAdmin = valorDetalle($detalle, $liquidacion, 'valor_cuota_manejo', 'valor_cuota_manejo');
+$otrosConceptosDeuda = [];
+if (!empty($detalle['otros_conceptos_deuda']) && is_array($detalle['otros_conceptos_deuda'])) {
+    foreach ($detalle['otros_conceptos_deuda'] as $concepto) {
+        $descripcion = trim((string) ($concepto['descripcion'] ?? ''));
+        $valor = max(0, (float) ($concepto['valor'] ?? 0));
+        if ($descripcion === '' || $valor <= 0) {
+            continue;
+        }
+        $otrosConceptosDeuda[] = ['descripcion' => $descripcion, 'valor' => $valor];
+    }
+}
+$totalOtrosConceptosDeuda = array_sum(array_column($otrosConceptosDeuda, 'valor'));
 $saldoLiquidacion = array_key_exists('saldo_liquidacion', $detalle)
     ? (float) $detalle['saldo_liquidacion']
-    : ($ahorro + $rendimientos - $capitalPendiente - $interesesPendientes - $cuotaAdmin);
+    : ($ahorro + $rendimientos - $capitalPendiente - $interesesPendientes - $cuotaAdmin - $totalOtrosConceptosDeuda);
 $saldoPendiente = valorDetalle($detalle, $liquidacion, 'saldo_pendiente', 'saldo_pendiente', max(0, -$saldoLiquidacion));
 $estadoNuevoSocio = round($saldoPendiente, 2) > 0.0 ? 'Retirado con deuda pendiente' : 'Retirado';
 $config = getConfiguracionGeneral($pdo);
@@ -269,6 +281,9 @@ ob_start();
         <tr><td class="label">Capital pendiente préstamo</td><td class="text-end negativo"><?php echo monedaLiquidacion($capitalPendiente); ?></td></tr>
         <tr><td class="label">Intereses pendientes</td><td class="text-end negativo"><?php echo monedaLiquidacion($interesesPendientes); ?></td></tr>
         <tr><td class="label">Cuota de administración</td><td class="text-end negativo"><?php echo monedaLiquidacion($cuotaAdmin); ?></td></tr>
+        <?php foreach ($otrosConceptosDeuda as $concepto): ?>
+            <tr><td class="label"><?php echo h((string) $concepto['descripcion']); ?></td><td class="text-end negativo"><?php echo monedaLiquidacion((float) $concepto['valor']); ?></td></tr>
+        <?php endforeach; ?>
         <tr class="destacado"><td class="label">Saldo de liquidación</td><td class="text-end <?php echo claseValor($saldoLiquidacion); ?>"><?php echo monedaLiquidacion($saldoLiquidacion); ?></td></tr>
         <tr class="destacado"><td class="label">Saldo pendiente del socio</td><td class="text-end <?php echo $saldoPendiente > 0 ? 'negativo' : ''; ?>"><?php echo monedaLiquidacion($saldoPendiente); ?></td></tr>
     </table>
