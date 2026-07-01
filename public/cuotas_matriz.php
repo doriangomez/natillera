@@ -50,6 +50,205 @@ if ($actividadCuotaId > 0 && !empty($condicionesPeriodo)) {
     }
 }
 
+
+$fechasPeriodos = [];
+$fechaFinMatriz = null;
+foreach ($periodos as $p) {
+    $clavePeriodo = sprintf('%04d-%02d', (int) $p['anio'], (int) $p['mes']);
+    $fechaFinPeriodo = DateTime::createFromFormat('Y-m-d', sprintf('%04d-%02d-01', (int) $p['anio'], (int) $p['mes']));
+    if (!$fechaFinPeriodo) {
+        continue;
+    }
+
+    $fechaFinPeriodo->modify('last day of this month');
+    $fechasPeriodos[$clavePeriodo] = $fechaFinPeriodo->format('Y-m-d');
+
+    if ($fechaFinMatriz === null || $fechaFinPeriodo->format('Y-m-d') > $fechaFinMatriz) {
+        $fechaFinMatriz = $fechaFinPeriodo->format('Y-m-d');
+    }
+}
+
+function inicializarDetalleSocioMes(array &$destino, int $socioId, string $clave): void {
+    if (!isset($destino[$socioId])) {
+        $destino[$socioId] = [];
+    }
+
+    if (!isset($destino[$socioId][$clave])) {
+        $destino[$socioId][$clave] = 0.0;
+    }
+}
+
+$interesesPorSocio = [];
+if (!empty($condicionesPeriodo)) {
+    $paramsIntereses = [];
+    $condicionesIntereses = [];
+
+    foreach ($periodos as $idx => $p) {
+        $condicionesIntereses[] = "(m.anio = :anio$idx AND m.mes = :mes$idx)";
+        $paramsIntereses[":anio$idx"] = (int) $p['anio'];
+        $paramsIntereses[":mes$idx"] = (int) $p['mes'];
+    }
+
+    $sqlIntereses = 'SELECT m.id_socio, m.anio, m.mes, SUM(ABS(m.valor)) AS total_interes'
+        . ' FROM movimientos m'
+        . ' JOIN actividades_maestro a ON m.id_actividad = a.id_actividad'
+        . ' WHERE m.id_socio IS NOT NULL'
+        . ' AND a.es_pago_interes = 1'
+        . ' AND (' . implode(' OR ', $condicionesIntereses) . ')'
+        . ' GROUP BY m.id_socio, m.anio, m.mes';
+
+    $stmtIntereses = $pdo->prepare($sqlIntereses);
+    $stmtIntereses->execute($paramsIntereses);
+
+    foreach ($stmtIntereses->fetchAll() as $row) {
+        $socioId = (int) $row['id_socio'];
+        $clave = sprintf('%04d-%02d', (int) $row['anio'], (int) $row['mes']);
+        inicializarDetalleSocioMes($interesesPorSocio, $socioId, $clave);
+        $interesesPorSocio[$socioId][$clave] += (float) $row['total_interes'];
+    }
+}
+
+$pollasPorSocio = [];
+if (!empty($condicionesPeriodo)) {
+    $paramsPollas = [];
+    $condicionesPollas = [];
+
+    foreach ($periodos as $idx => $p) {
+        $condicionesPollas[] = "(m.anio = :anio$idx AND m.mes = :mes$idx)";
+        $paramsPollas[":anio$idx"] = (int) $p['anio'];
+        $paramsPollas[":mes$idx"] = (int) $p['mes'];
+    }
+
+    $sqlPollas = 'SELECT m.id_socio, m.anio, m.mes, SUM(ABS(m.valor)) AS total_polla'
+        . ' FROM movimientos m'
+        . ' JOIN actividades_maestro a ON m.id_actividad = a.id_actividad'
+        . ' WHERE m.id_socio IS NOT NULL'
+        . ' AND a.es_polla = 1'
+        . ' AND (' . implode(' OR ', $condicionesPollas) . ')'
+        . ' GROUP BY m.id_socio, m.anio, m.mes';
+
+    $stmtPollas = $pdo->prepare($sqlPollas);
+    $stmtPollas->execute($paramsPollas);
+
+    foreach ($stmtPollas->fetchAll() as $row) {
+        $socioId = (int) $row['id_socio'];
+        $clave = sprintf('%04d-%02d', (int) $row['anio'], (int) $row['mes']);
+        inicializarDetalleSocioMes($pollasPorSocio, $socioId, $clave);
+        $pollasPorSocio[$socioId][$clave] += (float) $row['total_polla'];
+    }
+}
+
+$saldosPrestamoPorSocio = [];
+if ($fechaFinMatriz !== null && !empty($fechasPeriodos)) {
+    $stmtPrestamosSocio = $pdo->prepare(
+        'SELECT id_prestamo, id_socio, fecha_prestamo, monto_prestamo, saldo_capital_actual, estado'
+        . ' FROM prestamos'
+        . ' WHERE id_socio IS NOT NULL'
+        . ' AND fecha_prestamo <= :fecha_fin'
+    );
+    $stmtPrestamosSocio->execute([':fecha_fin' => $fechaFinMatriz]);
+    $prestamosSocio = $stmtPrestamosSocio->fetchAll();
+
+    $prestamosPorId = [];
+    foreach ($prestamosSocio as $prestamo) {
+        $prestamosPorId[(int) $prestamo['id_prestamo']] = $prestamo;
+    }
+
+    $saldosHistoricos = [];
+    if (!empty($prestamosPorId) && !empty($condicionesPeriodo)) {
+        $paramsPeriodosPrestamo = [];
+        $condicionesPeriodosPrestamo = [];
+
+        foreach ($periodos as $idx => $p) {
+            $condicionesPeriodosPrestamo[] = "(pp.anio = :anio$idx AND pp.mes = :mes$idx)";
+            $paramsPeriodosPrestamo[":anio$idx"] = (int) $p['anio'];
+            $paramsPeriodosPrestamo[":mes$idx"] = (int) $p['mes'];
+        }
+
+        $sqlPeriodosPrestamo = 'SELECT pp.id_prestamo, pp.anio, pp.mes, pp.capital_final'
+            . ' FROM periodos_prestamo pp'
+            . ' JOIN prestamos p ON p.id_prestamo = pp.id_prestamo'
+            . ' WHERE p.id_socio IS NOT NULL'
+            . ' AND (' . implode(' OR ', $condicionesPeriodosPrestamo) . ')';
+
+        $stmtPeriodosPrestamo = $pdo->prepare($sqlPeriodosPrestamo);
+        $stmtPeriodosPrestamo->execute($paramsPeriodosPrestamo);
+
+        foreach ($stmtPeriodosPrestamo->fetchAll() as $row) {
+            $idPrestamo = (int) $row['id_prestamo'];
+            $clave = sprintf('%04d-%02d', (int) $row['anio'], (int) $row['mes']);
+
+            if (!isset($saldosHistoricos[$idPrestamo])) {
+                $saldosHistoricos[$idPrestamo] = [];
+            }
+
+            $saldosHistoricos[$idPrestamo][$clave] = (float) $row['capital_final'];
+        }
+    }
+
+    $abonosCapitalPorPrestamo = [];
+    if (!empty($prestamosPorId)) {
+        $stmtAbonosCapital = $pdo->prepare(
+            'SELECT m.id_prestamo, m.fecha, ABS(m.valor) AS valor_capital'
+            . ' FROM movimientos m'
+            . ' JOIN actividades_maestro a ON m.id_actividad = a.id_actividad'
+            . ' JOIN prestamos p ON p.id_prestamo = m.id_prestamo'
+            . ' WHERE p.id_socio IS NOT NULL'
+            . ' AND a.es_pago_prestamo = 1'
+            . ' AND m.fecha <= :fecha_fin'
+            . ' ORDER BY m.id_prestamo, m.fecha'
+        );
+        $stmtAbonosCapital->execute([':fecha_fin' => $fechaFinMatriz]);
+
+        foreach ($stmtAbonosCapital->fetchAll() as $row) {
+            $idPrestamo = (int) $row['id_prestamo'];
+
+            if (!isset($abonosCapitalPorPrestamo[$idPrestamo])) {
+                $abonosCapitalPorPrestamo[$idPrestamo] = [];
+            }
+
+            $abonosCapitalPorPrestamo[$idPrestamo][] = [
+                'fecha' => (string) $row['fecha'],
+                'valor' => (float) $row['valor_capital'],
+            ];
+        }
+    }
+
+    foreach ($prestamosSocio as $prestamo) {
+        $idPrestamo = (int) $prestamo['id_prestamo'];
+        $socioId = (int) $prestamo['id_socio'];
+        $fechaPrestamo = (string) $prestamo['fecha_prestamo'];
+        $montoPrestamo = (float) $prestamo['monto_prestamo'];
+        $abonosPrestamo = $abonosCapitalPorPrestamo[$idPrestamo] ?? [];
+
+        foreach ($fechasPeriodos as $clave => $fechaFinPeriodo) {
+            if ($fechaPrestamo > $fechaFinPeriodo) {
+                continue;
+            }
+
+            if (isset($saldosHistoricos[$idPrestamo][$clave])) {
+                $saldoPeriodo = (float) $saldosHistoricos[$idPrestamo][$clave];
+            } else {
+                $capitalPagado = 0.0;
+                foreach ($abonosPrestamo as $abono) {
+                    if ($abono['fecha'] <= $fechaFinPeriodo) {
+                        $capitalPagado += (float) $abono['valor'];
+                    }
+                }
+
+                $saldoPeriodo = max(0, $montoPrestamo - $capitalPagado);
+            }
+
+            if ($saldoPeriodo <= 0.01) {
+                continue;
+            }
+
+            inicializarDetalleSocioMes($saldosPrestamoPorSocio, $socioId, $clave);
+            $saldosPrestamoPorSocio[$socioId][$clave] += $saldoPeriodo;
+        }
+    }
+}
+
 function formatearMonedaCuotas(float $valor): string {
     $prefijo = $valor < 0 ? '-' : '';
     return $prefijo . '$' . number_format(abs($valor), 0, ',', '.');
@@ -110,20 +309,55 @@ function formatearMonedaCuotas(float $valor): string {
                             <?php $valor = $socioPeriodos[$clave] ?? ['quincenas' => [], 'total' => 0.0]; ?>
                             <?php $quincenas = $valor['quincenas'] ?? []; ?>
                             <?php ksort($quincenas); ?>
+                            <?php
+                            $saldoPrestamo = $saldosPrestamoPorSocio[(int) $s['id_socio']][$clave] ?? null;
+                            $interesPagado = $interesesPorSocio[(int) $s['id_socio']][$clave] ?? null;
+                            $pollaPagada = $pollasPorSocio[(int) $s['id_socio']][$clave] ?? null;
+                            ?>
                             <td class="text-end align-middle">
-                                <?php if (!empty($quincenas)): ?>
-                                    <div class="text-end small">
-                                        <?php foreach ([1, 2] as $q): if (!empty($quincenas[$q])): ?>
-                                            <div>Q<?php echo $q; ?>: <?php echo formatearMonedaCuotas((float) $quincenas[$q]); ?></div>
-                                        <?php endif; endforeach; ?>
-                                        <?php if (!empty($quincenas[0])): ?>
-                                            <div>Sin quincena: <?php echo formatearMonedaCuotas((float) $quincenas[0]); ?></div>
+                                <div class="small">
+                                    <div class="mb-1">
+                                        <div class="fw-semibold">Cuota:</div>
+                                        <?php if (!empty($quincenas)): ?>
+                                            <?php foreach ([1, 2] as $q): if (!empty($quincenas[$q])): ?>
+                                                <div>Q<?php echo $q; ?>: <?php echo formatearMonedaCuotas((float) $quincenas[$q]); ?></div>
+                                            <?php endif; endforeach; ?>
+                                            <?php if (!empty($quincenas[0])): ?>
+                                                <div>Sin quincena: <?php echo formatearMonedaCuotas((float) $quincenas[0]); ?></div>
+                                            <?php endif; ?>
+                                            <div class="fw-semibold mt-1">Total: <?php echo formatearMonedaCuotas((float) $valor['total']); ?></div>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
                                         <?php endif; ?>
-                                        <div class="fw-semibold mt-1">Total: <?php echo formatearMonedaCuotas((float) $valor['total']); ?></div>
                                     </div>
-                                <?php else: ?>
-                                    <span class="text-muted">-</span>
-                                <?php endif; ?>
+
+                                    <div class="mt-2">
+                                        <span class="fw-semibold">Préstamo:</span>
+                                        <?php if ($saldoPrestamo !== null && (float) $saldoPrestamo > 0.01): ?>
+                                            <?php echo formatearMonedaCuotas((float) $saldoPrestamo); ?>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div>
+                                        <span class="fw-semibold">Intereses:</span>
+                                        <?php if ($interesPagado !== null && (float) $interesPagado > 0.01): ?>
+                                            <?php echo formatearMonedaCuotas((float) $interesPagado); ?>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div>
+                                        <span class="fw-semibold">Polla:</span>
+                                        <?php if ($pollaPagada !== null && (float) $pollaPagada > 0.01): ?>
+                                            <span class="text-success"><?php echo formatearMonedaCuotas((float) $pollaPagada); ?></span>
+                                        <?php else: ?>
+                                            <span class="text-danger">No ha pagado</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
                             </td>
                         <?php endforeach; ?>
                     </tr>
