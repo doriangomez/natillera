@@ -9,9 +9,9 @@ function obtenerReporteUltimoAporte(PDO $pdo): array
         ->query(
             "SELECT s.id_socio,
                     s.nombre_completo,
-                    cuota.mes AS cuota_mes,
+                    cuota.fecha AS cuota_fecha,
                     cuota.quincena AS cuota_quincena,
-                    polla.mes AS polla_mes,
+                    polla.fecha AS polla_fecha,
                     polla.quincena AS polla_quincena
              FROM socios s
              LEFT JOIN movimientos cuota ON cuota.id_movimiento = (
@@ -38,9 +38,18 @@ function obtenerReporteUltimoAporte(PDO $pdo): array
         ->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function valorReporteUltimoAporte($valor): string
+function valorReporteUltimoAporte($fecha, $quincena): string
 {
-    return ($valor === null || $valor === '') ? 'Sin registro' : (string) $valor;
+    if ($fecha === null || $fecha === '') {
+        return 'Sin registro';
+    }
+
+    $fechaFormateada = DateTime::createFromFormat('Y-m-d', (string) $fecha);
+    if (!$fechaFormateada) {
+        return 'Sin registro';
+    }
+
+    return $fechaFormateada->format('d/m/Y') . ' (Q' . $quincena . ')';
 }
 
 $reporteUltimoAporte = obtenerReporteUltimoAporte($pdo);
@@ -54,20 +63,16 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel') {
         <thead>
             <tr>
                 <th>Socio</th>
-                <th>Último Pago Cuota Mes</th>
-                <th>Último Pago Cuota Q</th>
-                <th>Última Polla Mes</th>
-                <th>Última Polla Q</th>
+                <th>Último Pago Cuota</th>
+                <th>Última Polla</th>
             </tr>
         </thead>
         <tbody>
             <?php foreach ($reporteUltimoAporte as $fila): ?>
                 <tr>
                     <td><?php echo htmlspecialchars($fila['nombre_completo'], ENT_QUOTES, 'UTF-8'); ?></td>
-                    <td><?php echo htmlspecialchars(valorReporteUltimoAporte($fila['cuota_mes']), ENT_QUOTES, 'UTF-8'); ?></td>
-                    <td><?php echo htmlspecialchars(valorReporteUltimoAporte($fila['cuota_quincena']), ENT_QUOTES, 'UTF-8'); ?></td>
-                    <td><?php echo htmlspecialchars(valorReporteUltimoAporte($fila['polla_mes']), ENT_QUOTES, 'UTF-8'); ?></td>
-                    <td><?php echo htmlspecialchars(valorReporteUltimoAporte($fila['polla_quincena']), ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td><?php echo htmlspecialchars(valorReporteUltimoAporte($fila['cuota_fecha'], $fila['cuota_quincena']), ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td><?php echo htmlspecialchars(valorReporteUltimoAporte($fila['polla_fecha'], $fila['polla_quincena']), ENT_QUOTES, 'UTF-8'); ?></td>
                 </tr>
             <?php endforeach; ?>
         </tbody>
@@ -90,23 +95,19 @@ require_once __DIR__ . '/../includes/header.php';
                 <thead>
                     <tr>
                         <th>Socio</th>
-                        <th>Último Pago Cuota Mes</th>
-                        <th>Último Pago Cuota Q</th>
-                        <th>Última Polla Mes</th>
-                        <th>Última Polla Q</th>
+                        <th>Último Pago Cuota</th>
+                        <th>Última Polla</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($reporteUltimoAporte)): ?>
-                        <tr><td colspan="5" class="text-center text-muted">No hay socios activos para mostrar.</td></tr>
+                        <tr><td colspan="3" class="text-center text-muted">No hay socios activos para mostrar.</td></tr>
                     <?php else: ?>
                         <?php foreach ($reporteUltimoAporte as $fila): ?>
                             <tr>
                                 <td><?php echo clean($fila['nombre_completo']); ?></td>
-                                <td><?php echo clean(valorReporteUltimoAporte($fila['cuota_mes'])); ?></td>
-                                <td><?php echo clean(valorReporteUltimoAporte($fila['cuota_quincena'])); ?></td>
-                                <td><?php echo clean(valorReporteUltimoAporte($fila['polla_mes'])); ?></td>
-                                <td><?php echo clean(valorReporteUltimoAporte($fila['polla_quincena'])); ?></td>
+                                <td><?php echo clean(valorReporteUltimoAporte($fila['cuota_fecha'], $fila['cuota_quincena'])); ?></td>
+                                <td><?php echo clean(valorReporteUltimoAporte($fila['polla_fecha'], $fila['polla_quincena'])); ?></td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
