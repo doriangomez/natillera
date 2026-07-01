@@ -371,7 +371,32 @@ function obtenerTiposLiquidacion(): array {
     ];
 }
 
-function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo): ?array {
+function normalizarConceptosDeudaLiquidacion(array $idsActividades, array $valores, array $actividades = []): array {
+    $nombresActividades = [];
+    foreach ($actividades as $actividad) {
+        $idActividad = (int) ($actividad['id_actividad'] ?? 0);
+        if ($idActividad > 0) {
+            $nombresActividades[$idActividad] = (string) ($actividad['nombre_actividad'] ?? '');
+        }
+    }
+
+    $conceptos = [];
+    foreach ($valores as $indice => $valorRaw) {
+        $idActividad = (int) ($idsActividades[$indice] ?? 0);
+        $valor = max(0, (float) $valorRaw);
+        if ($idActividad <= 0 || $valor <= 0) {
+            continue;
+        }
+        $conceptos[] = [
+            'id_actividad' => $idActividad,
+            'nombre_actividad' => $nombresActividades[$idActividad] ?? '',
+            'valor' => $valor,
+        ];
+    }
+    return $conceptos;
+}
+
+function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo, array $otrosConceptosDeuda = []): ?array {
     asegurarEsquemaLiquidaciones($pdo);
 
     $stmtSocio = $pdo->prepare('SELECT id_socio, id_interno, nombre_completo, saldo_socio, activo FROM socios WHERE id_socio = :id');
@@ -437,7 +462,17 @@ function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo): ?
     $saldoActualSocio = (float) ($socio['saldo_socio'] ?? 0);
     $saldoBase = $ahorroAcumuladoBruto;
     $cuotaManejo = max(0, $cuotaManejo);
-    $deudaTotal = $valorPrestamos + $cuotaManejo;
+    $otrosConceptosDeuda = array_values(array_filter(array_map(static function ($concepto) {
+        $idActividad = (int) ($concepto['id_actividad'] ?? 0);
+        $nombreActividad = trim((string) ($concepto['nombre_actividad'] ?? ''));
+        $valor = max(0, (float) ($concepto['valor'] ?? 0));
+        if ($idActividad <= 0 || $valor <= 0) {
+            return null;
+        }
+        return ['id_actividad' => $idActividad, 'nombre_actividad' => $nombreActividad, 'valor' => $valor];
+    }, $otrosConceptosDeuda)));
+    $totalOtrosConceptosDeuda = array_sum(array_column($otrosConceptosDeuda, 'valor'));
+    $deudaTotal = $valorPrestamos + $cuotaManejo + $totalOtrosConceptosDeuda;
     $saldoLiquidacion = $ahorroAcumuladoBruto + $rendimientos - $deudaTotal;
     $valorAplicadoDeuda = min(max(0, $ahorroAcumuladoBruto + $rendimientos), $valorPrestamos);
     $deficit = max(0, abs(min(0, $saldoLiquidacion)));
@@ -457,6 +492,8 @@ function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo): ?
         'saldo_liquidacion' => $saldoLiquidacion,
         'prestamos_descontados' => $prestamos,
         'valor_cuota_manejo' => $cuotaManejo,
+        'otros_conceptos_deuda' => $otrosConceptosDeuda,
+        'total_otros_conceptos_deuda' => $totalOtrosConceptosDeuda,
         'valor_aplicado_deuda' => $valorAplicadoDeuda,
         'deficit' => $deficit,
         'valor_bruto' => $valorBruto,

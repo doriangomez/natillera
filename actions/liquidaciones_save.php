@@ -226,6 +226,10 @@ if (!isset($tipos[$tipoLiquidacion])) {
 
 $idSocio = isset($_POST['id_socio']) ? (int) $_POST['id_socio'] : 0;
 $cuotaManejo = isset($_POST['cuota_manejo']) ? (float) $_POST['cuota_manejo'] : 0.0;
+$otrosConceptosDeuda = normalizarConceptosDeudaLiquidacion(
+    is_array($_POST['otros_conceptos_actividad'] ?? null) ? $_POST['otros_conceptos_actividad'] : [],
+    is_array($_POST['otros_conceptos_valor'] ?? null) ? $_POST['otros_conceptos_valor'] : []
+);
 $idActividadLiquidacion = isset($_POST['id_actividad_liquidacion']) ? (int) $_POST['id_actividad_liquidacion'] : 0;
 $idActividadRetencion = isset($_POST['id_actividad_retencion'])
     ? (int) $_POST['id_actividad_retencion']
@@ -302,7 +306,7 @@ try {
         }
     }
 
-    $calculo = calcularLiquidacionSocio($pdo, $idSocio, $cuotaManejo);
+    $calculo = calcularLiquidacionSocio($pdo, $idSocio, $cuotaManejo, $otrosConceptosDeuda);
     if (!$calculo) {
         throw new InvalidArgumentException('No se encontró el socio para liquidar.');
     }
@@ -533,6 +537,49 @@ try {
         ];
     }
 
+    foreach ($calculo['otros_conceptos_deuda'] as $indiceConcepto => $conceptoDeuda) {
+        $valorConcepto = (float) ($conceptoDeuda['valor'] ?? 0);
+        $idActividadConcepto = (int) ($conceptoDeuda['id_actividad'] ?? 0);
+        if ($idActividadConcepto <= 0 || $valorConcepto <= 0) {
+            continue;
+        }
+        $actividadConcepto = obtenerActividadValida($pdo, $idActividadConcepto);
+        if (!$actividadConcepto) {
+            throw new InvalidArgumentException('La actividad seleccionada para otro concepto de deuda no es válida.');
+        }
+        $nombreActividadConcepto = (string) ($actividadConcepto['nombre_actividad'] ?? ('Actividad #' . $idActividadConcepto));
+        $calculo['otros_conceptos_deuda'][$indiceConcepto]['nombre_actividad'] = $nombreActividadConcepto;
+        $reglaNatilleraConcepto = normalizarReglaAfectacion($actividadConcepto['afecta_saldo_natillera'] ?? 'neutral');
+        $esIngresoConcepto = $reglaNatilleraConcepto === 'suma' ? 1 : 0;
+        $esEgresoConcepto = $reglaNatilleraConcepto === 'resta' ? 1 : 0;
+        $valorMovimientoConcepto = $esEgresoConcepto ? -abs($valorConcepto) : abs($valorConcepto);
+        ejecutarLiquidacionStatement($insertMov, [
+            ':fecha' => $fecha,
+            ':anio' => $anio,
+            ':mes' => $mes,
+            ':quincena' => $quincena,
+            ':id_socio' => $idSocio,
+            ':id_prestamo' => null,
+            ':id_actividad' => $idActividadConcepto,
+            ':motivo' => $nombreActividadConcepto,
+            ':valor' => $valorMovimientoConcepto,
+            ':medio' => 'Liquidaciones',
+            ':ingreso' => $esIngresoConcepto,
+            ':egreso' => $esEgresoConcepto,
+            ':obs' => 'Concepto adicional de deuda recuperado en liquidación.',
+            ':usuario' => $usuario,
+            ':modulo' => 'liquidaciones',
+        ]);
+        $idMovConcepto = (int) $pdo->lastInsertId();
+        $movimientosGenerados[] = [
+            'tipo' => 'otro_concepto_deuda',
+            'id_movimiento' => $idMovConcepto,
+            'id_actividad' => $idActividadConcepto,
+            'nombre_actividad' => $nombreActividadConcepto,
+            'valor' => abs($valorConcepto),
+        ];
+    }
+
     $movRetencionId = null;
     if ($cuotaManejo > 0 && (float) $calculo['deficit'] <= 0) {
         ejecutarLiquidacionStatement($insertMov, [
@@ -606,6 +653,8 @@ try {
             'saldo_pendiente' => $saldoPendiente,
             'deficit' => $calculo['deficit'],
             'valor_cuota_manejo' => $calculo['valor_cuota_manejo'],
+            'otros_conceptos_deuda' => $calculo['otros_conceptos_deuda'],
+            'total_otros_conceptos_deuda' => $calculo['total_otros_conceptos_deuda'],
             'valor_bruto' => $calculo['valor_bruto'],
             'valor_neto' => $calculo['valor_neto'],
             'advertencia_deficit' => $calculo['deficit'] > 0 ? 'El saldo de liquidación es negativo. Se creó un nuevo préstamo por el saldo pendiente exacto y el socio quedó retirado con deuda pendiente.' : null,
