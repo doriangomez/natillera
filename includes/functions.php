@@ -371,16 +371,25 @@ function obtenerTiposLiquidacion(): array {
     ];
 }
 
-function normalizarConceptosDeudaLiquidacion(array $descripciones, array $valores): array {
+function normalizarConceptosDeudaLiquidacion(array $idsActividades, array $valores, array $actividades = []): array {
+    $nombresActividades = [];
+    foreach ($actividades as $actividad) {
+        $idActividad = (int) ($actividad['id_actividad'] ?? 0);
+        if ($idActividad > 0) {
+            $nombresActividades[$idActividad] = (string) ($actividad['nombre_actividad'] ?? '');
+        }
+    }
+
     $conceptos = [];
     foreach ($valores as $indice => $valorRaw) {
-        $descripcion = trim((string) ($descripciones[$indice] ?? ''));
+        $idActividad = (int) ($idsActividades[$indice] ?? 0);
         $valor = max(0, (float) $valorRaw);
-        if ($descripcion === '' || $valor <= 0) {
+        if ($idActividad <= 0 || $valor <= 0) {
             continue;
         }
         $conceptos[] = [
-            'descripcion' => $descripcion,
+            'id_actividad' => $idActividad,
+            'nombre_actividad' => $nombresActividades[$idActividad] ?? '',
             'valor' => $valor,
         ];
     }
@@ -454,12 +463,13 @@ function calcularLiquidacionSocio(PDO $pdo, int $idSocio, float $cuotaManejo, ar
     $saldoBase = $ahorroAcumuladoBruto;
     $cuotaManejo = max(0, $cuotaManejo);
     $otrosConceptosDeuda = array_values(array_filter(array_map(static function ($concepto) {
-        $descripcion = trim((string) ($concepto['descripcion'] ?? ''));
+        $idActividad = (int) ($concepto['id_actividad'] ?? 0);
+        $nombreActividad = trim((string) ($concepto['nombre_actividad'] ?? ''));
         $valor = max(0, (float) ($concepto['valor'] ?? 0));
-        if ($descripcion === '' || $valor <= 0) {
+        if ($idActividad <= 0 || $valor <= 0) {
             return null;
         }
-        return ['descripcion' => $descripcion, 'valor' => $valor];
+        return ['id_actividad' => $idActividad, 'nombre_actividad' => $nombreActividad, 'valor' => $valor];
     }, $otrosConceptosDeuda)));
     $totalOtrosConceptosDeuda = array_sum(array_column($otrosConceptosDeuda, 'valor'));
     $deudaTotal = $valorPrestamos + $cuotaManejo + $totalOtrosConceptosDeuda;

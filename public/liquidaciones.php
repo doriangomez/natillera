@@ -15,8 +15,9 @@ $idSocio = isset($_GET['id_socio']) ? (int) $_GET['id_socio'] : 0;
 $tipoLiquidacion = trim((string) ($_GET['tipo_liquidacion'] ?? 'anticipada'));
 $cuotaManejo = isset($_GET['cuota_manejo']) ? (float) $_GET['cuota_manejo'] : 0.0;
 $otrosConceptosDeuda = normalizarConceptosDeudaLiquidacion(
-    is_array($_GET['otros_conceptos_descripcion'] ?? null) ? $_GET['otros_conceptos_descripcion'] : [],
-    is_array($_GET['otros_conceptos_valor'] ?? null) ? $_GET['otros_conceptos_valor'] : []
+    is_array($_GET['otros_conceptos_actividad'] ?? null) ? $_GET['otros_conceptos_actividad'] : [],
+    is_array($_GET['otros_conceptos_valor'] ?? null) ? $_GET['otros_conceptos_valor'] : [],
+    $actividades
 );
 $idActividadLiquidacion = isset($_GET['id_actividad_liquidacion']) ? (int) $_GET['id_actividad_liquidacion'] : 0;
 $idActividadRetencion = isset($_GET['id_actividad_retencion'])
@@ -105,11 +106,16 @@ if ($editarId > 0) {
                     </div>
                     <div class="small text-muted mb-2">Agregue conceptos adicionales que deben descontarse al socio, por ejemplo: Intereses Junio o Polla Mayo y Junio.</div>
                     <div id="otros-conceptos-deuda" class="vstack gap-2">
-                        <?php $conceptosFormulario = !empty($otrosConceptosDeuda) ? $otrosConceptosDeuda : [['descripcion' => '', 'valor' => '']]; ?>
+                        <?php $conceptosFormulario = !empty($otrosConceptosDeuda) ? $otrosConceptosDeuda : [['id_actividad' => 0, 'nombre_actividad' => '', 'valor' => '']]; ?>
                         <?php foreach ($conceptosFormulario as $concepto): ?>
                             <div class="row g-2 concepto-deuda-linea">
                                 <div class="col-md-7">
-                                    <input class="form-control" type="text" name="otros_conceptos_descripcion[]" placeholder="Descripción" value="<?php echo clean((string) ($concepto['descripcion'] ?? '')); ?>">
+                                    <select class="form-select" name="otros_conceptos_actividad[]">
+                                        <option value="">Seleccione actividad...</option>
+                                        <?php foreach ($actividades as $actividad): ?>
+                                            <option value="<?php echo (int) $actividad['id_actividad']; ?>" <?php echo (int) ($concepto['id_actividad'] ?? 0) === (int) $actividad['id_actividad'] ? 'selected' : ''; ?>><?php echo clean($actividad['nombre_actividad']); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
                                 <div class="col-md-4">
                                     <input class="form-control" type="number" min="0" step="0.01" name="otros_conceptos_valor[]" placeholder="Valor" value="<?php echo ($concepto['valor'] ?? '') !== '' ? number_format((float) $concepto['valor'], 2, '.', '') : ''; ?>">
@@ -182,7 +188,7 @@ if ($editarId > 0) {
                     <tr><th>- Intereses pendientes</th><td>$<?php echo number_format(array_sum(array_column($resultado['prestamos_descontados'], 'intereses_pendientes')), 0, ',', '.'); ?></td></tr>
                     <tr><th>- Cuota de administración</th><td>$<?php echo number_format($resultado['valor_cuota_manejo'], 0, ',', '.'); ?></td></tr>
                     <?php foreach ($resultado['otros_conceptos_deuda'] as $concepto): ?>
-                        <tr><th>- <?php echo clean((string) $concepto['descripcion']); ?></th><td>$<?php echo number_format((float) $concepto['valor'], 0, ',', '.'); ?></td></tr>
+                        <tr><th>- <?php echo clean((string) $concepto['nombre_actividad']); ?></th><td>$<?php echo number_format((float) $concepto['valor'], 0, ',', '.'); ?></td></tr>
                     <?php endforeach; ?>
                     <tr><th>Deuda total</th><td>$<?php echo number_format($resultado['deuda_total'], 0, ',', '.'); ?></td></tr>
                     <tr class="table-light"><th>Saldo de liquidación</th><td class="fw-bold"><?php echo $resultado['saldo_liquidacion'] < 0 ? '-' : ''; ?>$<?php echo number_format(abs((float) $resultado['saldo_liquidacion']), 0, ',', '.'); ?></td></tr>
@@ -247,7 +253,7 @@ if ($editarId > 0) {
                 <input type="hidden" name="id_actividad_liquidacion" value="<?php echo (int) $idActividadLiquidacion; ?>">
                 <input type="hidden" name="id_actividad_retencion" value="<?php echo (int) $idActividadRetencion; ?>">
                 <?php foreach ($resultado['otros_conceptos_deuda'] as $concepto): ?>
-                    <input type="hidden" name="otros_conceptos_descripcion[]" value="<?php echo clean((string) $concepto['descripcion']); ?>">
+                    <input type="hidden" name="otros_conceptos_actividad[]" value="<?php echo (int) $concepto['id_actividad']; ?>">
                     <input type="hidden" name="otros_conceptos_valor[]" value="<?php echo number_format((float) $concepto['valor'], 2, '.', ''); ?>">
                 <?php endforeach; ?>
                 <input type="hidden" name="observaciones" value="Liquidación <?php echo clean($tipoLiquidacion); ?> desde módulo central.">
@@ -389,12 +395,25 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
+    const opcionesActividades = <?php echo json_encode(array_map(static fn($actividad) => [
+        'id' => (int) $actividad['id_actividad'],
+        'nombre' => (string) $actividad['nombre_actividad'],
+    ], $actividades), JSON_UNESCAPED_UNICODE); ?>;
+
+    function opcionesActividadHtml() {
+        return '<option value="">Seleccione actividad...</option>' + opcionesActividades.map(function (actividad) {
+            const id = String(actividad.id).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const nombre = String(actividad.nombre).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return `<option value="${id}">${nombre}</option>`;
+        }).join('');
+    }
+
     function crearLinea() {
         const linea = document.createElement('div');
         linea.className = 'row g-2 concepto-deuda-linea';
         linea.innerHTML = `
             <div class="col-md-7">
-                <input class="form-control" type="text" name="otros_conceptos_descripcion[]" placeholder="Descripción">
+                <select class="form-select" name="otros_conceptos_actividad[]">${opcionesActividadHtml()}</select>
             </div>
             <div class="col-md-4">
                 <input class="form-control" type="number" min="0" step="0.01" name="otros_conceptos_valor[]" placeholder="Valor">

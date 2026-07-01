@@ -200,12 +200,12 @@ $cuotaAdmin = valorDetalle($detalle, $liquidacion, 'valor_cuota_manejo', 'valor_
 $otrosConceptosDeuda = [];
 if (!empty($detalle['otros_conceptos_deuda']) && is_array($detalle['otros_conceptos_deuda'])) {
     foreach ($detalle['otros_conceptos_deuda'] as $concepto) {
-        $descripcion = trim((string) ($concepto['descripcion'] ?? ''));
+        $nombreActividad = trim((string) ($concepto['nombre_actividad'] ?? ($concepto['descripcion'] ?? '')));
         $valor = max(0, (float) ($concepto['valor'] ?? 0));
-        if ($descripcion === '' || $valor <= 0) {
+        if ($nombreActividad === '' || $valor <= 0) {
             continue;
         }
-        $otrosConceptosDeuda[] = ['descripcion' => $descripcion, 'valor' => $valor];
+        $otrosConceptosDeuda[] = ['nombre_actividad' => $nombreActividad, 'valor' => $valor];
     }
 }
 $totalOtrosConceptosDeuda = array_sum(array_column($otrosConceptosDeuda, 'valor'));
@@ -282,7 +282,7 @@ ob_start();
         <tr><td class="label">Intereses pendientes</td><td class="text-end negativo"><?php echo monedaLiquidacion($interesesPendientes); ?></td></tr>
         <tr><td class="label">Cuota de administración</td><td class="text-end negativo"><?php echo monedaLiquidacion($cuotaAdmin); ?></td></tr>
         <?php foreach ($otrosConceptosDeuda as $concepto): ?>
-            <tr><td class="label"><?php echo h((string) $concepto['descripcion']); ?></td><td class="text-end negativo"><?php echo monedaLiquidacion((float) $concepto['valor']); ?></td></tr>
+            <tr><td class="label"><?php echo h((string) $concepto['nombre_actividad']); ?></td><td class="text-end negativo"><?php echo monedaLiquidacion((float) $concepto['valor']); ?></td></tr>
         <?php endforeach; ?>
         <tr class="destacado"><td class="label">Saldo de liquidación</td><td class="text-end <?php echo claseValor($saldoLiquidacion); ?>"><?php echo monedaLiquidacion($saldoLiquidacion); ?></td></tr>
         <tr class="destacado"><td class="label">Saldo pendiente del socio</td><td class="text-end <?php echo $saldoPendiente > 0 ? 'negativo' : ''; ?>"><?php echo monedaLiquidacion($saldoPendiente); ?></td></tr>
