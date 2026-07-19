@@ -284,8 +284,22 @@ function formatearMonedaCuotas(float $valor): string {
 <?php elseif (empty($periodos)): ?>
     <div class="alert alert-info">Aún no hay periodos activos configurados. Agrégalos desde Configuración &gt; Periodos.</div>
 <?php else: ?>
-    <div class="table-responsive">
-        <table class="table table-bordered align-middle">
+    <style>
+        .cuotas-matriz-wrapper {
+            max-height: calc(100vh - 220px);
+            overflow: auto;
+        }
+
+        .cuotas-matriz-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: var(--bs-table-bg, var(--bs-light));
+            box-shadow: inset 0 -1px 0 var(--bs-border-color);
+        }
+    </style>
+    <div class="table-responsive cuotas-matriz-wrapper">
+        <table class="table table-bordered align-middle cuotas-matriz-table">
             <thead class="table-light">
                 <tr>
                     <th style="min-width: 200px;">Socio</th>
