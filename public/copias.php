@@ -172,6 +172,41 @@ if ($ejecutarConciliacion) {
                         </div>
                     <?php endif; ?>
 
+                    <?php if (!empty($diagnosticoDatos['posibles_pagos_duplicados'])): ?>
+                        <div class="alert alert-warning">
+                            <div class="fw-semibold mb-1">Posibles pagos duplicados por error de carga</div>
+                            <p class="mb-2">Se encontraron movimientos con el mismo socio, fecha, actividad y valor, registrados con menos de 30 minutos de diferencia. Esta validación solo informa; no borra ni modifica datos.</p>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>IDs movimiento</th>
+                                            <th>Socio</th>
+                                            <th>Fecha pago</th>
+                                            <th>Actividad</th>
+                                            <th class="text-end">Valor</th>
+                                            <th>Horas de registro</th>
+                                            <th class="text-end">Ventana (min.)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($diagnosticoDatos['posibles_pagos_duplicados'] as $duplicado): ?>
+                                            <tr>
+                                                <td>#<?php echo htmlspecialchars(implode(', #', $duplicado['ids_movimiento'])); ?></td>
+                                                <td><?php echo htmlspecialchars($duplicado['socio']); ?></td>
+                                                <td><?php echo htmlspecialchars($duplicado['fecha']); ?></td>
+                                                <td><?php echo htmlspecialchars($duplicado['actividad']); ?></td>
+                                                <td class="text-end">$<?php echo number_format((float) $duplicado['valor'], 2); ?></td>
+                                                <td><?php echo htmlspecialchars(implode(' / ', $duplicado['fechas_registro'])); ?></td>
+                                                <td class="text-end"><?php echo (int) $duplicado['minutos_ventana']; ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
                     <?php if (!empty($diagnosticoDatos['desviaciones_prestamos'])): ?>
                         <div class="alert alert-warning">
                             <div class="fw-semibold mb-1">Préstamos con saldos diferentes a los movimientos</div>

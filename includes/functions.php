@@ -1093,6 +1093,7 @@ function generarConciliacionInterna(PDO $pdo): array {
         'checks' => [],
         'desviaciones_socios' => [],
         'desviaciones_prestamos' => [],
+        'posibles_pagos_duplicados' => [],
     ];
 
     $saldoMovimientos = (float) $pdo->query(
@@ -1276,6 +1277,83 @@ function generarConciliacionInterna(PDO $pdo): array {
     ];
 
     if ($movimientosSinMedio > 0) {
+        $reporte['ok'] = false;
+    }
+
+
+    $stmtDuplicados = $pdo->query(
+        "SELECT m.id_movimiento, m.id_socio, COALESCE(s.nombre_completo, CONCAT('Socio #', m.id_socio)) AS socio, " .
+        "m.fecha, m.id_actividad, COALESCE(a.nombre_actividad, CONCAT('Actividad #', m.id_actividad)) AS actividad, " .
+        "m.valor, m.fecha_registro " .
+        "FROM movimientos m " .
+        "JOIN (" .
+        "SELECT id_socio, fecha, id_actividad, valor " .
+        "FROM movimientos " .
+        "WHERE id_socio IS NOT NULL AND fecha_registro IS NOT NULL " .
+        "GROUP BY id_socio, fecha, id_actividad, valor HAVING COUNT(*) > 1" .
+        ") repetidos ON repetidos.id_socio = m.id_socio " .
+        "AND repetidos.fecha = m.fecha " .
+        "AND repetidos.id_actividad = m.id_actividad " .
+        "AND repetidos.valor = m.valor " .
+        "LEFT JOIN socios s ON s.id_socio = m.id_socio " .
+        "LEFT JOIN actividades_maestro a ON a.id_actividad = m.id_actividad " .
+        "WHERE m.fecha_registro IS NOT NULL " .
+        "ORDER BY m.id_socio, m.fecha, m.id_actividad, m.valor, m.fecha_registro, m.id_movimiento"
+    );
+
+    $posiblesPagosDuplicados = [];
+    $grupoActual = [];
+    $claveActual = null;
+    $registroAnterior = null;
+    $cerrarGrupoDuplicado = static function (array $grupo) use (&$posiblesPagosDuplicados): void {
+        if (count($grupo) < 2) {
+            return;
+        }
+
+        $ids = [];
+        $registros = [];
+        foreach ($grupo as $movimiento) {
+            $ids[] = (int) $movimiento['id_movimiento'];
+            $registros[] = $movimiento['fecha_registro'];
+        }
+
+        $primero = $grupo[0];
+        $posiblesPagosDuplicados[] = [
+            'ids_movimiento' => $ids,
+            'socio' => $primero['socio'],
+            'fecha' => $primero['fecha'],
+            'actividad' => $primero['actividad'],
+            'valor' => (float) $primero['valor'],
+            'fechas_registro' => $registros,
+            'minutos_ventana' => (int) floor((strtotime(end($registros)) - strtotime($registros[0])) / 60),
+        ];
+    };
+
+    foreach ($stmtDuplicados->fetchAll(PDO::FETCH_ASSOC) as $movimiento) {
+        $clave = implode('|', [$movimiento['id_socio'], $movimiento['fecha'], $movimiento['id_actividad'], $movimiento['valor']]);
+        $registro = strtotime($movimiento['fecha_registro']);
+        if ($claveActual !== $clave || ($registroAnterior !== null && ($registro - $registroAnterior) >= 1800)) {
+            $cerrarGrupoDuplicado($grupoActual);
+            $grupoActual = [];
+            $claveActual = $clave;
+        }
+
+        $grupoActual[] = $movimiento;
+        $registroAnterior = $registro;
+    }
+    $cerrarGrupoDuplicado($grupoActual);
+
+    $reporte['posibles_pagos_duplicados'] = $posiblesPagosDuplicados;
+    $reporte['checks'][] = [
+        'titulo' => 'Posibles pagos duplicados',
+        'detalle' => 'Mismo socio, fecha, actividad y valor, registrados con menos de 30 minutos de diferencia. Solo se informa; no modifica datos.',
+        'registrado' => count($posiblesPagosDuplicados),
+        'esperado' => 0,
+        'diferencia' => count($posiblesPagosDuplicados),
+        'ok' => count($posiblesPagosDuplicados) === 0,
+    ];
+
+    if (!empty($posiblesPagosDuplicados)) {
         $reporte['ok'] = false;
     }
 
