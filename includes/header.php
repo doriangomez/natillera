@@ -272,7 +272,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <a class="nav-link-sidebar<?php echo in_array($currentPage, ['prestamos.php', 'prestamo_detalle.php', 'prestamos_matriz.php'], true) ? ' active' : ''; ?>" href="prestamos.php"><i class="bi bi-cash-coin"></i><span>Préstamos</span></a>
             <div class="nav-submenu">
                 <a class="nav-link-submenu<?php echo $currentPage === 'prestamos.php' ? ' active' : ''; ?>" href="prestamos.php#prestamos-vigentes">Préstamos vigentes</a>
-                <a class="nav-link-submenu<?php echo $currentPage === 'prestamo_detalle.php' ? ' active' : ''; ?>" href="prestamos.php#prestamos-vigentes">Línea de tiempo por préstamo</a>
+                <a class="nav-link-submenu<?php echo $currentPage === 'prestamo_detalle.php' ? ' active' : ''; ?>" href="prestamo_detalle.php">Línea de tiempo por préstamo</a>
                 <a class="nav-link-submenu<?php echo $currentPage === 'prestamos_matriz.php' ? ' active' : ''; ?>" href="prestamos_matriz.php">Matriz de préstamos</a>
             </div>
             <a class="nav-link-sidebar<?php echo $currentPage === 'retiros_caja.php' ? ' active' : ''; ?>" href="retiros_caja.php"><i class="bi bi-safe2"></i><span>Retiros a caja</span></a>

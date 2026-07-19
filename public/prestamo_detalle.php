@@ -4,12 +4,59 @@ require_once __DIR__ . '/../includes/prestamo_detalle_helpers.php';
 
 $idPrestamo = isset($_GET['id_prestamo']) ? (int) $_GET['id_prestamo'] : 0;
 $detalle = $idPrestamo > 0 ? cargarDetallePrestamo($pdo, $idPrestamo) : null;
+
+$prestamosDisponibles = [];
+if ($idPrestamo <= 0) {
+    $prestamosDisponibles = listarPrestamosParaLineaTiempo($pdo);
+}
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="mb-0 d-flex align-items-center gap-2"><i class="bi bi-clock-history text-primary"></i><span>Línea de tiempo del préstamo</span></h2>
     <a href="prestamos.php" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Volver a préstamos</a>
 </div>
-<?php if (!$detalle): ?>
+<?php if ($idPrestamo <= 0): ?>
+    <div class="card mb-3">
+        <div class="card-header category-prestamos"><i class="bi bi-search"></i><span>Seleccione un préstamo</span></div>
+        <div class="card-body">
+            <p class="text-muted">Elija un préstamo para abrir su línea de tiempo consolidada. Esta vista es solo lectura.</p>
+            <?php if (empty($prestamosDisponibles)): ?>
+                <div class="alert alert-info mb-0">No hay préstamos disponibles para consultar.</div>
+            <?php else: ?>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered align-middle">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Deudor</th>
+                                <th>Aval</th>
+                                <th>Tipo</th>
+                                <th class="text-end">Saldo capital</th>
+                                <th class="text-end">Saldo interés</th>
+                                <th>Estado</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($prestamosDisponibles as $item): ?>
+                                <?php $nombreItem = $item['es_particular'] ? ($item['nombre_deudor'] ?: 'Particular sin nombre') : ($item['nombre_completo'] ?: 'Socio sin nombre'); ?>
+                                <tr>
+                                    <td><?php echo (int) $item['id_prestamo']; ?></td>
+                                    <td><?php echo clean($nombreItem); ?></td>
+                                    <td><?php echo clean($item['nombre_aval'] ?: 'No aplica'); ?></td>
+                                    <td><?php echo ((int) $item['es_particular'] === 1) ? 'Particular' : 'Socio'; ?></td>
+                                    <td class="text-end"><?php echo formatoMonedaPrestamoDetalle((float) $item['saldo_capital_actual']); ?></td>
+                                    <td class="text-end"><?php echo formatoMonedaPrestamoDetalle((float) $item['saldo_intereses_actual']); ?></td>
+                                    <td><?php echo clean($item['estado'] ?: 'Activo'); ?></td>
+                                    <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="prestamo_detalle.php?id_prestamo=<?php echo (int) $item['id_prestamo']; ?>">Ver línea de tiempo</a></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+<?php elseif (!$detalle): ?>
     <div class="alert alert-danger">No se encontró el préstamo solicitado.</div>
 <?php else: ?>
 <?php

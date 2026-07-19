@@ -9,6 +9,20 @@ function nombreMesPrestamoDetalle(int $mes): string {
     return $nombres[$mes] ?? sprintf('Mes %02d', $mes);
 }
 
+
+function listarPrestamosParaLineaTiempo(PDO $pdo): array {
+    $stmt = $pdo->query(
+        'SELECT p.id_prestamo, p.es_particular, p.nombre_deudor, p.saldo_capital_actual, p.saldo_intereses_actual, p.estado,' .
+        '       s.nombre_completo, aval.nombre_completo AS nombre_aval' .
+        '  FROM prestamos p' .
+        '  LEFT JOIN socios s ON p.id_socio = s.id_socio' .
+        '  LEFT JOIN socios aval ON p.id_socio_aval = aval.id_socio' .
+        ' ORDER BY p.fecha_prestamo DESC, p.id_prestamo DESC'
+    );
+
+    return $stmt->fetchAll();
+}
+
 function cargarDetallePrestamo(PDO $pdo, int $idPrestamo): ?array {
     $stmt = $pdo->prepare(
         'SELECT p.*, s.nombre_completo, aval.nombre_completo AS nombre_aval,' .
