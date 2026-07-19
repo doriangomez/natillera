@@ -396,7 +396,7 @@ $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS |
         </form>
     </div>
 </div>
-<h4 class="d-flex align-items-center gap-2"><i class="bi bi-activity text-primary"></i><span>Préstamos vigentes</span></h4>
+<h4 id="prestamos-vigentes" class="d-flex align-items-center gap-2"><i class="bi bi-activity text-primary"></i><span>Préstamos vigentes</span></h4>
 <div class="table-responsive">
 <table class="table table-sm table-bordered align-middle">
     <thead>
@@ -459,6 +459,7 @@ $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS |
                 <td>$<?php echo number_format($p['saldo_intereses_actual'],0,',','.'); ?></td>
                 <td><?php echo $estadoPrestamo; ?> <span class="small"><?php echo $semaforo; ?></span></td>
                 <td class="text-end">
+                    <a class="btn btn-sm btn-outline-info mb-1" href="prestamo_detalle.php?id_prestamo=<?php echo (int) $p['id_prestamo']; ?>">Ver línea de tiempo</a>
                     <form id="<?php echo $formEditarId; ?>" method="POST" action="../actions/prestamos_save.php" class="d-inline">
                         <input type="hidden" name="accion" value="editar_campos_liquidacion">
                         <input type="hidden" name="id_prestamo" value="<?php echo $p['id_prestamo']; ?>">

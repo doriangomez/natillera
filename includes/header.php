@@ -269,8 +269,12 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <a class="nav-link-sidebar<?php echo $currentPage === 'conciliaciones.php' ? ' active' : ''; ?>" href="conciliaciones.php"><i class="bi bi-credit-card-2-front"></i><span>Conciliación medios de pago</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'pollas.php' ? ' active' : ''; ?>" href="pollas.php"><i class="bi bi-trophy"></i><span>Pollas</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'rifas.php' ? ' active' : ''; ?>" href="rifas.php"><i class="bi bi-stars"></i><span>Rifas</span></a>
-            <a class="nav-link-sidebar<?php echo $currentPage === 'prestamos.php' ? ' active' : ''; ?>" href="prestamos.php"><i class="bi bi-cash-coin"></i><span>Préstamos</span></a>
-            <a class="nav-link-sidebar<?php echo $currentPage === 'prestamos_matriz.php' ? ' active' : ''; ?>" href="prestamos_matriz.php"><i class="bi bi-table"></i><span>Matriz de préstamos</span></a>
+            <a class="nav-link-sidebar<?php echo in_array($currentPage, ['prestamos.php', 'prestamo_detalle.php', 'prestamos_matriz.php'], true) ? ' active' : ''; ?>" href="prestamos.php"><i class="bi bi-cash-coin"></i><span>Préstamos</span></a>
+            <div class="nav-submenu">
+                <a class="nav-link-submenu<?php echo $currentPage === 'prestamos.php' ? ' active' : ''; ?>" href="prestamos.php#prestamos-vigentes">Préstamos vigentes</a>
+                <a class="nav-link-submenu<?php echo $currentPage === 'prestamo_detalle.php' ? ' active' : ''; ?>" href="prestamos.php#prestamos-vigentes">Línea de tiempo por préstamo</a>
+                <a class="nav-link-submenu<?php echo $currentPage === 'prestamos_matriz.php' ? ' active' : ''; ?>" href="prestamos_matriz.php">Matriz de préstamos</a>
+            </div>
             <a class="nav-link-sidebar<?php echo $currentPage === 'retiros_caja.php' ? ' active' : ''; ?>" href="retiros_caja.php"><i class="bi bi-safe2"></i><span>Retiros a caja</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'bolsa_administracion.php' ? ' active' : ''; ?>" href="bolsa_administracion.php"><i class="bi bi-piggy-bank"></i><span>Bolsa administración</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'gastos.php' ? ' active' : ''; ?>" href="gastos.php"><i class="bi bi-receipt"></i><span>Gastos</span></a>
