@@ -69,6 +69,94 @@ switch ($tipo) {
 
         generarCSV(['ID','Nombre','Aporte mensual promedio','Total aportado','Saldo vigente'],$rowsFormateadas);
         break;
+    case 'liquidaciones_conceptos':
+        asegurarEsquemaLiquidaciones($pdo);
+        $fSocio = isset($_GET['socio']) ? (int) $_GET['socio'] : 0;
+        $fEstado = trim((string) ($_GET['estado'] ?? 'activa'));
+        if (!in_array($fEstado, ['activa', 'reversada', 'editada', 'todas'], true)) {
+            $fEstado = 'activa';
+        }
+
+        $params = [];
+        $where = [];
+        if ($fSocio > 0) {
+            $where[] = 'l.socio_id = :socio';
+            $params[':socio'] = $fSocio;
+        }
+        if ($fEstado !== 'todas') {
+            $where[] = 'l.estado = :estado';
+            $params[':estado'] = $fEstado;
+        }
+        $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        $stmtLiquidaciones = $pdo->prepare(
+            "SELECT l.id, l.socio_id, l.fecha, l.estado, s.nombre_completo
+             FROM liquidaciones l
+             JOIN socios s ON s.id_socio = l.socio_id
+             $whereSql
+             ORDER BY s.nombre_completo, l.fecha DESC, l.id DESC"
+        );
+        $stmtLiquidaciones->execute($params);
+        $liquidaciones = $stmtLiquidaciones->fetchAll(PDO::FETCH_ASSOC);
+
+        $idsSocios = [];
+        $resumenLiquidaciones = [];
+        foreach ($liquidaciones as $liq) {
+            $idSocio = (int) $liq['socio_id'];
+            $idsSocios[$idSocio] = $idSocio;
+            if (!isset($resumenLiquidaciones[$idSocio])) {
+                $resumenLiquidaciones[$idSocio] = ['nombre' => $liq['nombre_completo'], 'liquidaciones' => []];
+            }
+            $resumenLiquidaciones[$idSocio]['liquidaciones'][] = '#' . (int) $liq['id'] . ' ' . $liq['fecha'] . ' (' . $liq['estado'] . ')';
+        }
+
+        $conceptos = [];
+        $periodos = [];
+        $datos = [];
+        if (!empty($idsSocios)) {
+            $placeholders = implode(',', array_fill(0, count($idsSocios), '?'));
+            $stmtMovimientos = $pdo->prepare(
+                "SELECT m.id_socio, m.anio, m.mes, a.nombre_actividad,
+                        SUM(CASE
+                            WHEN a.afecta_saldo_natillera = 'resta' OR a.afecta_saldo_socio = 'resta' THEN -ABS(m.valor)
+                            ELSE ABS(m.valor)
+                        END) AS total
+                 FROM movimientos m
+                 JOIN actividades_maestro a ON a.id_actividad = m.id_actividad
+                 WHERE m.id_socio IN ($placeholders)
+                 GROUP BY m.id_socio, m.anio, m.mes, a.id_actividad, a.nombre_actividad
+                 ORDER BY m.anio, m.mes, a.nombre_actividad"
+            );
+            $stmtMovimientos->execute(array_values($idsSocios));
+            foreach ($stmtMovimientos->fetchAll(PDO::FETCH_ASSOC) as $mov) {
+                $idSocio = (int) $mov['id_socio'];
+                $periodo = sprintf('%04d-%02d', (int) $mov['anio'], (int) $mov['mes']);
+                $concepto = (string) $mov['nombre_actividad'];
+                $conceptos[$concepto] = $concepto;
+                $periodos[$periodo] = $periodo;
+                $datos[$idSocio][$periodo][$concepto] = (float) $mov['total'];
+            }
+        }
+        ksort($periodos);
+        ksort($conceptos, SORT_NATURAL | SORT_FLAG_CASE);
+
+        $header = array_merge(['Socio', 'Liquidaciones', 'Periodo'], array_values($conceptos), ['Total mes']);
+        $rows = [];
+        foreach ($resumenLiquidaciones as $idSocio => $resumen) {
+            foreach ($periodos as $periodo) {
+                $totalMes = 0;
+                $row = [$resumen['nombre'], implode(', ', $resumen['liquidaciones']), $periodo];
+                foreach ($conceptos as $concepto) {
+                    $valor = (float) ($datos[$idSocio][$periodo][$concepto] ?? 0);
+                    $totalMes += $valor;
+                    $row[] = $valor;
+                }
+                $row[] = $totalMes;
+                $rows[] = $row;
+            }
+        }
+        generarCSV($header, $rows);
+        break;
     case 'prestamos':
         $rows = $pdo->query('SELECT id_prestamo, nombre_deudor, saldo_capital_actual, saldo_intereses_actual FROM prestamos')->fetchAll(PDO::FETCH_NUM);
         generarCSV(['ID','Deudor','Saldo capital','Saldo intereses'],$rows);
