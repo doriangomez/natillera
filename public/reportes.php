@@ -188,6 +188,15 @@ $periodosEnMora = $pdo
         <a class="btn btn-primary" href="reporte_ultimo_aporte.php"><i class="bi bi-table"></i> Ver reporte</a>
     </div>
 </div>
+<div class="card mb-3">
+    <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+            <h5 class="mb-1">Socios liquidados por conceptos</h5>
+            <p class="text-muted mb-0">Consulta todos los conceptos de los socios liquidados agrupados mes a mes.</p>
+        </div>
+        <a class="btn btn-primary" href="reporte_liquidaciones_conceptos.php"><i class="bi bi-table"></i> Ver reporte</a>
+    </div>
+</div>
 <div class="row g-3 mb-3">
     <div class="col-md-3">
         <div class="card h-100">

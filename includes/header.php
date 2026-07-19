@@ -276,9 +276,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                 <a class="nav-link-submenu<?php echo $currentPage === 'liquidacion_anticipada.php' ? ' active' : ''; ?>" href="liquidacion_anticipada.php">Liquidación anticipada</a>
                 <a class="nav-link-submenu<?php echo $currentPage === 'liquidacion_definitiva.php' ? ' active' : ''; ?>" href="liquidacion_definitiva.php">Liquidación definitiva</a>
             </div>
-            <a class="nav-link-sidebar<?php echo in_array($currentPage, ['reportes.php', 'reporte_ultimo_aporte.php'], true) ? ' active' : ''; ?>" href="reportes.php"><i class="bi bi-file-earmark-bar-graph"></i><span>Reportes</span></a>
+            <a class="nav-link-sidebar<?php echo in_array($currentPage, ['reportes.php', 'reporte_ultimo_aporte.php', 'reporte_liquidaciones_conceptos.php'], true) ? ' active' : ''; ?>" href="reportes.php"><i class="bi bi-file-earmark-bar-graph"></i><span>Reportes</span></a>
             <div class="nav-submenu">
                 <a class="nav-link-submenu<?php echo $currentPage === 'reporte_ultimo_aporte.php' ? ' active' : ''; ?>" href="reporte_ultimo_aporte.php">Último aporte por socio</a>
+                <a class="nav-link-submenu<?php echo $currentPage === 'reporte_liquidaciones_conceptos.php' ? ' active' : ''; ?>" href="reporte_liquidaciones_conceptos.php">Liquidados por conceptos</a>
             </div>
             <a class="nav-link-sidebar<?php echo $currentPage === 'estadisticas.php' ? ' active' : ''; ?>" href="estadisticas.php"><i class="bi bi-pie-chart"></i><span>Estadísticas</span></a>
             <a class="nav-link-sidebar<?php echo $currentPage === 'reglamento.php' ? ' active' : ''; ?>" href="reglamento.php"><i class="bi bi-journal-text"></i><span>Reglamento</span></a>
