@@ -396,7 +396,7 @@ $periodosJson = json_encode($periodosPorPrestamo, JSON_HEX_TAG | JSON_HEX_APOS |
         </form>
     </div>
 </div>
-<h4 class="d-flex align-items-center gap-2"><i class="bi bi-activity text-primary"></i><span>Préstamos vigentes</span></h4>
+<h4 id="prestamos-vigentes" class="d-flex align-items-center gap-2"><i class="bi bi-activity text-primary"></i><span>Préstamos vigentes</span></h4>
 <div class="table-responsive">
 <table class="table table-sm table-bordered align-middle">
     <thead>
