@@ -24,6 +24,21 @@ if ($ejecutarConciliacion) {
                         <div class="p-4 border rounded-3 h-100 bg-light">
                             <div class="d-flex align-items-center justify-content-between mb-3">
                                 <div>
+                                    <h5 class="mb-1">Reconciliación de Efectivo</h5>
+                                    <p class="text-muted mb-0">Compara el efectivo esperado contra bancos, Nequi, personas y efectivo físico.</p>
+                                </div>
+                                <div class="badge-soft">Control</div>
+                            </div>
+                            <a class="btn btn-outline-primary w-100" href="reconciliacion_efectivo.php">
+                                <i class="bi bi-cash-stack"></i>
+                                Abrir módulo
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 col-md-6">
+                        <div class="p-4 border rounded-3 h-100 bg-light">
+                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                <div>
                                     <h5 class="mb-1">Exportar a Excel</h5>
                                     <p class="text-muted mb-0">Genera un archivo .xls con todas las tablas y registros actuales.</p>
                                 </div>

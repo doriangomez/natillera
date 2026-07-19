@@ -292,7 +292,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <a class="nav-link-sidebar<?php echo $currentPage === 'reglamento.php' ? ' active' : ''; ?>" href="reglamento.php"><i class="bi bi-journal-text"></i><span>Reglamento</span></a>
             <a class="nav-link-sidebar" href="../actions/export_csv.php?tipo=menu"><i class="bi bi-filetype-csv"></i><span>Exportar</span></a>
             <?php if ($isAdmin): ?>
-                <a class="nav-link-sidebar<?php echo $currentPage === 'copias.php' ? ' active' : ''; ?>" href="copias.php"><i class="bi bi-hdd-stack"></i><span>Copias</span></a>
+                <a class="nav-link-sidebar<?php echo in_array($currentPage, ['copias.php','reconciliacion_efectivo.php'], true) ? ' active' : ''; ?>" href="copias.php"><i class="bi bi-hdd-stack"></i><span>Copias</span></a>
+                <div class="nav-submenu">
+                    <a class="nav-link-submenu<?php echo $currentPage === 'reconciliacion_efectivo.php' ? ' active' : ''; ?>" href="reconciliacion_efectivo.php">Reconciliación de Efectivo</a>
+                </div>
             <?php endif; ?>
             <?php if ($isAdmin): ?>
                 <a class="nav-link-sidebar<?php echo $currentPage === 'auditoria_integridad.php' ? ' active' : ''; ?>" href="auditoria_integridad.php"><i class="bi bi-shield-check"></i><span>Auditoría de Integridad</span></a>
