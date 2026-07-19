@@ -19,7 +19,8 @@ if ($idSocio) {
 $socios = getSocios($pdo, '');
 $actividades = getActividades($pdo, false, true);
 $medios = getMediosPago($pdo, true);
-$prestamos = $pdo->query("SELECT p.id_prestamo, COALESCE(s.nombre_completo, p.nombre_deudor, CONCAT('Préstamo ', p.id_prestamo)) AS deudor FROM prestamos p LEFT JOIN socios s ON s.id_socio = p.id_socio ORDER BY p.id_prestamo DESC")->fetchAll();
+$nombreDeudorPrestamo = libroDiarioColumnExists($pdo, 'prestamos', 'nombre_deudor') ? 'p.nombre_deudor' : 'NULL';
+$prestamos = $pdo->query("SELECT p.id_prestamo, COALESCE(s.nombre_completo, $nombreDeudorPrestamo, CONCAT('Préstamo ', p.id_prestamo)) AS deudor FROM prestamos p LEFT JOIN socios s ON s.id_socio = p.id_socio ORDER BY p.id_prestamo DESC")->fetchAll();
 $rows = libroDiarioObtenerMovimientos($pdo, $filtros, $idSocio ?: null);
 $totales = libroDiarioAplicarSaldo($rows, (bool) $idSocio);
 $rowsValidacion = libroDiarioObtenerMovimientos($pdo, ['neutrales' => '1'], $idSocio ?: null, true);

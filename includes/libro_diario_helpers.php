@@ -67,6 +67,9 @@ function libroDiarioAplicarSaldo(array &$rows, bool $vistaSocio = false): array 
 function libroDiarioObtenerMovimientos(PDO $pdo, array $filtros, ?int $idSocio = null, bool $sinFiltros = false): array {
     $tieneLiquidacion = libroDiarioColumnExists($pdo, 'movimientos', 'id_liquidacion');
     $selectLiquidacion = $tieneLiquidacion ? 'm.id_liquidacion' : 'NULL AS id_liquidacion';
+    $tieneNombreDeudor = libroDiarioColumnExists($pdo, 'prestamos', 'nombre_deudor');
+    $selectNombreDeudor = $tieneNombreDeudor ? 'p.nombre_deudor' : 'NULL AS nombre_deudor';
+    $tieneSocioAval = libroDiarioColumnExists($pdo, 'prestamos', 'id_socio_aval');
     $where = [];
     $params = [];
     if ($idSocio !== null) {
@@ -84,7 +87,7 @@ function libroDiarioObtenerMovimientos(PDO $pdo, array $filtros, ?int $idSocio =
         if (!empty($filtros['prestamo'])) { $where[] = 'm.id_prestamo = :prestamo'; $params[':prestamo'] = (int) $filtros['prestamo']; }
         if (empty($filtros['neutrales'])) { $where[] = '(m.es_ingreso = 1 OR m.es_egreso = 1)'; }
     }
-    $sql = "SELECT m.*, $selectLiquidacion, s.nombre_completo, a.nombre_actividad, a.es_prestamo, a.es_pago_prestamo, a.es_pago_interes, mp.nombre AS medio_pago_nombre, p.id_socio AS prestamo_id_socio, p.nombre_deudor
+    $sql = "SELECT m.*, $selectLiquidacion, s.nombre_completo, a.nombre_actividad, a.es_prestamo, a.es_pago_prestamo, a.es_pago_interes, mp.nombre AS medio_pago_nombre, p.id_socio AS prestamo_id_socio, $selectNombreDeudor
             FROM movimientos m
             LEFT JOIN socios s ON s.id_socio = m.id_socio
             LEFT JOIN actividades_maestro a ON a.id_actividad = m.id_actividad
@@ -95,7 +98,7 @@ function libroDiarioObtenerMovimientos(PDO $pdo, array $filtros, ?int $idSocio =
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    if ($idSocio !== null) {
+    if ($idSocio !== null && $tieneSocioAval) {
         $sqlAval = str_replace('m.id_socio = :id_socio', 'p.id_socio_aval = :id_socio AND (m.id_socio IS NULL OR m.id_socio <> :id_socio)', $sql);
         $stmtAval = $pdo->prepare($sqlAval);
         $stmtAval->execute($params);
