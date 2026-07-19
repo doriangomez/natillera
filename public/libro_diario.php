@@ -1,8 +1,12 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/libro_diario_helpers.php';
 checkAdmin();
 
+try {
 $filtros = [
     'desde' => $_GET['desde'] ?? '', 'hasta' => $_GET['hasta'] ?? '', 'socio' => $_GET['socio'] ?? '',
     'actividad' => $_GET['actividad'] ?? '', 'medio' => $_GET['medio'] ?? '', 'prestamo' => $_GET['prestamo'] ?? '',
@@ -19,7 +23,8 @@ if ($idSocio) {
 $socios = getSocios($pdo, '');
 $actividades = getActividades($pdo, false, true);
 $medios = getMediosPago($pdo, true);
-$prestamos = $pdo->query("SELECT p.id_prestamo, COALESCE(s.nombre_completo, p.nombre_deudor, CONCAT('Préstamo ', p.id_prestamo)) AS deudor FROM prestamos p LEFT JOIN socios s ON s.id_socio = p.id_socio ORDER BY p.id_prestamo DESC")->fetchAll();
+$nombreDeudorPrestamo = libroDiarioColumnExists($pdo, 'prestamos', 'nombre_deudor') ? 'p.nombre_deudor' : 'NULL';
+$prestamos = $pdo->query("SELECT p.id_prestamo, COALESCE(s.nombre_completo, $nombreDeudorPrestamo, CONCAT('Préstamo ', p.id_prestamo)) AS deudor FROM prestamos p LEFT JOIN socios s ON s.id_socio = p.id_socio ORDER BY p.id_prestamo DESC")->fetchAll();
 $rows = libroDiarioObtenerMovimientos($pdo, $filtros, $idSocio ?: null);
 $totales = libroDiarioAplicarSaldo($rows, (bool) $idSocio);
 $rowsValidacion = libroDiarioObtenerMovimientos($pdo, ['neutrales' => '1'], $idSocio ?: null, true);
@@ -27,6 +32,12 @@ $totalesValidacion = libroDiarioAplicarSaldo($rowsValidacion, (bool) $idSocio);
 $saldoGuardado = $idSocio ? (float) ($socioDetalle['saldo_socio'] ?? 0) : getSaldoNatillera($pdo);
 $diferencia = $totalesValidacion['saldo_final'] - $saldoGuardado;
 $exportParams = libroDiarioQueryString(['socio_detalle' => $idSocio ?: null]);
+} catch (Throwable $e) {
+    echo '<pre>';
+    print_r($e);
+    echo '</pre>';
+    exit;
+}
 ?>
 <div class="d-flex justify-content-between align-items-start mb-3">
     <div>
