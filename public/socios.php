@@ -118,6 +118,9 @@ $valorCuotaMensual = $periodicidadPago === 'quincenal' ? $valorCuota * 2 : $valo
                             <td>$<?php echo number_format($s['saldo_socio'],0,',','.'); ?></td>
                             <td>
                                 <a class="btn btn-sm btn-primary btn-icon" href="?id=<?php echo $s['id_socio']; ?>"><span><i class="bi bi-pencil"></i> Editar</span></a>
+                                <?php if (isset($_SESSION['rol']) && $_SESSION['rol'] === 'admin'): ?>
+                                    <a class="btn btn-sm btn-outline-dark btn-icon" href="libro_diario.php?socio_detalle=<?php echo $s['id_socio']; ?>"><span><i class="bi bi-journal-text"></i> Auxiliar</span></a>
+                                <?php endif; ?>
                                 <form method="POST" action="../actions/socios_save.php" class="d-inline" onsubmit="return confirm('¿Inactivar socio?');">
                                     <input type="hidden" name="id_socio" value="<?php echo $s['id_socio']; ?>">
                                     <input type="hidden" name="accion" value="inactivar">
