@@ -263,3 +263,64 @@ CREATE TABLE conciliaciones_medios_pago (
     UNIQUE KEY uq_conciliacion_mensual (id_medio, anio, mes),
     CONSTRAINT fk_conciliaciones_medio FOREIGN KEY (id_medio) REFERENCES medios_pago(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+-- Reconciliación de Efectivo
+-- Estructura propuesta/creada para histórico sin modificar datos existentes:
+-- 1) reconciliacion_custodios: lista editable de sitios/personas/cuentas donde puede estar la plata.
+-- 2) reconciliacion_cortes: encabezado histórico de cada corte con saldos calculados y diferencia.
+-- 3) reconciliacion_corte_items: desglose congelado por sitio de custodia para cada corte.
+-- 4) reconciliacion_cartera_detalle: snapshot de cartera vigente detallada por deudor para exportación/auditoría.
+CREATE TABLE IF NOT EXISTS reconciliacion_custodios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL,
+    tipo ENUM('efectivo','nequi','persona','banco','otro') NOT NULL DEFAULT 'otro',
+    activo TINYINT(1) NOT NULL DEFAULT 1,
+    observaciones TEXT DEFAULT NULL,
+    fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_reconciliacion_custodio_nombre (nombre)
+);
+
+CREATE TABLE IF NOT EXISTS reconciliacion_cortes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    fecha_corte DATE NOT NULL,
+    saldo_general DECIMAL(12,2) NOT NULL DEFAULT 0,
+    cartera_vigente DECIMAL(12,2) NOT NULL DEFAULT 0,
+    efectivo_esperado DECIMAL(12,2) NOT NULL DEFAULT 0,
+    total_ubicado DECIMAL(12,2) NOT NULL DEFAULT 0,
+    diferencia DECIMAL(12,2) NOT NULL DEFAULT 0,
+    usuario_registro VARCHAR(100) DEFAULT NULL,
+    observaciones TEXT DEFAULT NULL,
+    fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_reconciliacion_cortes_fecha (fecha_corte)
+);
+
+CREATE TABLE IF NOT EXISTS reconciliacion_corte_items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    id_corte INT NOT NULL,
+    id_custodio INT DEFAULT NULL,
+    nombre_custodio VARCHAR(150) NOT NULL,
+    tipo_custodio VARCHAR(30) NOT NULL DEFAULT 'otro',
+    valor DECIMAL(12,2) NOT NULL DEFAULT 0,
+    observaciones TEXT DEFAULT NULL,
+    CONSTRAINT fk_reconciliacion_items_corte FOREIGN KEY (id_corte) REFERENCES reconciliacion_cortes(id) ON DELETE CASCADE,
+    CONSTRAINT fk_reconciliacion_items_custodio FOREIGN KEY (id_custodio) REFERENCES reconciliacion_custodios(id) ON DELETE SET NULL,
+    INDEX idx_reconciliacion_items_corte (id_corte)
+);
+
+CREATE TABLE IF NOT EXISTS reconciliacion_cartera_detalle (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    id_corte INT NOT NULL,
+    id_prestamo INT DEFAULT NULL,
+    deudor VARCHAR(150) NOT NULL,
+    estado VARCHAR(50) DEFAULT NULL,
+    saldo_capital_actual DECIMAL(12,2) NOT NULL DEFAULT 0,
+    CONSTRAINT fk_reconciliacion_cartera_corte FOREIGN KEY (id_corte) REFERENCES reconciliacion_cortes(id) ON DELETE CASCADE,
+    INDEX idx_reconciliacion_cartera_corte (id_corte)
+);
+
+INSERT IGNORE INTO reconciliacion_custodios (nombre, tipo, observaciones) VALUES
+('Efectivo (bolsillos)', 'efectivo', 'Custodio inicial sugerido'),
+('Nequi', 'nequi', 'Custodio inicial sugerido'),
+('Gloria', 'persona', 'Custodio inicial sugerido'),
+('Andrea', 'persona', 'Custodio inicial sugerido'),
+('Bancolombia', 'banco', 'Custodio inicial sugerido');
