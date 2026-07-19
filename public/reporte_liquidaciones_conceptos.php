@@ -36,7 +36,10 @@ $sociosFiltro = $pdo
     ->query('SELECT DISTINCT s.id_socio, s.nombre_completo FROM socios s JOIN liquidaciones l ON l.socio_id = s.id_socio ORDER BY s.nombre_completo')
     ->fetchAll(PDO::FETCH_ASSOC);
 
-$conceptos = [];
+$conceptos = [
+    'Pago de intereses' => 'Pago de intereses',
+    'Pago a préstamo / capital' => 'Pago a préstamo / capital',
+];
 $periodos = [];
 $datos = [];
 $resumenLiquidaciones = [];
@@ -56,18 +59,53 @@ foreach ($liquidaciones as $liq) {
 if (!empty($idsSocios)) {
     $placeholders = implode(',', array_fill(0, count($idsSocios), '?'));
     $stmtMovimientos = $pdo->prepare(
-        "SELECT m.id_socio, m.anio, m.mes, a.nombre_actividad,
+        "SELECT CASE
+                    WHEN m.id_socio IN ($placeholders) THEN m.id_socio
+                    WHEN p.id_socio IN ($placeholders) THEN p.id_socio
+                    ELSE p.id_socio_aval
+                END AS id_socio,
+                m.anio,
+                m.mes,
+                CASE
+                    WHEN COALESCE(a.es_pago_interes, 0) = 1 OR a.id_actividad = 3 THEN 'Pago de intereses'
+                    WHEN COALESCE(a.es_pago_prestamo, 0) = 1 OR a.id_actividad = 2 THEN 'Pago a préstamo / capital'
+                    ELSE a.nombre_actividad
+                END AS nombre_actividad,
                 SUM(CASE
+                    WHEN COALESCE(a.es_pago_interes, 0) = 1 OR COALESCE(a.es_pago_prestamo, 0) = 1 OR a.id_actividad IN (2, 3) THEN ABS(m.valor)
                     WHEN a.afecta_saldo_natillera = 'resta' OR a.afecta_saldo_socio = 'resta' THEN -ABS(m.valor)
                     ELSE ABS(m.valor)
                 END) AS total
          FROM movimientos m
          JOIN actividades_maestro a ON a.id_actividad = m.id_actividad
+         LEFT JOIN prestamos p ON p.id_prestamo = m.id_prestamo
          WHERE m.id_socio IN ($placeholders)
-         GROUP BY m.id_socio, m.anio, m.mes, a.id_actividad, a.nombre_actividad
-         ORDER BY m.anio, m.mes, a.nombre_actividad"
+            OR p.id_socio IN ($placeholders)
+            OR p.id_socio_aval IN ($placeholders)
+         GROUP BY CASE
+                      WHEN m.id_socio IN ($placeholders) THEN m.id_socio
+                      WHEN p.id_socio IN ($placeholders) THEN p.id_socio
+                      ELSE p.id_socio_aval
+                  END,
+                  m.anio,
+                  m.mes,
+                  CASE
+                      WHEN COALESCE(a.es_pago_interes, 0) = 1 OR a.id_actividad = 3 THEN 'Pago de intereses'
+                      WHEN COALESCE(a.es_pago_prestamo, 0) = 1 OR a.id_actividad = 2 THEN 'Pago a préstamo / capital'
+                      ELSE a.nombre_actividad
+                  END
+         ORDER BY m.anio, m.mes, nombre_actividad"
     );
-    $stmtMovimientos->execute(array_values($idsSocios));
+    $idsSociosParametros = array_values($idsSocios);
+    $stmtMovimientos->execute(array_merge(
+        $idsSociosParametros,
+        $idsSociosParametros,
+        $idsSociosParametros,
+        $idsSociosParametros,
+        $idsSociosParametros,
+        $idsSociosParametros,
+        $idsSociosParametros
+    ));
     foreach ($stmtMovimientos->fetchAll(PDO::FETCH_ASSOC) as $mov) {
         $idSocio = (int) $mov['id_socio'];
         $periodo = sprintf('%04d-%02d', (int) $mov['anio'], (int) $mov['mes']);
