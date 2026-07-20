@@ -1,9 +1,19 @@
 <?php
 
 function libroDiarioColumnExists(PDO $pdo, string $table, string $column): bool {
-    $stmt = $pdo->prepare('SHOW COLUMNS FROM ' . $table . ' LIKE :column');
-    $stmt->execute([':column' => $column]);
-    return (bool) $stmt->fetch();
+    $stmt = $pdo->prepare(
+        'SELECT COUNT(*)
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table
+           AND COLUMN_NAME = :column'
+    );
+    $stmt->execute([
+        ':table' => $table,
+        ':column' => $column,
+    ]);
+
+    return (int) $stmt->fetchColumn() > 0;
 }
 
 function libroDiarioMoney(float $value): string {
